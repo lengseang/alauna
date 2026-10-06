@@ -28,6 +28,30 @@ export const MicIcon = ({ size = 20, color = '#f4f4f5' }: IconProps) => (
   </Svg>
 );
 
+export const AttachmentIcon = ({ size = 18, color = '#a1a1aa' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  </Svg>
+);
+
+export const ImageIcon = ({ size = 18, color = '#a1a1aa' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <Rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <Circle cx="8.5" cy="8.5" r="1.5" />
+    <Polyline points="21 15 16 10 5 21" />
+  </Svg>
+);
+
+export const DocumentIcon = ({ size = 18, color = '#a1a1aa' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <Polyline points="14 2 14 8 20 8" />
+    <Line x1="16" y1="13" x2="8" y2="13" />
+    <Line x1="16" y1="17" x2="8" y2="17" />
+    <Polyline points="10 9 9 9 8 9" />
+  </Svg>
+);
+
 export const StorageIcon = ({ size = 20, color = '#f4f4f5' }: IconProps) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
     <Rect x="2" y="2" width="20" height="8" rx="2" />

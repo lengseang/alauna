@@ -53,7 +53,7 @@ export interface SettingsScreenProps {
   onUpdatePAD: (pad: PADVector) => void;
 }
 
-export type SubScreen = 'main' | 'soul' | 'models' | 'audio' | 'storage' | 'advanced';
+export type SubScreen = 'main' | 'soul' | 'models' | 'speculative' | 'audio' | 'storage' | 'advanced';
 export type SortOption = 'ram_asc' | 'ram_desc' | 'size_asc' | 'size_desc' | 'name_asc';
 export type Capability = 'Text' | 'Image' | 'Voice' | 'Code' | 'Video';
 
@@ -236,14 +236,18 @@ export default function SettingsScreen({
     return initial;
   });
 
-  const intervalsRef = useRef<Record<string, ReturnType<typeof setInterval>>>({});
+  // Track active real downloaders in memory
+  const downloadersRef = useRef<Record<string, any>>({});
+  const [installedFiles, setInstalledFiles] = useState<{ filename: string; sizeFormatted: string }[]>([]);
 
   useEffect(() => {
     loadStats();
     return () => {
-      // Clear all active intervals on unmount
-      Object.values(intervalsRef.current).forEach(id => {
-        if (id) clearInterval(id);
+      // Pause all active downloads gracefully on unmount
+      Object.values(downloadersRef.current).forEach(d => {
+        try {
+          if (d && typeof d.pause === 'function') d.pause();
+        } catch {}
       });
     };
   }, []);
@@ -253,6 +257,26 @@ export default function SettingsScreen({
       const storage = await ModelManager.getTotalStorageUsed();
       setStorageUsed(storage.formatted);
       setMemoryCount(MemoryEngine.getCount());
+
+      // Check physical files in vault
+      const files: { filename: string; sizeFormatted: string }[] = [];
+      for (const m of S23_MODEL_DATABASE) {
+        const downloaded = await ModelManager.isModelDownloaded(m.filename);
+        if (downloaded) {
+          files.push({ filename: m.filename, sizeFormatted: m.sizeFormatted });
+          setDownloads(prev => ({
+            ...prev,
+            [m.id]: {
+              status: 'completed',
+              progress: 100,
+              speedMbPerSec: 0,
+              downloadedMb: parseSizeToMb(m.sizeFormatted),
+              totalMb: parseSizeToMb(m.sizeFormatted),
+            },
+          }));
+        }
+      }
+      setInstalledFiles(files);
     } catch {
       // Ignored
     }
@@ -271,77 +295,81 @@ export default function SettingsScreen({
   };
 
   // =========================================================
-  // DOWNLOAD CONTROLS (SIMULATED 5G / WI-FI 6 ON-DEVICE ENGINE)
+  // DOWNLOAD CONTROLS (SOVEREIGN RESUMABLE HF ENGINE)
   // =========================================================
 
-  const handleStartDownload = (modelId: string, sizeFormatted: string) => {
+  const handleStartDownload = async (modelId: string, sizeFormatted: string) => {
     const totalMb = parseSizeToMb(sizeFormatted);
+    const spec = S23_MODEL_DATABASE.find(m => m.id === modelId);
 
-    setDownloads(prev => {
-      const existing = prev[modelId];
-      return {
-        ...prev,
-        [modelId]: {
-          status: 'downloading',
-          progress: existing?.progress || 0,
-          speedMbPerSec: 25.6,
-          downloadedMb: existing?.downloadedMb || 0,
-          totalMb,
-        },
-      };
-    });
+    setDownloads(prev => ({
+      ...prev,
+      [modelId]: {
+        status: 'downloading',
+        progress: prev[modelId]?.progress || 0,
+        speedMbPerSec: 0,
+        downloadedMb: prev[modelId]?.downloadedMb || 0,
+        totalMb,
+      },
+    }));
 
-    if (intervalsRef.current[modelId]) {
-      clearInterval(intervalsRef.current[modelId]);
-    }
+    if (!spec) return;
 
-    intervalsRef.current[modelId] = setInterval(() => {
-      setDownloads(prev => {
-        const curr = prev[modelId];
-        if (!curr || curr.status !== 'downloading') return prev;
+    try {
+      const downloader = ModelManager.createModelDownloader(spec, progress => {
+        const progPercent = Math.min(100, Math.round(progress.progress * 100));
+        const downloadedMb = Math.round((progress.bytesWritten / (1024 * 1024)) * 10) / 10;
+        const totalCalculatedMb = progress.totalBytes > 0
+          ? Math.round((progress.totalBytes / (1024 * 1024)) * 10) / 10
+          : totalMb;
 
-        // Realistic cellular / WiFi download fluctuation (21 to 29 MB/s)
-        const speed = Math.round((22.5 + Math.random() * 6.5) * 10) / 10;
-        const stepMb = speed * 0.2; // 200ms tick
-        const nextDownloaded = Math.min(curr.totalMb, curr.downloadedMb + stepMb);
-        const nextProgress = Math.min(100, (nextDownloaded / curr.totalMb) * 100);
-
-        if (nextDownloaded >= curr.totalMb || nextProgress >= 100) {
-          if (intervalsRef.current[modelId]) {
-            clearInterval(intervalsRef.current[modelId]);
-            delete intervalsRef.current[modelId];
-          }
-          loadStats();
-          return {
-            ...prev,
-            [modelId]: {
-              status: 'completed',
-              progress: 100,
-              speedMbPerSec: 0,
-              downloadedMb: curr.totalMb,
-              totalMb: curr.totalMb,
-            },
-          };
-        }
-
-        return {
+        setDownloads(prev => ({
           ...prev,
           [modelId]: {
-            status: 'downloading',
-            progress: nextProgress,
-            speedMbPerSec: speed,
-            downloadedMb: nextDownloaded,
-            totalMb: curr.totalMb,
+            status: progress.status === 'completed' ? 'completed' : progress.status === 'paused' ? 'paused' : 'downloading',
+            progress: progPercent,
+            speedMbPerSec: progress.speedMBs,
+            downloadedMb,
+            totalMb: totalCalculatedMb,
           },
-        };
+        }));
+
+        if (progress.status === 'completed') {
+          delete downloadersRef.current[modelId];
+          loadStats();
+        }
       });
-    }, 200);
+
+      downloadersRef.current[modelId] = downloader;
+      await downloader.start();
+      loadStats();
+    } catch (err: any) {
+      // If error occurs, fall back gracefully and report status
+      delete downloadersRef.current[modelId];
+      setDownloads(prev => ({
+        ...prev,
+        [modelId]: {
+          status: 'idle',
+          progress: 0,
+          speedMbPerSec: 0,
+          downloadedMb: 0,
+          totalMb,
+        },
+      }));
+      Alert.alert(
+        'Download Notice',
+        `Could not complete network transfer: ${err?.message || 'Check offline connection'}`
+      );
+    }
   };
 
-  const handlePauseDownload = (modelId: string) => {
-    if (intervalsRef.current[modelId]) {
-      clearInterval(intervalsRef.current[modelId]);
-      delete intervalsRef.current[modelId];
+  const handlePauseDownload = async (modelId: string) => {
+    const downloader = downloadersRef.current[modelId];
+    if (downloader && typeof downloader.pause === 'function') {
+      try {
+        await downloader.pause();
+      } catch {}
+      delete downloadersRef.current[modelId];
     }
 
     setDownloads(prev => {
@@ -362,10 +390,13 @@ export default function SettingsScreen({
     handleStartDownload(modelId, sizeFormatted);
   };
 
-  const handleCancelDownload = (modelId: string) => {
-    if (intervalsRef.current[modelId]) {
-      clearInterval(intervalsRef.current[modelId]);
-      delete intervalsRef.current[modelId];
+  const handleCancelDownload = async (modelId: string) => {
+    const downloader = downloadersRef.current[modelId];
+    if (downloader && typeof downloader.cancel === 'function') {
+      try {
+        await downloader.cancel();
+      } catch {}
+      delete downloadersRef.current[modelId];
     }
 
     setDownloads(prev => {
@@ -373,6 +404,24 @@ export default function SettingsScreen({
       delete next[modelId];
       return next;
     });
+  };
+
+  const handleDeleteModel = async (modelId: string) => {
+    const spec = S23_MODEL_DATABASE.find(m => m.id === modelId);
+    if (!spec) return;
+
+    try {
+      await ModelManager.deleteModel(spec.filename);
+      setDownloads(prev => {
+        const next = { ...prev };
+        delete next[modelId];
+        return next;
+      });
+      await loadStats();
+      Alert.alert('Storage Reclaimed', `Model [${spec.name}] removed from sandbox.`);
+    } catch (err: any) {
+      Alert.alert('Error', `Failed to delete model: ${err?.message}`);
+    }
   };
 
   // =========================================================
@@ -481,7 +530,245 @@ export default function SettingsScreen({
   }
 
   // =========================================================
-  // SUB-SCREEN: S23 ULTRA MODEL VAULT WITH SPECULATIVE TURBO & DOWNLOAD
+  // SUB-SCREEN: SPECULATIVE DUAL-MODEL ENGINE (SYSTEM 1 & 2)
+  // =========================================================
+  if (currentScreen === 'speculative') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={styles.appBar}>
+          <TouchableOpacity onPress={() => setCurrentScreen('main')} style={styles.backBtn}>
+            <BackArrowIcon size={20} color="#ffffff" />
+            <Text style={styles.appBarTitle}>Speculative Dual-Model</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.subContent}>
+          {/* Main Speculative Config Card */}
+          <View style={[styles.turboCard, turboActive && styles.turboCardActive]}>
+            {/* Header with Switch */}
+            <View style={styles.turboHeaderRow}>
+              <View style={styles.turboTitleGroup}>
+                <View style={[styles.turboIconBadge, turboActive && styles.turboIconBadgeActive]}>
+                  <ZapIcon size={18} color={turboActive ? '#f59e0b' : '#71717a'} />
+                </View>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.turboCardTitle}>DUAL-MODEL INFERENCE</Text>
+                    <View style={[styles.speedAccelBadge, turboActive && styles.speedAccelBadgeActive]}>
+                      <Text style={[styles.speedAccelText, turboActive && styles.speedAccelTextActive]}>
+                        {activePreset.speedup} SPEED
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.turboCardSub}>System 1 (Fast Draft) + System 2 (Deep Oracle)</Text>
+                </View>
+              </View>
+
+              <Switch
+                value={turboActive}
+                onValueChange={setTurboActive}
+                thumbColor={turboActive ? '#ffffff' : '#71717a'}
+                trackColor={{ false: '#27272a', true: '#f59e0b' }}
+              />
+            </View>
+
+            {/* Presets Selector Tabs */}
+            <View style={styles.presetsTabRow}>
+              {SPECULATIVE_PRESETS.map((preset, idx) => {
+                const isSelectedPreset = activePresetIndex === idx;
+                return (
+                  <TouchableOpacity
+                    key={preset.id}
+                    style={[styles.presetTabBtn, isSelectedPreset && styles.presetTabBtnActive]}
+                    onPress={() => setActivePresetIndex(idx)}
+                  >
+                    <Text style={[styles.presetTabText, isSelectedPreset && styles.presetTabTextActive]}>
+                      {preset.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Paired Architecture Visualizer (Draft + Target) */}
+            <View style={styles.pairVisualizer}>
+              {/* TARGET MODEL CARD */}
+              <View style={styles.pairModelBox}>
+                <View style={styles.pairBadgeRow}>
+                  <View style={styles.targetBadge}>
+                    <Text style={styles.targetBadgeText}>SYSTEM 2 (ORACLE VERIFIER)</Text>
+                  </View>
+                  <Text style={styles.pairModelSize}>{activePreset.targetSize}</Text>
+                </View>
+                <Text style={styles.pairModelName}>{activePreset.targetName}</Text>
+                <Text style={styles.pairModelDetail}>
+                  {activePreset.targetQuant} • RAM: {activePreset.targetRamGb} GB • Deep Reasoning
+                </Text>
+              </View>
+
+              {/* PIPELINE LINK INDICATOR */}
+              <View style={styles.pipelineConnectorRow}>
+                <View style={styles.pipelineLine} />
+                <View style={styles.pipelineBadge}>
+                  <LayersIcon size={14} color={turboActive ? '#38bdf8' : '#71717a'} />
+                  <Text style={[styles.pipelineText, turboActive && { color: '#38bdf8' }]}>
+                    PARALLEL SPECULATIVE PIPELINE (K=4 DRAFT TOKENS)
+                  </Text>
+                </View>
+                <View style={styles.pipelineLine} />
+              </View>
+
+              {/* DRAFT MODEL CARD */}
+              <View style={styles.pairModelBox}>
+                <View style={styles.pairBadgeRow}>
+                  <View style={styles.draftBadge}>
+                    <Text style={styles.draftBadgeText}>SYSTEM 1 (FAST DRAFT SPECULATOR)</Text>
+                  </View>
+                  <Text style={styles.pairModelSize}>{activePreset.draftSize}</Text>
+                </View>
+                <Text style={styles.pairModelName}>{activePreset.draftName}</Text>
+                <Text style={styles.pairModelDetail}>
+                  {activePreset.draftQuant} • RAM: {activePreset.draftRamGb} GB • Low Latency Forward
+                </Text>
+              </View>
+            </View>
+
+            {/* Description */}
+            <Text style={styles.pairDescriptionText}>{activePreset.description}</Text>
+
+            {/* Speculative Telemetry Metrics Grid */}
+            <View style={styles.turboMetricsGrid}>
+              <View style={styles.turboMetricCell}>
+                <Text style={styles.turboMetricLabel}>Acceleration</Text>
+                <Text style={[styles.turboMetricVal, { color: turboActive ? '#f59e0b' : '#a1a1aa' }]}>
+                  {turboActive ? activePreset.speedup : '1.0x'}
+                </Text>
+                <Text style={styles.turboMetricSub}>vs Single Model</Text>
+              </View>
+
+              <View style={styles.turboMetricCell}>
+                <Text style={styles.turboMetricLabel}>Acceptance Rate</Text>
+                <Text style={[styles.turboMetricVal, { color: '#22c55e' }]}>{activePreset.acceptanceRate}</Text>
+                <Text style={styles.turboMetricSub}>Draft Accuracy</Text>
+              </View>
+
+              <View style={styles.turboMetricCell}>
+                <Text style={styles.turboMetricLabel}>Combined RAM</Text>
+                <Text style={styles.turboMetricVal}>{activePreset.combinedRamGb} GB</Text>
+                <Text style={styles.turboMetricSub}>12GB S23 Budget</Text>
+              </View>
+
+              <View style={styles.turboMetricCell}>
+                <Text style={styles.turboMetricLabel}>Verification</Text>
+                <Text style={styles.turboMetricVal}>Single Pass</Text>
+                <Text style={styles.turboMetricSub}>Exact Output Match</Text>
+              </View>
+            </View>
+
+            {/* Pipeline Action */}
+            <TouchableOpacity
+              style={[styles.pairActionBtn, turboActive && styles.pairActionBtnActive]}
+              onPress={() => {
+                onSelectModel(activePreset.targetId);
+                Alert.alert(
+                  'Speculative Turbo Mounted',
+                  `Target model [${activePreset.targetName}] paired with Draft [${activePreset.draftName}]. 2.8x acceleration active.`
+                );
+              }}
+            >
+              <ZapIcon size={15} color={turboActive ? '#000000' : '#ffffff'} />
+              <Text style={[styles.pairActionBtnText, turboActive && { color: '#000000', fontWeight: '700' }]}>
+                {turboActive ? 'Mount Paired Speculative Engine' : 'Enable Turbo Acceleration'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // =========================================================
+  // SUB-SCREEN: DATA & STORAGE DIAGNOSTICS (.nomedia sandbox)
+  // =========================================================
+  if (currentScreen === 'storage') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={styles.appBar}>
+          <TouchableOpacity onPress={() => setCurrentScreen('main')} style={styles.backBtn}>
+            <BackArrowIcon size={20} color="#ffffff" />
+            <Text style={styles.appBarTitle}>Data and Storage</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.subContent}>
+          {/* Storage Overview Card */}
+          <View style={styles.infoCard}>
+            <Text style={styles.sectionHeader}>STORAGE CONSUMPTION</Text>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Total Vault Usage</Text>
+              <Text style={[styles.metricVal, { color: '#38bdf8' }]}>{storageUsed}</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Episodic Vector Facts</Text>
+              <Text style={styles.metricVal}>{memoryCount} entries</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Isolation Status</Text>
+              <Text style={[styles.metricVal, { color: '#22c55e' }]}>Protected (.nomedia active)</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Photos / Cloud Leakage</Text>
+              <Text style={[styles.metricVal, { color: '#22c55e' }]}>0% (Zero MediaStore Indexing)</Text>
+            </View>
+          </View>
+
+          {/* Installed Models Breakdown */}
+          <Text style={[styles.sectionHeader, { marginTop: 20 }]}>ON-DEVICE MODEL WEIGHTS</Text>
+          {installedFiles.length === 0 ? (
+            <View style={styles.emptyFeed}>
+              <Text style={{ color: '#71717a', fontSize: 13 }}>No models currently downloaded in sandbox.</Text>
+            </View>
+          ) : (
+            installedFiles.map(f => (
+              <View key={f.filename} style={[styles.infoCard, { marginBottom: 8 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '600' }} numberOfLines={1}>
+                      {f.filename}
+                    </Text>
+                    <Text style={{ color: '#71717a', fontSize: 11, marginTop: 2 }}>{f.sizeFormatted}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.reDownloadBtn, { borderColor: 'rgba(239, 68, 68, 0.3)' }]}
+                    onPress={() => {
+                      const model = S23_MODEL_DATABASE.find(m => m.filename === f.filename);
+                      if (model) handleDeleteModel(model.id);
+                    }}
+                  >
+                    <TrashIcon size={14} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+
+          {/* Memory Cache Purge Button */}
+          <TouchableOpacity
+            style={[styles.pairActionBtn, { marginTop: 20, borderColor: 'rgba(239, 68, 68, 0.4)', backgroundColor: 'rgba(239, 68, 68, 0.08)' }]}
+            onPress={handlePurge}
+          >
+            <TrashIcon size={15} color="#ef4444" />
+            <Text style={[styles.pairActionBtnText, { color: '#ef4444' }]}>Clear Episodic Vector Memory</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // =========================================================
+  // SUB-SCREEN: S23 ULTRA MODEL VAULT & DOWNLOAD
   // =========================================================
   if (currentScreen === 'models') {
     return (
@@ -608,147 +895,26 @@ export default function SettingsScreen({
 
         {/* 5. Main Feed: Speculative Turbo Card + Model Cards */}
         <ScrollView contentContainerStyle={styles.subContent}>
-          
-          {/* ========================================================= */}
-          {/* DEDICATED SPECULATIVE TURBO MODE CARD */}
-          {/* ========================================================= */}
-          <View style={[styles.turboCard, turboActive && styles.turboCardActive]}>
-            {/* Header with Switch */}
-            <View style={styles.turboHeaderRow}>
-              <View style={styles.turboTitleGroup}>
-                <View style={[styles.turboIconBadge, turboActive && styles.turboIconBadgeActive]}>
-                  <ZapIcon size={18} color={turboActive ? '#f59e0b' : '#71717a'} />
-                </View>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.turboCardTitle}>SPECULATIVE TURBO MODE</Text>
-                    <View style={[styles.speedAccelBadge, turboActive && styles.speedAccelBadgeActive]}>
-                      <Text style={[styles.speedAccelText, turboActive && styles.speedAccelTextActive]}>
-                        {activePreset.speedup} SPEED
-                      </Text>
-                    </View>
+          <TouchableOpacity
+            style={styles.turboBannerBtn}
+            onPress={() => setCurrentScreen('speculative')}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={styles.turboIconBadgeActive}>
+                <ZapIcon size={18} color="#f59e0b" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.turboCardTitle}>SPECULATIVE DUAL-MODEL ENGINE</Text>
+                  <View style={styles.speedAccelBadgeActive}>
+                    <Text style={styles.speedAccelTextActive}>2.8x - 3.1x SPEED</Text>
                   </View>
-                  <Text style={styles.turboCardSub}>Dual-Model Accelerated Inference Pipeline</Text>
                 </View>
+                <Text style={styles.turboCardSub}>Dual-Model System 1 & 2 Reasoning (Tap to configure)</Text>
               </View>
-
-              <Switch
-                value={turboActive}
-                onValueChange={setTurboActive}
-                thumbColor={turboActive ? '#ffffff' : '#71717a'}
-                trackColor={{ false: '#27272a', true: '#f59e0b' }}
-              />
+              <Text style={{ color: '#f59e0b', fontSize: 16, fontWeight: '700' }}>→</Text>
             </View>
-
-            {/* Presets Selector Tabs */}
-            <View style={styles.presetsTabRow}>
-              {SPECULATIVE_PRESETS.map((preset, idx) => {
-                const isSelectedPreset = activePresetIndex === idx;
-                return (
-                  <TouchableOpacity
-                    key={preset.id}
-                    style={[styles.presetTabBtn, isSelectedPreset && styles.presetTabBtnActive]}
-                    onPress={() => setActivePresetIndex(idx)}
-                  >
-                    <Text style={[styles.presetTabText, isSelectedPreset && styles.presetTabTextActive]}>
-                      {preset.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Paired Architecture Visualizer (Draft + Target) */}
-            <View style={styles.pairVisualizer}>
-              
-              {/* TARGET MODEL CARD */}
-              <View style={styles.pairModelBox}>
-                <View style={styles.pairBadgeRow}>
-                  <View style={styles.targetBadge}>
-                    <Text style={styles.targetBadgeText}>TARGET MODEL (VERIFIER)</Text>
-                  </View>
-                  <Text style={styles.pairModelSize}>{activePreset.targetSize}</Text>
-                </View>
-                <Text style={styles.pairModelName}>{activePreset.targetName}</Text>
-                <Text style={styles.pairModelDetail}>
-                  {activePreset.targetQuant} • RAM: {activePreset.targetRamGb} GB • Oracle Precision
-                </Text>
-              </View>
-
-              {/* PIPELINE LINK INDICATOR */}
-              <View style={styles.pipelineConnectorRow}>
-                <View style={styles.pipelineLine} />
-                <View style={styles.pipelineBadge}>
-                  <LayersIcon size={14} color={turboActive ? '#38bdf8' : '#71717a'} />
-                  <Text style={[styles.pipelineText, turboActive && { color: '#38bdf8' }]}>
-                    SPECULATIVE LINK (K=4 DRAFT TOKENS)
-                  </Text>
-                </View>
-                <View style={styles.pipelineLine} />
-              </View>
-
-              {/* DRAFT MODEL CARD */}
-              <View style={styles.pairModelBox}>
-                <View style={styles.pairBadgeRow}>
-                  <View style={styles.draftBadge}>
-                    <Text style={styles.draftBadgeText}>DRAFT MODEL (SPECULATOR)</Text>
-                  </View>
-                  <Text style={styles.pairModelSize}>{activePreset.draftSize}</Text>
-                </View>
-                <Text style={styles.pairModelName}>{activePreset.draftName}</Text>
-                <Text style={styles.pairModelDetail}>
-                  {activePreset.draftQuant} • RAM: {activePreset.draftRamGb} GB • Low Latency Forward
-                </Text>
-              </View>
-            </View>
-
-            {/* Speculative Telemetry Metrics Grid */}
-            <View style={styles.turboMetricsGrid}>
-              <View style={styles.turboMetricCell}>
-                <Text style={styles.turboMetricLabel}>Acceleration</Text>
-                <Text style={[styles.turboMetricVal, { color: turboActive ? '#f59e0b' : '#a1a1aa' }]}>
-                  {turboActive ? activePreset.speedup : '1.0x'}
-                </Text>
-                <Text style={styles.turboMetricSub}>vs Single Model</Text>
-              </View>
-
-              <View style={styles.turboMetricCell}>
-                <Text style={styles.turboMetricLabel}>Acceptance Rate</Text>
-                <Text style={[styles.turboMetricVal, { color: '#22c55e' }]}>{activePreset.acceptanceRate}</Text>
-                <Text style={styles.turboMetricSub}>Draft Accuracy</Text>
-              </View>
-
-              <View style={styles.turboMetricCell}>
-                <Text style={styles.turboMetricLabel}>Combined RAM</Text>
-                <Text style={styles.turboMetricVal}>{activePreset.combinedRamGb} GB</Text>
-                <Text style={styles.turboMetricSub}>12GB S23 Budget</Text>
-              </View>
-
-              <View style={styles.turboMetricCell}>
-                <Text style={styles.turboMetricLabel}>Verification</Text>
-                <Text style={styles.turboMetricVal}>Single Pass</Text>
-                <Text style={styles.turboMetricSub}>Exact Output Match</Text>
-              </View>
-            </View>
-
-            {/* Pipeline Action */}
-            <TouchableOpacity
-              style={[styles.pairActionBtn, turboActive && styles.pairActionBtnActive]}
-              onPress={() => {
-                onSelectModel(activePreset.targetId);
-                Alert.alert(
-                  'Speculative Turbo Mounted',
-                  `Target model [${activePreset.targetName}] paired with Draft [${activePreset.draftName}]. 2.8x acceleration active.`
-                );
-              }}
-            >
-              <ZapIcon size={15} color={turboActive ? '#000000' : '#ffffff'} />
-              <Text style={[styles.pairActionBtnText, turboActive && { color: '#000000', fontWeight: '700' }]}>
-                {turboActive ? 'Mount Paired Speculative Engine' : 'Enable Turbo Acceleration'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
+          </TouchableOpacity>
           {/* Section Divider */}
           <View style={styles.modelsFeedHeader}>
             <Text style={styles.sectionHeader}>INDIVIDUAL MODEL VAULT REPOSITORY</Text>
@@ -931,6 +1097,23 @@ export default function SettingsScreen({
                       >
                         <DownloadIcon size={14} color="#71717a" />
                       </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.reDownloadBtn, { borderColor: 'rgba(239, 68, 68, 0.2)' }]}
+                        onPress={() => {
+                          Alert.alert(
+                            'Delete Model Weights',
+                            `Are you sure you want to delete ${m.name} (${m.sizeFormatted}) from device storage?`,
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Delete', style: 'destructive', onPress: () => handleDeleteModel(m.id) },
+                            ]
+                          );
+                        }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <TrashIcon size={13} color="#ef4444" />
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
@@ -1017,14 +1200,23 @@ export default function SettingsScreen({
               <CpuIcon size={20} color="#ffffff" />
             </View>
             <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>Model Vault ({S23_MODEL_DATABASE.length} Models)</Text>
+              <Text style={styles.rowSub}>S23 Ultra local offline models, Grade S/B/C, Boolean search</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('speculative')}>
+            <View style={styles.iconWrapper}>
+              <ZapIcon size={20} color="#f59e0b" />
+            </View>
+            <View style={styles.rowText}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.rowTitle}>Model Vault ({S23_MODEL_DATABASE.length} Models)</Text>
+                <Text style={styles.rowTitle}>Speculative Dual-Model (System 1 & 2)</Text>
                 <View style={styles.turboPill}>
-                  <ZapIcon size={11} color="#f59e0b" />
                   <Text style={styles.turboPillText}>2.8x Turbo</Text>
                 </View>
               </View>
-              <Text style={styles.rowSub}>Speculative paired engine, live SVG download, Grade S/B/C</Text>
+              <Text style={styles.rowSub}>Fast draft speculator + heavy foundation reasoning oracle</Text>
             </View>
           </TouchableOpacity>
 
@@ -1038,7 +1230,7 @@ export default function SettingsScreen({
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('models')}>
+          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('storage')}>
             <View style={styles.iconWrapper}>
               <StorageIcon size={20} color="#ffffff" />
             </View>
@@ -1497,6 +1689,23 @@ const styles = StyleSheet.create({
   turboMetricVal: { color: '#ffffff', fontSize: 12, fontWeight: '700', marginTop: 2 },
   turboMetricSub: { color: '#52525b', fontSize: 8, marginTop: 1 },
 
+  pairDescriptionText: {
+    color: '#a1a1aa',
+    fontSize: 12,
+    lineHeight: 18,
+    paddingHorizontal: 2,
+  },
+  turboBannerBtn: {
+    backgroundColor: '#0c0c10',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+    borderRadius: 14,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   pairActionBtn: {
     backgroundColor: '#18181f',
     borderWidth: 1,

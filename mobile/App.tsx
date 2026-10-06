@@ -20,7 +20,20 @@ import { MemoryEngine } from './src/services/memoryEngine';
 import { VaultStorage, ChatThread, ChatMessage, ThreadSoulConfig } from './src/services/vaultStorage';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ThreadSoulModal from './src/components/ThreadSoulModal';
-import { SoulIcon, SlidersIcon, ZapIcon, CrossIcon } from './src/components/Icons';
+import {
+  SoulIcon,
+  SlidersIcon,
+  ZapIcon,
+  CrossIcon,
+  MicIcon,
+  AttachmentIcon,
+  ImageIcon,
+  DocumentIcon,
+  CameraIcon,
+} from './src/components/Icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { Image } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -40,6 +53,10 @@ export default function App() {
   const [threadSoulModalOpen, setThreadSoulModalOpen] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
 
+  // Multimodal Attachments State
+  const [selectedMedia, setSelectedMedia] = useState<{ uri: string; type: 'image' | 'file'; name?: string }[]>([]);
+  const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+
   // Voice Pulse Animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -54,6 +71,75 @@ export default function App() {
     } catch {
       // Ignored
     }
+  };
+
+  const handlePickImage = async () => {
+    setAttachmentMenuOpen(false);
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        allowsMultipleSelection: true,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const newItems = result.assets.map(a => ({
+          uri: a.uri,
+          type: 'image' as const,
+          name: a.fileName || 'Photo',
+        }));
+        setSelectedMedia(prev => [...prev, ...newItems]);
+      }
+    } catch {}
+  };
+
+  const handleTakePhoto = async () => {
+    setAttachmentMenuOpen(false);
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const item = {
+          uri: result.assets[0].uri,
+          type: 'image' as const,
+          name: 'Camera Capture',
+        };
+        setSelectedMedia(prev => [...prev, item]);
+      }
+    } catch {}
+  };
+
+  const handlePickDocument = async () => {
+    setAttachmentMenuOpen(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        multiple: true,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const newItems = result.assets.map(a => ({
+          uri: a.uri,
+          type: 'file' as const,
+          name: a.name || 'Document',
+        }));
+        setSelectedMedia(prev => [...prev, ...newItems]);
+      }
+    } catch {}
+  };
+
+  const handleRemoveMedia = (index: number) => {
+    setSelectedMedia(prev => prev.filter((_, i) => i !== index));
   };
 
   const startVoicePulse = () => {
@@ -74,9 +160,10 @@ export default function App() {
   };
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && selectedMedia.length === 0) return;
 
     const userText = inputText.trim();
+    const mediaUris = selectedMedia.map(m => m.uri);
     
     // 1. Process turn with this thread's specific soul and PAD
     const threadArch = currentThread.soulConfig.archetype;
@@ -88,6 +175,7 @@ export default function App() {
       sender: 'user',
       text: userText,
       timestamp: Date.now(),
+      mediaUris: mediaUris.length > 0 ? mediaUris : undefined,
       tokenCountEst: Math.floor(userText.length / 4),
     };
 
@@ -104,7 +192,7 @@ export default function App() {
     const updatedMessages = [...currentThread.messages, userMsg, botMsg];
 
     // Auto-derive thread title if it's the first user turn
-    const threadTitle = currentThread.title === 'New Conversation' ? userText.slice(0, 32) : currentThread.title;
+    const threadTitle = currentThread.title === 'New Conversation' ? (userText ? userText.slice(0, 32) : 'Photo Analysis') : currentThread.title;
 
     let updatedThread: ChatThread = {
       ...currentThread,
@@ -122,6 +210,7 @@ export default function App() {
 
     setCurrentThread(updatedThread);
     setInputText('');
+    setSelectedMedia([]);
 
     // 4. Persist sovereign thread to disk
     await VaultStorage.saveThread(updatedThread);
@@ -256,7 +345,15 @@ export default function App() {
                     m.sender === 'user' ? styles.userBubble : styles.assistantBubble,
                   ]}
                 >
-                  <Text style={styles.messageText}>{m.text}</Text>
+                  {/* Attached Media Previews */}
+                  {m.mediaUris && m.mediaUris.length > 0 && (
+                    <View style={styles.attachedMediaGrid}>
+                      {m.mediaUris.map((uri, idx) => (
+                        <Image key={idx} source={{ uri }} style={styles.bubbleMediaThumb} />
+                      ))}
+                    </View>
+                  )}
+                  {m.text ? <Text style={styles.messageText}>{m.text}</Text> : null}
                 </View>
               </View>
             ))}
@@ -264,7 +361,43 @@ export default function App() {
 
           {/* Floating Bottom Input Deck */}
           <View style={styles.inputDeck}>
+            {/* Selected Attachments Preview Tray */}
+            {selectedMedia.length > 0 && (
+              <View style={styles.mediaPreviewTray}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {selectedMedia.map((item, idx) => (
+                    <View key={idx} style={styles.mediaPreviewCard}>
+                      {item.type === 'image' ? (
+                        <Image source={{ uri: item.uri }} style={styles.mediaPreviewThumb} />
+                      ) : (
+                        <View style={styles.docPreviewBadge}>
+                          <DocumentIcon size={14} color="#38bdf8" />
+                          <Text style={styles.docPreviewText} numberOfLines={1}>{item.name}</Text>
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.mediaRemoveBtn}
+                        onPress={() => handleRemoveMedia(idx)}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <CrossIcon size={10} color="#ffffff" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
             <View style={styles.inputShell}>
+              {/* Attachment Picker Trigger Button */}
+              <TouchableOpacity
+                style={styles.attachBtn}
+                onPress={() => setAttachmentMenuOpen(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <AttachmentIcon size={18} color="#a1a1aa" />
+              </TouchableOpacity>
+
               <TextInput
                 style={styles.promptField}
                 placeholder="Message CHIWIWI..."
@@ -274,6 +407,8 @@ export default function App() {
                 onSubmitEditing={handleSend}
                 returnKeyType="send"
               />
+
+              {/* Minimal Line Mic Icon */}
               <TouchableOpacity
                 style={styles.micBtn}
                 onPress={() => {
@@ -281,13 +416,53 @@ export default function App() {
                   startVoicePulse();
                 }}
               >
-                <Text style={{ fontSize: 16 }}>🎙</Text>
+                <MicIcon size={18} color="#ffffff" />
               </TouchableOpacity>
+
               <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
                 <Text style={styles.sendBtnText}>↑</Text>
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Multimodal Attachment Picker Menu Modal */}
+          <Modal visible={attachmentMenuOpen} transparent animationType="fade">
+            <View style={styles.modalBackdrop}>
+              <TouchableOpacity style={styles.backdropTouch} onPress={() => setAttachmentMenuOpen(false)} />
+              <View style={styles.attachmentSheet}>
+                <Text style={styles.attachmentTitle}>ATTACH CONTENT</Text>
+                <TouchableOpacity style={styles.attachmentOption} onPress={handleTakePhoto}>
+                  <View style={styles.attachIconBg}>
+                    <CameraIcon size={18} color="#38bdf8" />
+                  </View>
+                  <View>
+                    <Text style={styles.attachOptionLabel}>Camera</Text>
+                    <Text style={styles.attachOptionSub}>Take photo with S23 Ultra</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.attachmentOption} onPress={handlePickImage}>
+                  <View style={styles.attachIconBg}>
+                    <ImageIcon size={18} color="#22c55e" />
+                  </View>
+                  <View>
+                    <Text style={styles.attachOptionLabel}>Photos & Images</Text>
+                    <Text style={styles.attachOptionSub}>Select from device gallery</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.attachmentOption} onPress={handlePickDocument}>
+                  <View style={styles.attachIconBg}>
+                    <DocumentIcon size={18} color="#f59e0b" />
+                  </View>
+                  <View>
+                    <Text style={styles.attachOptionLabel}>Files & Documents</Text>
+                    <Text style={styles.attachOptionSub}>PDF, TXT, code, markdown</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </KeyboardAvoidingView>
 
         {/* History Drawer Modal (Persistent Saved Threads) */}
@@ -607,5 +782,115 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+
+  // Multimodal Attachments & Preview Tray
+  attachBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaPreviewTray: {
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  mediaPreviewCard: {
+    position: 'relative',
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: '#18181d',
+  },
+  mediaPreviewThumb: {
+    width: 56,
+    height: 56,
+    borderRadius: 9,
+  },
+  mediaRemoveBtn: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  docPreviewBadge: {
+    height: 56,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: 160,
+  },
+  docPreviewText: {
+    color: '#e4e4e7',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  attachedMediaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  bubbleMediaThumb: {
+    width: 180,
+    height: 140,
+    borderRadius: 12,
+    backgroundColor: '#27272a',
+  },
+
+  // Attachment Sheet Modal
+  attachmentSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#111114',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 24,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 28,
+    gap: 16,
+  },
+  attachmentTitle: {
+    color: '#71717a',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginBottom: 4,
+  },
+  attachmentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 10,
+  },
+  attachIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#18181d',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachOptionLabel: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  attachOptionSub: {
+    color: '#71717a',
+    fontSize: 12,
+    marginTop: 2,
   },
 });
