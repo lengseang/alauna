@@ -1,0 +1,9 @@
+{
+  "name": "chiwiwi",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Deterministic anti-hallucination agent gateway",
+  "scripts": {
+    "test": "node --test"
+  }
+}

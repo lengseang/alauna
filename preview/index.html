@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CHIWIWI — Sovereign Mobile AI Studio</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --drawer-bg: #09090b;
+      --card: #111114;
+      --card-active: #18181d;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --text: #f4f4f6;
+      --text-muted: #71717a;
+      --text-subtle: #52525b;
+      --accent: #ffffff;
+      --soul-primary: #38bdf8;
+      --soul-secondary: #818cf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    body {
+      background: #050508;
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+      overflow-x: hidden;
+    }
+
+    header { text-align: center; margin-bottom: 24px; }
+    header h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.3px; color: #fff; }
+    header p { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+
+    /* Handset Enclosure */
+    .phone {
+      width: 380px;
+      height: 780px;
+      border-radius: 54px;
+      background: var(--bg);
+      border: 4px solid #27272a;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    }
+
+    /* Top Navigation Bar */
+    .top-nav {
+      height: 56px;
+      padding: 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(20px);
+      z-index: 20;
+    }
+
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .icon-btn:hover { background: var(--card); }
+    .icon-btn svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+    .model-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .model-pill:hover { border-color: var(--border-strong); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+
+    /* Conversational Feed */
+    .chat-feed {
+      flex: 1;
+      padding: 20px 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      max-width: 86%;
+      gap: 5px;
+    }
+    .message.assistant {
+      align-self: flex-start;
+      max-width: 92%;
+    }
+    .message.user {
+      align-self: flex-end;
+      background: var(--card-active);
+      border: 1px solid var(--border);
+      padding: 12px 16px;
+      border-radius: 20px;
+      border-bottom-right-radius: 4px;
+      font-size: 14px;
+      line-height: 1.45;
+      color: #fff;
+    }
+    .meta-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .meta-tag b { color: var(--text); font-weight: 600; }
+    .assistant-bubble {
+      font-size: 14px;
+      line-height: 1.55;
+      color: #e4e4e7;
+      text-wrap: pretty;
+    }
+
+    /* Floating Input Deck */
+    .input-deck {
+      padding: 12px 16px 24px;
+      background: linear-gradient(to top, #000 85%, transparent);
+      z-index: 10;
+    }
+    .input-shell {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 26px;
+      padding: 6px 8px 6px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: border-color 0.2s ease;
+    }
+    .input-shell:focus-within { border-color: var(--border-strong); }
+    .prompt-field {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+    .prompt-field::placeholder { color: var(--text-subtle); }
+
+    .mic-live-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--card-active);
+      border: 1px solid var(--border);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .mic-live-btn:hover { background: #fff; color: #000; }
+    .mic-live-btn svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+    .send-action {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #fff;
+      color: #000;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .send-action svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+
+    /* -------------------------------------------------------------
+       SLIDE-OVER HISTORY DRAWER
+    ------------------------------------------------------------- */
+    .drawer-scrim {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      z-index: 50;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .drawer-scrim.open { opacity: 1; pointer-events: auto; }
+
+    .drawer {
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 300px;
+      background: var(--drawer-bg);
+      border-right: 1px solid var(--border);
+      z-index: 60;
+      transform: translateX(-100%);
+      transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 24px 16px;
+    }
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-btn-new {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    .drawer-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-subtle);
+      margin-bottom: 8px;
+      padding: 0 4px;
+    }
+    .chat-item {
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .chat-item:hover, .chat-item.active { background: var(--card); color: #fff; }
+
+    /* -------------------------------------------------------------
+       SOUL CUSTOMIZATION & CONFIG STUDIO (Sheet from Top Right ⌥)
+    ------------------------------------------------------------- */
+    .sheet-scrim {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      z-index: 70;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .sheet-scrim.open { opacity: 1; pointer-events: auto; }
+
+    .soul-sheet {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      max-height: 85%;
+      background: #0c0c0f;
+      border-top: 1px solid var(--border);
+      border-radius: 32px 32px 0 0;
+      padding: 20px 20px 36px;
+      z-index: 80;
+      transform: translateY(100%);
+      transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+    .soul-sheet.open { transform: translateY(0); }
+
+    .sheet-pill-handle {
+      width: 40px; height: 4px; border-radius: 2px;
+      background: rgba(255, 255, 255, 0.2); margin: 0 auto;
+    }
+    .sheet-title-row {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .sheet-heading { font-size: 15px; font-weight: 600; color: #fff; }
+
+    /* Archetype Switcher Grid */
+    .archetype-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .archetype-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .archetype-btn.active {
+      border-color: #fff;
+      background: var(--card-active);
+    }
+    .arch-name { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 2px; }
+    .arch-desc { font-size: 11px; color: var(--text-muted); line-height: 1.3; }
+
+    /* Sliders */
+    .tuning-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .slider-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .slider-val { font-variant-numeric: tabular-nums; color: var(--text-muted); font-size: 12px; }
+    input[type=range] {
+      width: 100%;
+      height: 4px;
+      accent-color: #fff;
+      background: #27272a;
+      border-radius: 2px;
+    }
+
+    /* Fullscreen Voice Mode (Siri Seamless Plasma) */
+    .voice-modal {
+      position: absolute;
+      inset: 0;
+      background: #000;
+      z-index: 90;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 60px 24px 44px;
+    }
+    .voice-modal.open { display: flex; }
+
+    .plasma-orb {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #fff 0%, #94a3b8 40%, #334155 80%, #000 100%);
+      filter: blur(14px);
+      box-shadow: 0 0 70px rgba(255, 255, 255, 0.2);
+      animation: siriBreathe 4.5s infinite ease-in-out;
+      margin: auto 0;
+    }
+    @keyframes siriBreathe {
+      0%, 100% { transform: scale(0.94); opacity: 0.85; }
+      50% { transform: scale(1.12); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>CHIWIWI — Sovereign Mobile AI Studio</h1>
+    <p>Clean Studio UI • Full Soul Customization Suite • Offline On-Device</p>
+    <div style="margin-top: 14px; display: flex; gap: 8px; justify-content: center;">
+      <button id="view-mode-app" onclick="switchMainView('app')" style="background: #fff; color: #000; border: none; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;">
+        📱 Mobile App
+      </button>
+      <button id="view-mode-dash" onclick="switchMainView('dash')" style="background: var(--card); color: var(--text-muted); border: 1px solid var(--border); padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer;">
+        📊 Management Dashboard
+      </button>
+    </div>
+  </header>
+
+  <div class="phone">
+    
+    <!-- Top Bar -->
+    <div class="top-nav">
+      <button class="icon-btn" onclick="toggleDrawer()" title="History">
+        <svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="20" y2="17"></line></svg>
+      </button>
+
+      <div class="model-pill" onclick="toggleSoulSheet()">
+        <div class="status-dot"></div>
+        <span id="active-model-lbl">Llama-3.2-1B</span>
+      </div>
+
+      <button class="icon-btn" onclick="toggleSoulSheet()" title="Soul Customization">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+    </div>
+
+    <!-- Chat Stream -->
+    <div class="chat-feed">
+      <div class="message assistant">
+        <div class="meta-tag"><b>CHIWIWI</b> • <span id="chat-soul-name">Empathetic Confidant</span></div>
+        <div class="assistant-bubble">
+          I'm completely loaded into your device's memory. All thoughts, emotional states, and voice processing stay strictly inside this sandbox. How can I help you today?
+        </div>
+      </div>
+
+      <div class="message user">
+        Can you optimize the decision gateway latency benchmark?
+      </div>
+
+      <div class="message assistant">
+        <div class="meta-tag"><b>CHIWIWI</b> • 0.08ms gateway</div>
+        <div class="assistant-bubble">
+          Evaluated against the AST. Tier 0 matched in 0.08ms with 100% determinism. Five test cases validated with zero hallucination.
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating Input Deck -->
+    <div class="input-deck">
+      <div class="input-shell">
+        <input type="text" class="prompt-field" placeholder="Message local agent..." />
+        <button class="mic-live-btn" onclick="openVoice()" title="Live Voice">
+          <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+        </button>
+        <button class="send-action" title="Send">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Scrim for Drawer -->
+    <div class="drawer-scrim" id="drawer-scrim" onclick="toggleDrawer()"></div>
+
+    <!-- Side History Drawer -->
+    <div class="drawer" id="drawer">
+      <div>
+        <button class="drawer-btn-new" onclick="toggleDrawer()">
+          <span>+ New Conversation</span>
+          <span style="color: var(--text-subtle);">⌘N</span>
+        </button>
+
+        <div class="drawer-label">Recent Conversations</div>
+        <div class="chat-item active">Decision Gateway Benchmarks</div>
+        <div class="chat-item">Soul Vector Equation Calibration</div>
+        <div class="chat-item">Offline Whisper Tokenizer</div>
+        <div class="chat-item">SQLite-vec Episodic Memory</div>
+      </div>
+
+      <div style="border-top: 1px solid var(--border); padding-top: 14px; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div style="font-size: 13px; font-weight: 600;">LENG SEANG</div>
+          <div style="font-size: 11px; color: var(--text-subtle);">Sovereign Handset</div>
+        </div>
+        <span style="font-size: 11px; padding: 3px 8px; border-radius: 6px; background: var(--card); border: 1px solid var(--border); color: #22c55e;">
+          LOCAL
+        </span>
+      </div>
+    </div>
+
+    <!-- Scrim for Soul Sheet -->
+    <div class="sheet-scrim" id="sheet-scrim" onclick="toggleSoulSheet()"></div>
+
+    <!-- Soul Customization & Model Sheet -->
+    <div class="soul-sheet" id="soul-sheet">
+      <div class="sheet-pill-handle"></div>
+      
+      <div class="sheet-title-row">
+        <span class="sheet-heading">Soul & Model Studio</span>
+        <button class="icon-btn" onclick="toggleSoulSheet()" style="width: 28px; height: 28px;">✕</button>
+      </div>
+
+      <!-- Active Model Selection -->
+      <div class="tuning-box">
+        <div class="slider-row">
+          <span>Target Engine</span>
+          <span class="slider-val">750 MB • Active RAM</span>
+        </div>
+        <select id="model-select" onchange="changeModel(this.value)" style="width: 100%; background: #000; border: 1px solid var(--border); color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 13px; outline: none;">
+          <option value="Llama-3.2-1B">Llama-3.2-1B-Instruct (Fast & Casual)</option>
+          <option value="SmolLM2-1.7B">SmolLM2-1.7B-Instruct (Balanced Roleplay)</option>
+        </select>
+      </div>
+
+      <!-- Archetype Matrix -->
+      <div>
+        <div class="drawer-label">Soul Archetypes</div>
+        <div class="archetype-grid">
+          <div class="archetype-btn active" id="arch-empath" onclick="setArchetype('empath')">
+            <div class="arch-name">Empathetic Confidant</div>
+            <div class="arch-desc">Warm, attentive, deep listening.</div>
+          </div>
+          <div class="archetype-btn" id="arch-mentor" onclick="setArchetype('mentor')">
+            <div class="arch-name">Sovereign Mentor</div>
+            <div class="arch-desc">Calm, high-wisdom, reflective.</div>
+          </div>
+          <div class="archetype-btn" id="arch-tactical" onclick="setArchetype('tactical')">
+            <div class="arch-name">Tactical Engineer</div>
+            <div class="arch-desc">Razor-sharp, zero preamble.</div>
+          </div>
+          <div class="archetype-btn" id="arch-spark" onclick="setArchetype('spark')">
+            <div class="arch-name">Playful Spark</div>
+            <div class="arch-desc">Spontaneous, high energy.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic PAD Sliders -->
+      <div class="tuning-box">
+        <div class="slider-row">
+          <span>Empathy & Warmth (P)</span>
+          <span class="slider-val" id="val-p">+0.65</span>
+        </div>
+        <input type="range" id="rng-p" min="-1" max="1" step="0.05" value="0.65" oninput="document.getElementById('val-p').innerText = (this.value > 0 ? '+' : '') + this.value" />
+
+        <div class="slider-row" style="margin-top: 8px;">
+          <span>Energy & Arousal (A)</span>
+          <span class="slider-val" id="val-a">0.40</span>
+        </div>
+        <input type="range" id="rng-a" min="0" max="1" step="0.05" value="0.40" oninput="document.getElementById('val-a').innerText = this.value" />
+
+        <div class="slider-row" style="margin-top: 8px;">
+          <span>Candor & Directness (D)</span>
+          <span class="slider-val" id="val-d">0.75</span>
+        </div>
+        <input type="range" id="rng-d" min="0" max="1" step="0.05" value="0.75" oninput="document.getElementById('val-d').innerText = this.value" />
+      </div>
+
+      <div style="font-size: 11px; color: var(--text-subtle); text-align: center;">
+        Inference: Local Metal/Vulkan • 0 Network Calls
+      </div>
+    </div>
+
+    <!-- Live Voice Modal -->
+    <div class="voice-modal" id="voice-modal">
+      <div style="width: 100%; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 11px; letter-spacing: 1.5px; color: var(--text-subtle); font-weight: 600;">OFFLINE LIVE VOICE</span>
+        <button class="icon-btn" onclick="closeVoice()">✕</button>
+      </div>
+
+      <div class="plasma-orb"></div>
+
+      <div style="text-align: center;">
+        <p style="font-size: 17px; color: #e4e4e7; margin-bottom: 24px;">"Listening closely..."</p>
+        <button class="icon-btn" onclick="closeVoice()" style="width: 52px; height: 52px; border-radius: 50%; background: #27272a; margin: 0 auto;">
+          ✕
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- -------------------------------------------------------------
+       SOVEREIGN MANAGEMENT DASHBOARD (Desktop / Local Web View)
+  ------------------------------------------------------------- -->
+  <div id="dashboard-container" style="display: none; width: 100%; max-width: 980px; background: #0c0c0f; border: 1px solid var(--border); border-radius: 20px; padding: 28px; box-shadow: 0 30px 80px rgba(0,0,0,0.8);">
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 24px;">
+      <div>
+        <h2 style="font-size: 18px; font-weight: 700; color: #fff;">CHIWIWI Local Node Telemetry & Vault</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Local Handset • USB/Localhost Bridge • Zero Outbound Traffic</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.2);">
+          ● LOCAL ENGINE ACTIVE
+        </span>
+      </div>
+    </div>
+
+    <!-- 4 Key Metrics Cards -->
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px;">
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Memory Load</div>
+        <div style="font-size: 22px; font-weight: 700; color: #fff; margin: 6px 0 2px;">1.08 GB</div>
+        <div style="font-size: 11px; color: #22c55e;">Within 6GB OS safe budget</div>
+      </div>
+
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Inference Speed</div>
+        <div style="font-size: 22px; font-weight: 700; color: #fff; margin: 6px 0 2px;">38.4 t/s</div>
+        <div style="font-size: 11px; color: var(--text-muted);">Vulkan / Metal GPU Kernel</div>
+      </div>
+
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Episodic Memories</div>
+        <div style="font-size: 22px; font-weight: 700; color: #fff; margin: 6px 0 2px;">142 facts</div>
+        <div style="font-size: 11px; color: var(--text-muted);">SQLite-vec index size 4.2 MB</div>
+      </div>
+
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);">Soul Equilibrium</div>
+        <div style="font-size: 22px; font-weight: 700; color: #fff; margin: 6px 0 2px;">+0.65 P</div>
+        <div style="font-size: 11px; color: var(--text-muted);">Attuned • Empathetic Confidant</div>
+      </div>
+    </div>
+
+    <!-- Main Grid: Model Vault & Memory Inspector -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+      
+      <!-- GGUF Model Vault Table with Grade Filtering -->
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div>
+            <span style="font-size: 13px; font-weight: 700;">S23 Ultra Local Model Vault</span>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">12GB Handset RAM • 21 Models Cataloged</div>
+          </div>
+          <span style="font-size: 11px; color: #22c55e; font-weight: 700;">Vulkan / OpenCL</span>
+        </div>
+
+        <div style="display: flex; gap: 6px; margin-bottom: 14px;">
+          <button style="background: #fff; color: #000; border: none; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; cursor: pointer;">All (21)</button>
+          <button style="background: var(--card-active); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; cursor: pointer;">Grade S (Titans)</button>
+          <button style="background: var(--card-active); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; cursor: pointer;">Grade B (Sweet Spot)</button>
+          <button style="background: var(--card-active); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; cursor: pointer;">Grade C (1B-2B)</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto;">
+          <!-- Model Item 1 -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: #fff;">Llama 3.2 (1B) <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(34,197,94,0.15); color: #22c55e;">Grade C</span></div>
+              <div style="font-size: 11px; color: var(--text-muted);">748 MB • 1.2 GB RAM • Fast & Casual</div>
+            </div>
+            <span style="font-size: 11px; color: #22c55e; font-weight: 700;">ACTIVE IN RAM</span>
+          </div>
+
+          <!-- Model Item 2 -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: #fff;">Phi-4-mini (3.8B) <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(59,130,246,0.15); color: #3b82f6;">Grade B</span></div>
+              <div style="font-size: 11px; color: var(--text-muted);">2.4 GB • 2.9 GB RAM • Microsoft Speed Demon</div>
+            </div>
+            <button style="background: var(--card-active); border: 1px solid var(--border); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;">Mount</button>
+          </div>
+
+          <!-- Model Item 3 -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: #fff;">Gemma 4 (12B) Abliterated <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(239,68,68,0.15); color: #ef4444;">Grade S</span> <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(236,72,153,0.15); color: #ec4899;">Uncensored</span></div>
+              <div style="font-size: 11px; color: var(--text-muted);">7.2 GB • 7.5 GB RAM • Unrestricted Multimodal Oracle</div>
+            </div>
+            <button style="background: var(--card-active); border: 1px solid var(--border); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;">Mount</button>
+          </div>
+
+          <!-- Model Item 4 -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px;">
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: #fff;">Llama 3.1 (8B) <span style="font-size: 9px; padding: 2px 6px; border-radius: 4px; background: rgba(239,68,68,0.15); color: #ef4444;">Grade S</span></div>
+              <div style="font-size: 11px; color: var(--text-muted);">4.9 GB • 5.6 GB RAM • Human-like Empathy & Roleplay</div>
+            </div>
+            <button style="background: var(--card-active); border: 1px solid var(--border); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;">Mount</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Episodic Memory Vault Inspector -->
+      <div style="background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 20px;">
+        <div style="font-size: 13px; font-weight: 700; margin-bottom: 14px; display: flex; justify-content: space-between;">
+          <span>Episodic Memory Vault (SQLite-vec)</span>
+          <span style="font-size: 11px; color: var(--text-muted);">Purge / Edit Allowed</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #fff;">User prefers action-first and zero preambles.</div>
+              <div style="font-size: 10px; color: var(--text-muted);">Extracted 2 hours ago • Relevance Score: 0.94</div>
+            </div>
+            <button style="background: transparent; border: none; color: #ef4444; font-size: 12px; cursor: pointer;">✕</button>
+          </div>
+
+          <div style="padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #fff;">Working on CHIWIWI on-device mobile AI agent.</div>
+              <div style="font-size: 10px; color: var(--text-muted);">Extracted yesterday • Relevance Score: 0.98</div>
+            </div>
+            <button style="background: transparent; border: none; color: #ef4444; font-size: 12px; cursor: pointer;">✕</button>
+          </div>
+
+          <div style="padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #fff;">Requested monochrome Siri-style organic fluid UI.</div>
+              <div style="font-size: 10px; color: var(--text-muted);">Extracted 10 mins ago • Relevance Score: 0.89</div>
+            </div>
+            <button style="background: transparent; border: none; color: #ef4444; font-size: 12px; cursor: pointer;">✕</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    function switchMainView(mode) {
+      const phone = document.querySelector('.phone');
+      const dash = document.getElementById('dashboard-container');
+      const btnApp = document.getElementById('view-mode-app');
+      const btnDash = document.getElementById('view-mode-dash');
+
+      if (mode === 'dash') {
+        phone.style.display = 'none';
+        dash.style.display = 'block';
+        btnDash.style.background = '#fff';
+        btnDash.style.color = '#000';
+        btnApp.style.background = 'var(--card)';
+        btnApp.style.color = 'var(--text-muted)';
+      } else {
+        phone.style.display = 'flex';
+        dash.style.display = 'none';
+        btnApp.style.background = '#fff';
+        btnApp.style.color = '#000';
+        btnDash.style.background = 'var(--card)';
+        btnDash.style.color = 'var(--text-muted)';
+      }
+    }
+
+    function toggleDrawer() {
+      document.getElementById('drawer').classList.toggle('open');
+      document.getElementById('drawer-scrim').classList.toggle('open');
+    }
+
+    function toggleSoulSheet() {
+      document.getElementById('soul-sheet').classList.toggle('open');
+      document.getElementById('sheet-scrim').classList.toggle('open');
+    }
+
+    function openVoice() {
+      document.getElementById('voice-modal').classList.add('open');
+    }
+
+    function closeVoice() {
+      document.getElementById('voice-modal').classList.remove('open');
+    }
+
+    function changeModel(val) {
+      document.getElementById('active-model-lbl').innerText = val;
+    }
+
+    const archetypes = {
+      empath: { name: "Empathetic Confidant", p: 0.65, a: 0.40, d: 0.50 },
+      mentor: { name: "Sovereign Mentor", p: 0.40, a: 0.20, d: 0.80 },
+      tactical: { name: "Tactical Engineer", p: 0.10, a: 0.85, d: 0.95 },
+      spark: { name: "Playful Spark", p: 0.85, a: 0.80, d: 0.60 }
+    };
+
+    function setArchetype(key) {
+      document.querySelectorAll('.archetype-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('arch-' + key).classList.add('active');
+
+      const a = archetypes[key];
+      document.getElementById('chat-soul-name').innerText = a.name;
+
+      document.getElementById('rng-p').value = a.p;
+      document.getElementById('val-p').innerText = (a.p > 0 ? '+' : '') + a.p;
+
+      document.getElementById('rng-a').value = a.a;
+      document.getElementById('val-a').innerText = a.a;
+
+      document.getElementById('rng-d').value = a.d;
+      document.getElementById('val-d').innerText = a.d;
+    }
+  </script>
+</body>
+</html>

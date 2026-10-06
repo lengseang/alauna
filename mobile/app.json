@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "CHIWIWI",
+    "slug": "chiwiwi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.chiwiwi.sovereign",
+      "backgroundColor": "#000000",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "CHIWIWI needs access to your microphone for 100% offline, on-device voice conversations.",
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "package": "com.chiwiwi.sovereign",
+      "backgroundColor": "#000000",
+      "predictiveBackGestureEnabled": true,
+      "permissions": [
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-file-system"
+      ]
+    ]
+  }
+}

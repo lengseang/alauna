@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Expo & Build Artifacts
+.expo/
+*/.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native builds & keys
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+/mobile/android/
+/mobile/ios/
+
+# Metro & caches
+.metro-health-check*
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+*.pem
+
+# Local env files & models weights
+.env*.local
+*.gguf
+*.bin
+*.part
+*.chiwiwi_part
+vault/models/*.gguf
+
+# Logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
