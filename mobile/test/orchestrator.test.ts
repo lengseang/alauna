@@ -4,6 +4,7 @@ import { routeDecision } from '../src/engine/gateway.ts';
 import { VoiceStreamer } from '../src/services/voiceStreamer.ts';
 import { MemoryEngine } from '../src/services/memoryEngine.ts';
 import { MobileOrchestrator } from '../src/engine/orchestrator.ts';
+import { LocalLlmDriver } from '../src/engine/localLlm.ts';
 
 test('Decision Gateway routes shorthand in < 0.1ms', () => {
   const res = routeDecision('H');
@@ -54,4 +55,53 @@ test('Mobile Orchestrator dynamically updates Soul PAD vector on turn processing
   // Pleasure should increase on rapport
   assert.ok(res.updatedPAD.pleasure >= initialPAD.pleasure);
   assert.ok(typeof res.synthesizedPrompt === 'string');
+});
+
+test('LocalLlmDriver loads model and tracks active loaded weights', async () => {
+  const loaded = await LocalLlmDriver.loadModel('llama-3.2-1b-instruct-q4_k_m.gguf');
+  assert.equal(loaded, true);
+  assert.equal(LocalLlmDriver.getLoadedModel(), 'llama-3.2-1b-instruct-q4_k_m.gguf');
+});
+
+test('LocalLlmDriver generates token stream with thoughts and clean response', async () => {
+  const tokens: string[] = [];
+  const stream = LocalLlmDriver.generateStream(
+    {
+      modelFilename: 'smollm2-135m-instruct-q4_k_m.gguf',
+      systemPrompt: 'System context',
+      userPrompt: 'who are you?',
+    },
+    (token) => tokens.push(token)
+  );
+
+  let finalResult: { fullText: string; thoughts: string; cleanResponse: string } | null = null;
+  while (true) {
+    const { value, done } = await stream.next();
+    if (done) {
+      finalResult = value;
+      break;
+    }
+  }
+
+  assert.ok(tokens.length > 0);
+  assert.ok(finalResult !== null);
+  assert.ok(finalResult.thoughts.includes('Context evaluation'));
+  assert.ok(finalResult.cleanResponse.includes('CHIWIWI'));
+  assert.equal(tokens.join(''), finalResult.cleanResponse);
+});
+
+test('MobileOrchestrator.processTurnAsync executes streaming turn with thought extraction', async () => {
+  const tokens: string[] = [];
+  const result = await MobileOrchestrator.processTurnAsync(
+    'hello friend',
+    'empath',
+    { pleasure: 0.5, arousal: 0.5, dominance: 0.5 },
+    'qwen2.5-0.5b-instruct-q4_k_m.gguf',
+    (token) => tokens.push(token)
+  );
+
+  assert.ok(tokens.length > 0);
+  assert.ok(result.response.length > 0);
+  assert.ok(result.thoughts && result.thoughts.length > 0);
+  assert.equal(tokens.join(''), result.response);
 });

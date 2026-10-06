@@ -19,6 +19,7 @@ import { ModelManager } from '../services/modelManager';
 import { MemoryEngine } from '../services/memoryEngine';
 import { HardwareProfiler } from '../services/hardwareProfiler';
 import { StorageConfigService } from '../services/storageConfig';
+import { LocalLlmDriver } from '../engine/localLlm';
 import { S23_MODEL_DATABASE, LocalModelSpec, ModelGrade } from '../types/settings';
 import {
   SoulIcon,
@@ -468,6 +469,23 @@ export default function SettingsScreen({
     }
   };
 
+  const handleMountModel = async (modelId: string) => {
+    const spec = S23_MODEL_DATABASE.find(m => m.id === modelId);
+    if (!spec) return;
+
+    const isDownloaded = await ModelManager.isModelDownloaded(spec.filename);
+    if (!isDownloaded) {
+      Alert.alert(
+        'Weights Required',
+        `Model [${spec.name}] is not present in storage yet. Please tap "Download Model" first to retrieve weights for local inference.`
+      );
+      return;
+    }
+
+    await LocalLlmDriver.loadModel(spec.filename);
+    onSelectModel(modelId);
+  };
+
   // =========================================================
   // SEARCH, BOOLEAN FILTER & SORT ENGINE
   // =========================================================
@@ -713,7 +731,19 @@ export default function SettingsScreen({
             {/* Pipeline Action */}
             <TouchableOpacity
               style={[styles.pairActionBtn, turboActive && styles.pairActionBtnActive]}
-              onPress={() => {
+              onPress={async () => {
+                const targetSpec = S23_MODEL_DATABASE.find(m => m.id === activePreset.targetId);
+                if (targetSpec) {
+                  const isDownloaded = await ModelManager.isModelDownloaded(targetSpec.filename);
+                  if (!isDownloaded) {
+                    Alert.alert(
+                      'Model Weights Required',
+                      `Target model [${activePreset.targetName}] is not downloaded yet. Please download it from the Models tab first.`
+                    );
+                    return;
+                  }
+                  await LocalLlmDriver.loadModel(targetSpec.filename);
+                }
                 onSelectModel(activePreset.targetId);
                 Alert.alert(
                   'Speculative Turbo Mounted',
@@ -1458,7 +1488,7 @@ export default function SettingsScreen({
                     <View style={styles.completedActionRow}>
                       <TouchableOpacity
                         style={[styles.mountBtn, isSelected && styles.mountBtnActive]}
-                        onPress={() => onSelectModel(m.id)}
+                        onPress={() => handleMountModel(m.id)}
                       >
                         <Text style={[styles.mountBtnText, isSelected && { color: '#000', fontWeight: '700' }]}>
                           {isSelected ? 'Loaded in RAM' : 'Mount into RAM'}

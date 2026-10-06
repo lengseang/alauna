@@ -4,6 +4,6 @@
   "type": "module",
   "description": "Deterministic anti-hallucination agent gateway",
   "scripts": {
-    "test": "node --test"
+    "test": "node --experimental-strip-types --test test/suite.test.js test/enterprise.test.js test/mobile.test.js"
   }
 }

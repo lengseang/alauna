@@ -25,6 +25,9 @@ import ThreadSoulModal from './src/components/ThreadSoulModal';
 import { HardwareProfiler } from './src/services/hardwareProfiler';
 import { StorageConfigService } from './src/services/storageConfig';
 import { ModelManager } from './src/services/modelManager';
+import { LocalLlmDriver } from './src/engine/localLlm';
+import { S23_MODEL_DATABASE } from './src/types/settings';
+import { VoiceController, type VoiceState } from './src/engine/voiceController';
 import { Directory, Paths } from 'expo-file-system';
 import {
   SoulIcon,
@@ -71,13 +74,32 @@ export default function App() {
   const [storageModalOpen, setStorageModalOpen] = useState(false);
   const [configuredVaultPath, setConfiguredVaultPath] = useState<string>('');
 
+  // Voice State & Streaming Pipeline
+  const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+  const [voiceTranscript, setVoiceTranscript] = useState<string>('');
+  const [voiceFeedback, setVoiceFeedback] = useState<string>('Listening closely. Speak anytime.');
+  const voiceControllerRef = useRef<VoiceController | null>(null);
+
   // Voice Pulse Animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     checkStorageVault();
     loadSavedThreads();
+    // Load initial active model into RAM
+    const spec = S23_MODEL_DATABASE.find(m => m.id === activeModelId);
+    if (spec) {
+      LocalLlmDriver.loadModel(spec.filename);
+    }
   }, []);
+
+  const handleSelectModel = async (id: string) => {
+    setActiveModelId(id);
+    const spec = S23_MODEL_DATABASE.find(m => m.id === id);
+    if (spec) {
+      await LocalLlmDriver.loadModel(spec.filename);
+    }
+  };
 
   const checkStorageVault = async () => {
     try {
@@ -223,6 +245,63 @@ export default function App() {
     ).start();
   };
 
+  const handleStartVoice = () => {
+    setVoiceActive(true);
+    startVoicePulse();
+    setVoiceState('listening');
+    setVoiceFeedback('Listening closely. Speak anytime.');
+    setVoiceTranscript('');
+
+    const controller = new VoiceController({
+      onStateChange: (state) => {
+        setVoiceState(state);
+        if (state === 'listening') {
+          setVoiceFeedback('Listening closely. Speak anytime.');
+        } else if (state === 'thinking') {
+          setVoiceFeedback('Reasoning on device with local weights...');
+        } else if (state === 'speaking') {
+          setVoiceFeedback('Speaking via neural voice engine...');
+        } else if (state === 'idle') {
+          setVoiceFeedback('Turn complete. Tap test prompt or speak again.');
+        }
+      },
+      onTranscriptUpdate: (text) => {
+        setVoiceTranscript(text);
+      },
+      onSentenceReady: (chunk) => {
+        setVoiceTranscript(prev => (prev ? `${prev} ${chunk.text}` : chunk.text));
+      },
+    });
+
+    voiceControllerRef.current = controller;
+    controller.startListening();
+  };
+
+  const handleStopVoice = () => {
+    if (voiceControllerRef.current) {
+      voiceControllerRef.current.stop();
+      voiceControllerRef.current = null;
+    }
+    setVoiceActive(false);
+    setVoiceState('idle');
+  };
+
+  const handleTriggerVoiceSpeech = async (speechText: string) => {
+    if (!voiceControllerRef.current) {
+      handleStartVoice();
+    }
+    const spec = S23_MODEL_DATABASE.find(m => m.id === activeModelId);
+    const modelFilename = spec?.filename || activeModelId;
+    if (voiceControllerRef.current) {
+      await voiceControllerRef.current.handleUserSpeechEnd(
+        speechText,
+        currentThread.soulConfig.archetype,
+        currentThread.soulConfig.pad,
+        modelFilename
+      );
+    }
+  };
+
   const handleSend = async () => {
     if (isGenerating) return;
     if (!inputText.trim() && selectedMedia.length === 0) return;
@@ -278,13 +357,16 @@ export default function App() {
       // Execute turn asynchronously through on-device streaming generator
       const threadArch = currentThread.soulConfig.archetype;
       const threadPAD = currentThread.soulConfig.pad;
+      const spec = S23_MODEL_DATABASE.find(m => m.id === activeModelId);
+      const modelFilename = spec?.filename || activeModelId;
+      const isDownloaded = spec ? await ModelManager.isModelDownloaded(spec.filename) : true;
 
       let accumulatedText = '';
       const result = await MobileOrchestrator.processTurnAsync(
         userText || 'Analyze attached document/image',
         threadArch,
         threadPAD,
-        activeModelId,
+        modelFilename,
         (token) => {
           accumulatedText += token;
           setCurrentThread(prev => ({
@@ -295,6 +377,8 @@ export default function App() {
           }));
         }
       );
+
+      const engineBadge = isDownloaded ? 'GGUF On-Device' : 'Fast-Path (Download weights in Settings)';
 
       setCurrentThread(prev => {
         let updated: ChatThread = {
@@ -307,7 +391,7 @@ export default function App() {
                   text: result.response,
                   thoughts: result.thoughts,
                   tokenCountEst: Math.floor(result.response.length / 4),
-                  meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category}`,
+                  meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category} • ${engineBadge}`,
                 }
               : m
           ),
@@ -367,7 +451,7 @@ export default function App() {
       <SettingsScreen
         onBack={() => setSettingsOpen(false)}
         activeModelId={activeModelId}
-        onSelectModel={setActiveModelId}
+        onSelectModel={handleSelectModel}
         activeArchetype={globalArchetype}
         onSelectArchetype={(key) => {
           setGlobalArchetype(key);
@@ -606,10 +690,7 @@ export default function App() {
               {/* Minimal Line Mic Icon */}
               <TouchableOpacity
                 style={styles.micBtn}
-                onPress={() => {
-                  setVoiceActive(true);
-                  startVoicePulse();
-                }}
+                onPress={handleStartVoice}
               >
                 <MicIcon size={18} color="#ffffff" />
               </TouchableOpacity>
@@ -747,24 +828,72 @@ export default function App() {
         <Modal visible={voiceActive} transparent animationType="fade">
           <View style={styles.voiceFullscreen}>
             <View style={styles.voiceTopBar}>
-              <Text style={styles.voiceTopLabel}>OFFLINE LIVE VOICE</Text>
-              <TouchableOpacity onPress={() => setVoiceActive(false)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.voiceTopLabel}>OFFLINE LIVE VOICE</Text>
+                <View
+                  style={[
+                    styles.voiceStateBadge,
+                    voiceState === 'listening'
+                      ? styles.voiceStateListening
+                      : voiceState === 'thinking'
+                      ? styles.voiceStateThinking
+                      : voiceState === 'speaking'
+                      ? styles.voiceStateSpeaking
+                      : styles.voiceStateIdle,
+                  ]}
+                >
+                  <Text style={styles.voiceStateBadgeText}>{voiceState.toUpperCase()}</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={handleStopVoice}>
                 <CrossIcon size={18} color="#ffffff" />
               </TouchableOpacity>
             </View>
 
-            <Animated.View
-              style={[
-                styles.siriPlasma,
-                { transform: [{ scale: pulseAnim }] },
-              ]}
-            />
+            <View style={styles.voicePlasmaCenter}>
+              <Animated.View
+                style={[
+                  styles.siriPlasma,
+                  { transform: [{ scale: pulseAnim }] },
+                ]}
+              />
+              <Text style={styles.voiceModelTag}>{activeModelId}</Text>
+            </View>
 
             <View style={styles.voiceBottom}>
-              <Text style={styles.voiceSubtitle}>"Listening closely. Speak anytime."</Text>
+              <Text style={styles.voiceSubtitle}>"{voiceFeedback}"</Text>
+
+              {voiceTranscript.length > 0 && (
+                <View style={styles.voiceTranscriptBubble}>
+                  <Text style={styles.voiceTranscriptText}>{voiceTranscript}</Text>
+                </View>
+              )}
+
+              {/* Instant Voice Test Chips */}
+              <View style={styles.voiceQuickChipsRow}>
+                <TouchableOpacity
+                  style={styles.voiceChip}
+                  onPress={() => handleTriggerVoiceSpeech('Hello Chiwiwi!')}
+                >
+                  <Text style={styles.voiceChipText}>"Hello!"</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.voiceChip}
+                  onPress={() => handleTriggerVoiceSpeech('Who are you?')}
+                >
+                  <Text style={styles.voiceChipText}>"Who are you?"</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.voiceChip}
+                  onPress={() => handleTriggerVoiceSpeech('System status and model architecture')}
+                >
+                  <Text style={styles.voiceChipText}>"Status check"</Text>
+                </TouchableOpacity>
+              </View>
+
               <TouchableOpacity
                 style={styles.closeVoiceBtn}
-                onPress={() => setVoiceActive(false)}
+                onPress={handleStopVoice}
               >
                 <CrossIcon size={18} color="#ffffff" />
               </TouchableOpacity>
@@ -1103,6 +1232,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   voiceTopLabel: { color: '#52525b', fontSize: 11, fontWeight: '700', letterSpacing: 1.5 },
+  voiceStateBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  voiceStateListening: {
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderColor: '#38bdf8',
+  },
+  voiceStateThinking: {
+    backgroundColor: 'rgba(168, 85, 247, 0.1)',
+    borderColor: '#a855f7',
+  },
+  voiceStateSpeaking: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderColor: '#22c55e',
+  },
+  voiceStateIdle: {
+    backgroundColor: 'rgba(113, 113, 122, 0.1)',
+    borderColor: '#71717a',
+  },
+  voiceStateBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  voicePlasmaCenter: {
+    alignItems: 'center',
+    gap: 16,
+  },
   siriPlasma: {
     width: 140,
     height: 140,
@@ -1114,17 +1275,59 @@ const styles = StyleSheet.create({
     shadowRadius: 50,
     elevation: 25,
   },
-  voiceBottom: { alignItems: 'center', gap: 24 },
-  voiceSubtitle: { color: '#e4e4e7', fontSize: 17, textAlign: 'center' },
+  voiceModelTag: {
+    color: '#71717a',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  voiceBottom: { alignItems: 'center', gap: 16, width: '100%', maxWidth: 360 },
+  voiceSubtitle: { color: '#e4e4e7', fontSize: 15, textAlign: 'center', fontWeight: '500' },
+  voiceTranscriptBubble: {
+    backgroundColor: '#18181d',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    width: '100%',
+  },
+  voiceTranscriptText: {
+    color: '#38bdf8',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  voiceQuickChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
+    marginVertical: 4,
+  },
+  voiceChip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  voiceChipText: {
+    color: '#d4d4d8',
+    fontSize: 12,
+    fontWeight: '500',
+  },
   closeVoiceBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#18181d',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginTop: 8,
   },
 
   // Multimodal Attachments & Preview Tray
