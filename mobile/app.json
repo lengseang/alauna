@@ -6,14 +6,15 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#000000",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.chiwiwi.sovereign",
       "backgroundColor": "#000000",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "CHIWIWI needs access to your microphone for 100% offline, on-device voice conversations.",
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -22,13 +23,22 @@
       "predictiveBackGestureEnabled": true,
       "permissions": [
         "RECORD_AUDIO",
-        "MODIFY_AUDIO_SETTINGS"
+        "MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
       ]
     },
     "plugins": [
       [
         "expo-file-system"
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "5a49f586-40aa-4252-bfaf-e6c3c4239303"
+      }
+    },
+    "owner": "lengseang"
   }
 }
