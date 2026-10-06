@@ -22,6 +22,7 @@ import { MemoryEngine } from './src/services/memoryEngine';
 import { VaultStorage, ChatThread, ChatMessage, ThreadSoulConfig } from './src/services/vaultStorage';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ThreadSoulModal from './src/components/ThreadSoulModal';
+import { HardwareProfiler } from './src/services/hardwareProfiler';
 import {
   SoulIcon,
   SlidersIcon,
@@ -502,7 +503,7 @@ export default function App() {
                   </View>
                   <View>
                     <Text style={styles.attachOptionLabel}>Camera</Text>
-                    <Text style={styles.attachOptionSub}>Take photo with S23 Ultra</Text>
+                    <Text style={styles.attachOptionSub}>Capture with device camera</Text>
                   </View>
                 </TouchableOpacity>
 
@@ -584,7 +585,9 @@ export default function App() {
               <View style={styles.drawerFooter}>
                 <View>
                   <Text style={styles.profileName}>LENG SEANG</Text>
-                  <Text style={styles.profileMeta}>S23 Ultra 12GB • Private Vault</Text>
+                  <Text style={styles.profileMeta}>
+                    {HardwareProfiler.getProfile().deviceModel} • {HardwareProfiler.getProfile().totalRamGb}GB RAM
+                  </Text>
                 </View>
                 <View style={styles.localBadge}>
                   <Text style={styles.localBadgeText}>LOCAL</Text>

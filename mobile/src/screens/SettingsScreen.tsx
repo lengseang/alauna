@@ -16,6 +16,7 @@ import Svg, { Rect } from 'react-native-svg';
 import { ARCHETYPES, SoulArchetypeKey, PADVector } from '../types/soul';
 import { ModelManager } from '../services/modelManager';
 import { MemoryEngine } from '../services/memoryEngine';
+import { HardwareProfiler } from '../services/hardwareProfiler';
 import { S23_MODEL_DATABASE, LocalModelSpec, ModelGrade } from '../types/settings';
 import {
   SoulIcon,
@@ -1038,7 +1039,7 @@ export default function SettingsScreen({
             <View style={styles.metricRow}>
               <View style={{ flex: 1, paddingRight: 10 }}>
                 <Text style={styles.switchTitle}>CPU Inference Threads</Text>
-                <Text style={styles.switchSub}>Cortex-X3 Prime & Cortex-A715 cores</Text>
+                <Text style={styles.switchSub}>Active worker threads for tensor ops</Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 {[2, 4, 6, 8].map(cnt => (
@@ -1063,16 +1064,26 @@ export default function SettingsScreen({
           <Text style={[styles.sectionHeader, { marginTop: 20 }]}>KERNEL TELEMETRY</Text>
           <View style={styles.infoCard}>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>SoC Platform</Text>
-              <Text style={styles.metricVal}>Qualcomm SM8550-AC (Galaxy)</Text>
+              <Text style={styles.metricLabel}>Device Hardware</Text>
+              <Text style={styles.metricVal}>
+                {HardwareProfiler.getProfile().manufacturer} {HardwareProfiler.getProfile().deviceModel}
+              </Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Total Physical RAM</Text>
-              <Text style={[styles.metricVal, { color: '#38bdf8' }]}>12 GB LPDDR5X (8533 Mbps)</Text>
+              <Text style={styles.metricLabel}>SoC Family</Text>
+              <Text style={styles.metricVal}>{HardwareProfiler.getProfile().socFamily}</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Physical RAM</Text>
+              <Text style={[styles.metricVal, { color: '#38bdf8' }]}>
+                ~{HardwareProfiler.getProfile().totalRamGb} GB Unified Memory
+              </Text>
             </View>
             <View style={styles.metricRow}>
               <Text style={styles.metricLabel}>Max Model Context Allocated</Text>
-              <Text style={styles.metricVal}>8,192 Tokens (KV Cache F16)</Text>
+              <Text style={styles.metricVal}>
+                {HardwareProfiler.getProfile().maxContextTokens.toLocaleString()} Tokens (KV Cache F16)
+              </Text>
             </View>
           </View>
         </ScrollView>
@@ -1456,7 +1467,9 @@ export default function SettingsScreen({
             <Text style={styles.brandGlyphText}>千</Text>
           </View>
           <Text style={styles.brandTitle}>CHIWIWI SOVEREIGN</Text>
-          <Text style={styles.brandSub}>Galaxy S23 Ultra • 12GB RAM Optimization</Text>
+          <Text style={styles.brandSub}>
+            {HardwareProfiler.getProfile().deviceModel} • {HardwareProfiler.getProfile().totalRamGb}GB RAM Optimization
+          </Text>
         </View>
 
         {/* Quick Hub Switches */}
@@ -1510,7 +1523,7 @@ export default function SettingsScreen({
             </View>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Model Vault ({S23_MODEL_DATABASE.length} Models)</Text>
-              <Text style={styles.rowSub}>S23 Ultra local offline models, Grade S/B/C, Boolean search</Text>
+              <Text style={styles.rowSub}>Local offline neural weights, Grade S/B/C, Boolean search</Text>
             </View>
           </TouchableOpacity>
 
@@ -1566,8 +1579,8 @@ export default function SettingsScreen({
               <SlidersIcon size={20} color="#ffffff" />
             </View>
             <View style={styles.rowText}>
-              <Text style={styles.rowTitle}>Advanced</Text>
-              <Text style={styles.rowSub}>Snapdragon 8 Gen 2 Vulkan compute kernels</Text>
+              <Text style={styles.rowTitle}>Advanced Compute</Text>
+              <Text style={styles.rowSub}>GPU shader offloading and hardware thread allocation</Text>
             </View>
           </TouchableOpacity>
 
