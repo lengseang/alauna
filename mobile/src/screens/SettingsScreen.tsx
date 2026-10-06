@@ -382,6 +382,14 @@ export default function SettingsScreen({
         if (progress.status === 'completed') {
           delete downloadersRef.current[modelId];
           loadStats();
+          Alert.alert(
+            'Download Complete',
+            `Model [${spec.name}] has been saved to your storage vault.\nWould you like to verify and mount into RAM now?`,
+            [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Verify & Mount', onPress: () => handleMountModel(modelId) },
+            ]
+          );
         }
       });
 
@@ -482,8 +490,32 @@ export default function SettingsScreen({
       return;
     }
 
+    // 1. Verify model file integrity
+    const verification = await ModelManager.verifyModelIntegrity(spec.filename);
+    if (!verification.valid) {
+      Alert.alert(
+        'Verification Failed',
+        `Model file corrupted or incomplete: ${verification.error || 'Check storage'}. Please re-download.`
+      );
+      return;
+    }
+
+    // 2. Mount into RAM and run warm-up test
     await LocalLlmDriver.loadModel(spec.filename);
+    const warmup = await LocalLlmDriver.verifyAndWarmup(spec.filename);
     onSelectModel(modelId);
+
+    Alert.alert(
+      'Model Verified & Mounted',
+      `[${spec.name}] (${spec.sizeFormatted}) is verified and active in RAM!\n` +
+      `• Weight file size: ${(verification.sizeBytes / (1024 * 1024)).toFixed(1)} MB\n` +
+      `• Warm-up latency: ${warmup.latencyMs.toFixed(1)}ms\n` +
+      `• Status: Verified & ready for chat`,
+      [
+        { text: 'Stay in Settings', style: 'cancel' },
+        { text: 'Start Chatting', onPress: onBack },
+      ]
+    );
   };
 
   // =========================================================

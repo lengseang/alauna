@@ -77,6 +77,28 @@ export class ModelManager {
   }
 
   /**
+   * Verify model file integrity, existence, and byte size.
+   */
+  public static async verifyModelIntegrity(
+    filename: string
+  ): Promise<{ valid: boolean; sizeBytes: number; error?: string }> {
+    await this.initSandbox();
+    const file = this.getModelFile(filename);
+    if (!file.exists) {
+      return { valid: false, sizeBytes: 0, error: 'Model file not found on disk.' };
+    }
+    const size = file.size;
+    if (size < 1024 * 1024) {
+      return {
+        valid: false,
+        sizeBytes: size,
+        error: `Incomplete download payload (${(size / 1024).toFixed(1)} KB). GGUF models require full weights.`,
+      };
+    }
+    return { valid: true, sizeBytes: size };
+  }
+
+  /**
    * Get all installed models with live disk size.
    */
   public static async getInstalledModels(): Promise<LocalModelSpec[]> {

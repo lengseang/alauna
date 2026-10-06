@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
   Alert,
+  PermissionsAndroid,
 } from 'react-native';
 import { ARCHETYPES, SoulArchetypeKey, PADVector } from './src/types/soul';
 import { MobileOrchestrator } from './src/engine/orchestrator';
@@ -43,6 +44,7 @@ import {
   PlusIcon,
   ChevronDownIcon,
   StorageIcon,
+  DownloadIcon,
 } from './src/components/Icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -73,6 +75,7 @@ export default function App() {
   const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
   const [storageModalOpen, setStorageModalOpen] = useState(false);
   const [configuredVaultPath, setConfiguredVaultPath] = useState<string>('');
+  const [isActiveModelInstalled, setIsActiveModelInstalled] = useState<boolean>(false);
 
   // Voice State & Streaming Pipeline
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -84,14 +87,53 @@ export default function App() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    checkStorageVault();
-    loadSavedThreads();
-    // Load initial active model into RAM
-    const spec = S23_MODEL_DATABASE.find(m => m.id === activeModelId);
-    if (spec) {
-      LocalLlmDriver.loadModel(spec.filename);
-    }
+    (async () => {
+      // 1. Request OS Permissions upfront on launch
+      await requestInitialPermissions();
+      // 2. Check and enforce sovereign storage vault directory
+      await checkStorageVault();
+      // 3. Load conversation histories
+      await loadSavedThreads();
+      // 4. Verify whether active model is installed and load into RAM
+      await checkActiveModelInstalled(activeModelId);
+      const spec = S23_MODEL_DATABASE.find(m => m.id === activeModelId);
+      if (spec) {
+        await LocalLlmDriver.loadModel(spec.filename);
+      }
+    })();
   }, []);
+
+  const requestInitialPermissions = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        const perms: any[] = [
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+        ];
+        if (Number(Platform.Version) >= 33) {
+          perms.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+        } else {
+          perms.push(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
+          perms.push(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
+        }
+        await PermissionsAndroid.requestMultiple(perms);
+      } else {
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+        await ImagePicker.requestCameraPermissionsAsync();
+      }
+    } catch {}
+  };
+
+  const checkActiveModelInstalled = async (modelId: string) => {
+    const spec = S23_MODEL_DATABASE.find(m => m.id === modelId);
+    if (!spec) {
+      setIsActiveModelInstalled(false);
+      return false;
+    }
+    const isDownloaded = await ModelManager.isModelDownloaded(spec.filename);
+    setIsActiveModelInstalled(isDownloaded);
+    return isDownloaded;
+  };
 
   const handleSelectModel = async (id: string) => {
     setActiveModelId(id);
@@ -99,6 +141,7 @@ export default function App() {
     if (spec) {
       await LocalLlmDriver.loadModel(spec.filename);
     }
+    await checkActiveModelInstalled(id);
   };
 
   const checkStorageVault = async () => {
@@ -127,7 +170,14 @@ export default function App() {
           setStorageModalOpen(false);
           await VaultStorage.initVault();
           await ModelManager.initSandbox();
-          Alert.alert('Storage Vault Configured', `Vault directory mounted at:\n${picked.uri}`);
+          Alert.alert(
+            'Storage Vault Ready',
+            `Vault directory mounted at:\n${picked.uri}\n\nNext step: download an on-device model from the Model Hub to start chatting.`,
+            [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Open Model Hub', onPress: () => setSettingsOpen(true) },
+            ]
+          );
         }
       } else {
         await handleUseDefaultSandbox();
@@ -144,7 +194,14 @@ export default function App() {
       setStorageModalOpen(false);
       await VaultStorage.initVault();
       await ModelManager.initSandbox();
-      Alert.alert('Internal Vault Initialized', 'Using sovereign app sandbox.');
+      Alert.alert(
+        'Storage Sandbox Initialized',
+        'Private app storage sandbox ready.\n\nNext step: download an on-device model from the Model Hub to start chatting.',
+        [
+          { text: 'Later', style: 'cancel' },
+          { text: 'Open Model Hub', onPress: () => setSettingsOpen(true) },
+        ]
+      );
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to initialize default sandbox.');
     }
@@ -516,6 +573,23 @@ export default function App() {
               </Text>
             </View>
           </View>
+        )}
+
+        {/* Model Download & Installation Notice */}
+        {!isActiveModelInstalled && (
+          <TouchableOpacity
+            style={styles.unmountedModelBanner}
+            onPress={() => setSettingsOpen(true)}
+            activeOpacity={0.8}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <DownloadIcon size={14} color="#f59e0b" />
+              <Text style={styles.unmountedModelText} numberOfLines={1}>
+                Weights for {activeModelId} not downloaded yet. Tap to download from Hub.
+              </Text>
+            </View>
+            <Text style={styles.unmountedModelAction}>Download →</Text>
+          </TouchableOpacity>
         )}
 
         {/* Keyboard Aware Chat Feed */}
@@ -1008,6 +1082,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   compactedBannerText: { color: '#60a5fa', fontSize: 11, fontWeight: '600' },
+  unmountedModelBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(245, 158, 11, 0.25)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  unmountedModelText: {
+    color: '#fbbf24',
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
+  },
+  unmountedModelAction: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
 
   keyboardContainer: { flex: 1 },
   chatScroll: { flex: 1 },

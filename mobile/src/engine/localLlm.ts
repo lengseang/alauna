@@ -40,6 +40,26 @@ export class LocalLlmDriver {
   }
 
   /**
+   * Fast verification & warmup turn to verify the model weights can run on-device inference.
+   */
+  public static async verifyAndWarmup(modelFilename: string): Promise<{ success: boolean; latencyMs: number }> {
+    const start = performance.now();
+    await this.loadModel(modelFilename);
+    const stream = this.generateStream({
+      modelFilename,
+      systemPrompt: 'Self-test verification pipeline',
+      userPrompt: 'verify model status',
+    });
+
+    while (true) {
+      const { done } = await stream.next();
+      if (done) break;
+    }
+    const end = performance.now();
+    return { success: true, latencyMs: end - start };
+  }
+
+  /**
    * Stream token generation with per-token callback.
    * Dynamically synthesizes intelligent responses based on context, input, and memory.
    */

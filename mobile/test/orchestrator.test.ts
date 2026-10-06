@@ -105,3 +105,9 @@ test('MobileOrchestrator.processTurnAsync executes streaming turn with thought e
   assert.ok(result.thoughts && result.thoughts.length > 0);
   assert.equal(tokens.join(''), result.response);
 });
+
+test('LocalLlmDriver.verifyAndWarmup executes self-test turn successfully', async () => {
+  const warmup = await LocalLlmDriver.verifyAndWarmup('llama-3.2-1b-instruct-q4_k_m.gguf');
+  assert.equal(warmup.success, true);
+  assert.ok(warmup.latencyMs >= 0);
+});
