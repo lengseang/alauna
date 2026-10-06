@@ -9,13 +9,31 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+      },
       "android": {
         "buildType": "apk"
+      },
+      "cache": {
+        "key": "chiwiwi-preview-cache",
+        "customPaths": [
+          "~/.gradle/caches"
+        ]
       }
     },
     "production": {
+      "env": {
+        "EAS_SKIP_AUTO_FINGERPRINT": "1"
+      },
       "android": {
         "buildType": "apk"
+      },
+      "cache": {
+        "key": "chiwiwi-prod-cache",
+        "customPaths": [
+          "~/.gradle/caches"
+        ]
       }
     }
   },
