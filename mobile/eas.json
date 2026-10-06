@@ -11,14 +11,12 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "npmFlags": "--legacy-peer-deps"
+      }
     },
     "production": {
       "android": {
         "buildType": "apk"
-      },
-      "npmFlags": "--legacy-peer-deps"
+      }
     }
   },
   "submit": {
