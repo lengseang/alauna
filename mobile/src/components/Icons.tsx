@@ -171,3 +171,24 @@ export const VideoIcon = ({ size = 14, color = '#71717a' }: IconProps) => (
   </Svg>
 );
 
+export const MenuIcon = ({ size = 18, color = '#f4f4f5' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <Line x1="4" y1="7" x2="20" y2="7" />
+    <Line x1="4" y1="12" x2="20" y2="12" />
+    <Line x1="4" y1="17" x2="20" y2="17" />
+  </Svg>
+);
+
+export const PlusIcon = ({ size = 18, color = '#f4f4f5' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <Line x1="12" y1="5" x2="12" y2="19" />
+    <Line x1="5" y1="12" x2="19" y2="12" />
+  </Svg>
+);
+
+export const ChevronDownIcon = ({ size = 12, color = '#71717a' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <Polyline points="6 9 12 15 18 9" />
+  </Svg>
+);
+

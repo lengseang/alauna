@@ -32,6 +32,9 @@ import {
   ImageIcon,
   DocumentIcon,
   CameraIcon,
+  MenuIcon,
+  PlusIcon,
+  ChevronDownIcon,
 } from './src/components/Icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -292,14 +295,14 @@ export default function App() {
             onPress={() => setDrawerOpen(true)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.iconText}>☰</Text>
+            <MenuIcon size={18} color="#ffffff" />
           </TouchableOpacity>
 
           {/* Center Pill: Shows Model and Thread Soul */}
           <TouchableOpacity style={styles.modelPill} onPress={() => setSettingsOpen(true)}>
             <View style={styles.statusDot} />
             <Text style={styles.modelPillText}>{activeModelId.split('-')[0].toUpperCase()}</Text>
-            <Text style={styles.dropdownArrow}>▾</Text>
+            <ChevronDownIcon size={12} color="#71717a" />
           </TouchableOpacity>
 
           {/* Right Action: Per-Thread Soul Customizer Button */}
@@ -345,40 +348,71 @@ export default function App() {
             contentContainerStyle={styles.chatContent}
             keyboardShouldPersistTaps="handled"
           >
-            {currentThread.messages.map((m) => (
-              <View
-                key={m.id}
-                style={[
-                  styles.messageRow,
-                  m.sender === 'user' ? styles.userRow : styles.assistantRow,
-                ]}
-              >
-                {m.sender === 'assistant' && (
-                  <View style={styles.assistantHeader}>
-                    <View style={styles.botDot} />
-                    <Text style={styles.botTag}>CHIWIWI</Text>
-                    <Text style={styles.soulTag}>• {ARCHETYPES[currentThread.soulConfig.archetype].name}</Text>
-                    {m.meta && <Text style={styles.metaText}>• {m.meta}</Text>}
-                  </View>
-                )}
-                <View
-                  style={[
-                    styles.messageBubble,
-                    m.sender === 'user' ? styles.userBubble : styles.assistantBubble,
-                  ]}
-                >
-                  {/* Attached Media Previews */}
-                  {m.mediaUris && m.mediaUris.length > 0 && (
-                    <View style={styles.attachedMediaGrid}>
-                      {m.mediaUris.map((uri, idx) => (
-                        <Image key={idx} source={{ uri }} style={styles.bubbleMediaThumb} />
-                      ))}
-                    </View>
-                  )}
-                  {m.text ? <Text style={styles.messageText}>{m.text}</Text> : null}
+            {currentThread.messages.length === 0 ? (
+              <View style={styles.emptyWelcomeContainer}>
+                <View style={styles.emptyHeroGlyph}>
+                  <Text style={styles.emptyHeroGlyphText}>千</Text>
+                </View>
+                <Text style={styles.emptyHeroTitle}>CHIWIWI SOVEREIGN</Text>
+                <Text style={styles.emptyHeroSub}>
+                  Zero-cloud on-device intelligence. 100% private to this device.
+                </Text>
+
+                <View style={styles.chipDeck}>
+                  {[
+                    { label: 'H', desc: 'Shorthand: immediate execution' },
+                    { label: 'Analyze stack trace', desc: 'Deep debug pipeline' },
+                    { label: 'Plan architecture', desc: 'System design triad' },
+                  ].map((chip, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={styles.heroPromptChip}
+                      onPress={() => {
+                        setInputText(chip.label);
+                      }}
+                    >
+                      <Text style={styles.heroPromptLabel}>{chip.label}</Text>
+                      <Text style={styles.heroPromptDesc}>{chip.desc}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
-            ))}
+            ) : (
+              currentThread.messages.map((m) => (
+                <View
+                  key={m.id}
+                  style={[
+                    styles.messageRow,
+                    m.sender === 'user' ? styles.userRow : styles.assistantRow,
+                  ]}
+                >
+                  {m.sender === 'assistant' && (
+                    <View style={styles.assistantHeader}>
+                      <View style={styles.botDot} />
+                      <Text style={styles.botTag}>CHIWIWI</Text>
+                      <Text style={styles.soulTag}>• {ARCHETYPES[currentThread.soulConfig.archetype].name}</Text>
+                      {m.meta && <Text style={styles.metaText}>• {m.meta}</Text>}
+                    </View>
+                  )}
+                  <View
+                    style={[
+                      styles.messageBubble,
+                      m.sender === 'user' ? styles.userBubble : styles.assistantBubble,
+                    ]}
+                  >
+                    {/* Attached Media Previews */}
+                    {m.mediaUris && m.mediaUris.length > 0 && (
+                      <View style={styles.attachedMediaGrid}>
+                        {m.mediaUris.map((uri, idx) => (
+                          <Image key={idx} source={{ uri }} style={styles.bubbleMediaThumb} />
+                        ))}
+                      </View>
+                    )}
+                    {m.text ? <Text style={styles.messageText}>{m.text}</Text> : null}
+                  </View>
+                </View>
+              ))
+            )}
           </ScrollView>
 
           {/* Floating Bottom Input Deck */}
@@ -503,7 +537,8 @@ export default function App() {
             <View style={styles.drawerSheet}>
               <View>
                 <TouchableOpacity style={styles.newChatBtn} onPress={handleNewConversation}>
-                  <Text style={styles.newChatText}>+ New Conversation</Text>
+                  <PlusIcon size={14} color="#000000" />
+                  <Text style={styles.newChatText}>New Conversation</Text>
                 </TouchableOpacity>
 
                 <Text style={styles.sectionHeader}>SAVED SOVEREIGN THREADS</Text>
@@ -659,6 +694,55 @@ const styles = StyleSheet.create({
   chatScroll: { flex: 1 },
   chatContent: { padding: 16, gap: 16 },
 
+  // Sovereign Minimalist Empty State
+  emptyWelcomeContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 48,
+    paddingHorizontal: 20,
+  },
+  emptyHeroGlyph: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: '#18181d',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyHeroGlyphText: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
+  emptyHeroTitle: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+  },
+  emptyHeroSub: {
+    color: '#71717a',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 280,
+    marginBottom: 32,
+  },
+  chipDeck: {
+    width: '100%',
+    gap: 8,
+  },
+  heroPromptChip: {
+    backgroundColor: '#111114',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+  },
+  heroPromptLabel: { color: '#ffffff', fontSize: 13, fontWeight: '600', marginBottom: 2 },
+  heroPromptDesc: { color: '#71717a', fontSize: 11 },
+
   messageRow: { width: '100%', marginVertical: 4 },
   userRow: { alignItems: 'flex-end' },
   assistantRow: { alignItems: 'flex-start' },
@@ -743,14 +827,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   newChatBtn: {
-    backgroundColor: '#111114',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
     padding: 12,
     borderRadius: 12,
     marginBottom: 20,
   },
-  newChatText: { color: '#ffffff', fontSize: 13, fontWeight: '600' },
+  newChatText: { color: '#000000', fontSize: 13, fontWeight: '700' },
   sectionHeader: { color: '#52525b', fontSize: 11, fontWeight: '700', marginBottom: 10 },
   threadItem: { paddingVertical: 10, paddingHorizontal: 6, borderRadius: 8 },
   threadItemActive: { backgroundColor: '#18181d' },
