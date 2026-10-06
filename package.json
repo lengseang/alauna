@@ -1,9 +1,11 @@
 {
   "name": "chiwiwi",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "private": true,
   "type": "module",
-  "description": "Deterministic anti-hallucination agent gateway",
+  "description": "CHIWIWI: private on-device AI chat. App code lives in ./mobile.",
   "scripts": {
-    "test": "node --experimental-strip-types --test test/suite.test.js test/enterprise.test.js test/mobile.test.js"
+    "test": "node --no-warnings --experimental-strip-types --test test/suite.test.js && npm --prefix mobile test",
+    "verify:catalog": "node --no-warnings --experimental-strip-types scripts/verify-catalog.mjs"
   }
 }

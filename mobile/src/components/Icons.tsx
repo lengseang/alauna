@@ -192,3 +192,87 @@ export const ChevronDownIcon = ({ size = 12, color = '#71717a' }: IconProps) => 
   </Svg>
 );
 
+
+const base = { fill: 'none', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+
+export const SendIcon = ({ size = 18, color = '#000000' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Line x1="12" y1="19" x2="12" y2="5" />
+    <Polyline points="5 12 12 5 19 12" />
+  </Svg>
+);
+
+export const StopIcon = ({ size = 16, color = '#000000' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth={1.8} strokeLinejoin="round">
+    <Rect x="6" y="6" width="12" height="12" rx="2" />
+  </Svg>
+);
+
+export const CopyIcon = ({ size = 14, color = '#a1a1aa' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Rect x="9" y="9" width="13" height="13" rx="2" />
+    <Path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </Svg>
+);
+
+export const RefreshIcon = ({ size = 14, color = '#a1a1aa' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Polyline points="23 4 23 10 17 10" />
+    <Path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+  </Svg>
+);
+
+export const FolderIcon = ({ size = 20, color = '#f4f4f5' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+  </Svg>
+);
+
+export const AlertIcon = ({ size = 16, color = '#f59e0b' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+    <Line x1="12" y1="9" x2="12" y2="13" />
+    <Line x1="12" y1="17" x2="12.01" y2="17" />
+  </Svg>
+);
+
+export const InfoIcon = ({ size = 16, color = '#38bdf8' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Circle cx="12" cy="12" r="10" />
+    <Line x1="12" y1="16" x2="12" y2="12" />
+    <Line x1="12" y1="8" x2="12.01" y2="8" />
+  </Svg>
+);
+
+export const ChevronRightIcon = ({ size = 14, color = '#71717a' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Polyline points="9 18 15 12 9 6" />
+  </Svg>
+);
+
+export const ChevronUpIcon = ({ size = 12, color = '#71717a' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Polyline points="18 15 12 9 6 15" />
+  </Svg>
+);
+
+export const IncognitoIcon = ({ size = 16, color = '#a1a1aa' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <Line x1="1" y1="1" x2="23" y2="23" />
+  </Svg>
+);
+
+export const PhoneIcon = ({ size = 20, color = '#f4f4f5' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Rect x="5" y="2" width="14" height="20" rx="2" />
+    <Line x1="12" y1="18" x2="12.01" y2="18" />
+  </Svg>
+);
+
+export const ThinkIcon = ({ size = 14, color = '#a1a1aa' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" stroke={color} {...base}>
+    <Path d="M9 18h6M10 22h4" />
+    <Path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z" />
+  </Svg>
+);
