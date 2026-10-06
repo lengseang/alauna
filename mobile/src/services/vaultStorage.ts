@@ -61,7 +61,7 @@ export class VaultStorage {
       // Android .nomedia flag file
       const noMediaFile = new File(this.mediaDir, '.nomedia');
       if (!noMediaFile.exists) {
-        noMediaFile.write('');
+        await noMediaFile.write('');
       }
     }
   }
@@ -74,7 +74,7 @@ export class VaultStorage {
     await this.initVault();
 
     const file = new File(this.chatsDir, `${thread.id}.chiwiwi`);
-    file.write(JSON.stringify(thread, null, 2));
+    await file.write(JSON.stringify(thread, null, 2));
   }
 
   /**
@@ -166,7 +166,7 @@ export class VaultStorage {
   public static async saveIsolatedMedia(filename: string, base64OrData: string): Promise<string> {
     await this.initVault();
     const mediaFile = new File(this.mediaDir, filename);
-    mediaFile.write(base64OrData);
+    await mediaFile.write(base64OrData);
     return mediaFile.uri;
   }
 

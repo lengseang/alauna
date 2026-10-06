@@ -4,6 +4,26 @@
  * to preserve relationship memory without KV-cache RAM explosion.
  */
 
+let Paths: any, File: any, Directory: any;
+try {
+  const expoFs = require('expo-file-system');
+  Paths = expoFs.Paths;
+  File = expoFs.File;
+  Directory = expoFs.Directory;
+} catch {
+  // In pure Node.js environments or tests where native module is unbundled
+  Paths = { document: '' };
+  File = class {
+    exists = false;
+    text() { return Promise.resolve('[]'); }
+    write() { return Promise.resolve(); }
+  };
+  Directory = class {
+    exists = true;
+    create() {}
+  };
+}
+
 export interface EpisodicMemory {
   id: string;
   fact: string;
@@ -13,6 +33,9 @@ export interface EpisodicMemory {
 }
 
 export class MemoryEngine {
+  private static getMemoryFile() {
+    return Paths?.document ? new File(new Directory(Paths.document, 'vault'), 'memory.json') : null;
+  }
   private static memories: EpisodicMemory[] = [
     {
       id: 'm1',
@@ -29,6 +52,32 @@ export class MemoryEngine {
       importance: 0.98,
     },
   ];
+  private static isLoaded = false;
+
+  public static async loadFromDisk(): Promise<void> {
+    if (this.isLoaded) return;
+    try {
+      const file = this.getMemoryFile();
+      if (file && file.exists) {
+        const text = await file.text();
+        const data = JSON.parse(text) as EpisodicMemory[];
+        if (Array.isArray(data)) {
+          this.memories = data;
+        }
+      }
+    } catch {}
+    this.isLoaded = true;
+  }
+
+  private static async persistToDisk(): Promise<void> {
+    try {
+      if (!Paths?.document) return;
+      const dir = new Directory(Paths.document, 'vault');
+      if (!dir.exists) dir.create();
+      const file = this.getMemoryFile();
+      if (file) await file.write(JSON.stringify(this.memories, null, 2));
+    } catch {}
+  }
 
   /**
    * Save a new extracted memory fact into the local store.
@@ -42,6 +91,7 @@ export class MemoryEngine {
       importance,
     };
     this.memories.push(memory);
+    this.persistToDisk();
     return memory;
   }
 
@@ -78,6 +128,7 @@ export class MemoryEngine {
    */
   public static clearAll(): void {
     this.memories = [];
+    this.persistToDisk();
   }
 
   public static getCount(): number {

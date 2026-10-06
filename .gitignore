@@ -40,3 +40,7 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 *.log
+
+# Large local binary packages
+*.apk
+*.zip

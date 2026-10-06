@@ -6,6 +6,7 @@
 import { routeDecision, type RouteResult } from './gateway.ts';
 import { ARCHETYPES, type SoulArchetypeKey, type PADVector } from '../types/soul.ts';
 import { MemoryEngine } from '../services/memoryEngine.ts';
+import { LocalLlmDriver } from './localLlm.ts';
 
 export interface TurnExecutionResult {
   route: RouteResult;
@@ -17,7 +18,67 @@ export interface TurnExecutionResult {
 
 export class MobileOrchestrator {
   /**
-   * Evaluates input, updates emotional PAD state, injects memory, and routes execution.
+   * Asynchronous, streaming turn execution through LocalLlmDriver.
+   */
+  public static async processTurnAsync(
+    input: string,
+    currentArchetype: SoulArchetypeKey,
+    currentPAD: PADVector,
+    activeModelFilename: string,
+    onToken?: (token: string) => void
+  ): Promise<TurnExecutionResult> {
+    const route = routeDecision(input);
+
+    // Evolve emotional PAD state
+    const basePAD = ARCHETYPES[currentArchetype].defaultPAD;
+    const lambda = 0.85;
+
+    let deltaP = 0;
+    let deltaA = 0;
+    if (route.category === 'RAPPORT') {
+      deltaP = 0.10;
+      deltaA = 0.05;
+    } else if (route.category === 'DEEP_DEBUG') {
+      deltaP = -0.05;
+      deltaA = 0.20;
+    }
+
+    const updatedPAD: PADVector = {
+      pleasure: Number(Math.max(-1, Math.min(1, lambda * currentPAD.pleasure + (1 - lambda) * basePAD.pleasure + deltaP)).toFixed(2)),
+      arousal: Number(Math.max(0, Math.min(1, lambda * currentPAD.arousal + (1 - lambda) * basePAD.arousal + deltaA)).toFixed(2)),
+      dominance: currentPAD.dominance,
+    };
+
+    const memoryContext = MemoryEngine.formatPromptContext();
+    const archetypeModifier = ARCHETYPES[currentArchetype].systemPromptModifier;
+    const synthesizedPrompt = `${archetypeModifier}\n[EMOTIONAL STATE: Pleasure=${updatedPAD.pleasure}, Arousal=${updatedPAD.arousal}]\n${memoryContext}\nUser: ${input}`;
+
+    // Stream generation from on-device driver
+    let responseText = '';
+    const stream = LocalLlmDriver.generateStream(
+      {
+        modelFilename: activeModelFilename,
+        systemPrompt: synthesizedPrompt,
+        userPrompt: input,
+      },
+      onToken
+    );
+
+    for await (const token of stream) {
+      responseText += token;
+    }
+
+    return {
+      route,
+      updatedPAD,
+      synthesizedPrompt,
+      response: responseText,
+      groundedFactsCount: MemoryEngine.queryMemories(3).length,
+    };
+  }
+
+  /**
+   * Evaluates input, updates emotional PAD state, injects memory, and routes execution (Synchronous fallback).
    */
   public static processTurn(
     input: string,

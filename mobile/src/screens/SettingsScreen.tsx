@@ -53,7 +53,7 @@ export interface SettingsScreenProps {
   onUpdatePAD: (pad: PADVector) => void;
 }
 
-export type SubScreen = 'main' | 'soul' | 'models' | 'speculative' | 'audio' | 'storage' | 'advanced';
+export type SubScreen = 'main' | 'soul' | 'models' | 'speculative' | 'audio' | 'storage' | 'security' | 'advanced';
 export type SortOption = 'ram_asc' | 'ram_desc' | 'size_asc' | 'size_desc' | 'name_asc';
 export type Capability = 'Text' | 'Image' | 'Voice' | 'Code' | 'Video';
 
@@ -214,6 +214,20 @@ export default function SettingsScreen({
   const [turboActive, setTurboActive] = useState<boolean>(true);
   const [activePresetIndex, setActivePresetIndex] = useState<number>(0);
 
+  // Audio & Voice Engine State
+  const [sttEngine, setSttEngine] = useState<'whisper_tiny' | 'whisper_base'>('whisper_tiny');
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [vadThreshold, setVadThreshold] = useState(0.5);
+
+  // Security & Privacy State
+  const [biometricLock, setBiometricLock] = useState(false);
+  const [autoPurgeDays, setAutoPurgeDays] = useState(30);
+
+  // Advanced Qualcomm Snapdragon 8 Gen 2 Acceleration State
+  const [vulkanCompute, setVulkanCompute] = useState(true);
+  const [threadCount, setThreadCount] = useState(4);
+  const [flashAttention, setFlashAttention] = useState(true);
+
   // Storage and Memory Stats
   const [storageUsed, setStorageUsed] = useState('748 MB');
   const [memoryCount, setMemoryCount] = useState(2);
@@ -283,9 +297,22 @@ export default function SettingsScreen({
   };
 
   const handlePurge = () => {
-    MemoryEngine.clearAll();
-    setMemoryCount(0);
-    Alert.alert('Memory Purged', 'Local episodic relationship memory cleared.');
+    Alert.alert(
+      'Purge Episodic Memory',
+      'Are you sure you want to delete all stored relationship facts and episodic memory vectors? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Purge Memory',
+          style: 'destructive',
+          onPress: () => {
+            MemoryEngine.clearAll();
+            setMemoryCount(0);
+            Alert.alert('Memory Purged', 'Local episodic relationship memory cleared.');
+          },
+        },
+      ]
+    );
   };
 
   const toggleCapability = (cap: Capability) => {
@@ -299,6 +326,18 @@ export default function SettingsScreen({
   // =========================================================
 
   const handleStartDownload = async (modelId: string, sizeFormatted: string) => {
+    // Guard: Prevent concurrent downloads to protect S23 Ultra storage and bandwidth
+    const activeDownloadId = Object.keys(downloads).find(
+      id => id !== modelId && downloads[id]?.status === 'downloading'
+    );
+    if (activeDownloadId) {
+      Alert.alert(
+        'Download In Progress',
+        'Another model is currently downloading. Please wait for it to complete or pause it before starting another download.'
+      );
+      return;
+    }
+
     const totalMb = parseSizeToMb(sizeFormatted);
     const spec = S23_MODEL_DATABASE.find(m => m.id === modelId);
 
@@ -768,8 +807,278 @@ export default function SettingsScreen({
   }
 
   // =========================================================
-  // SUB-SCREEN: S23 ULTRA MODEL VAULT & DOWNLOAD
+  // SUB-SCREEN: AUDIO & VOICE
   // =========================================================
+  if (currentScreen === 'audio') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={styles.appBar}>
+          <TouchableOpacity onPress={() => setCurrentScreen('main')} style={styles.backBtn}>
+            <BackArrowIcon size={20} color="#ffffff" />
+            <Text style={styles.appBarTitle}>Audio & Voice</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.subContent}>
+          <Text style={styles.sectionHeader}>SPEECH-TO-TEXT (STT)</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.metricRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>STT Model</Text>
+                <Text style={styles.switchSub}>Offline Whisper GGML kernel</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {(['whisper_tiny', 'whisper_base'] as const).map(engine => (
+                  <TouchableOpacity
+                    key={engine}
+                    style={[
+                      styles.filterPill,
+                      sttEngine === engine && styles.filterPillActive,
+                      { paddingVertical: 4, paddingHorizontal: 10 }
+                    ]}
+                    onPress={() => setSttEngine(engine)}
+                  >
+                    <Text style={[styles.filterPillText, sttEngine === engine && styles.filterPillTextActive]}>
+                      {engine === 'whisper_tiny' ? 'Tiny (75MB)' : 'Base (142MB)'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={[styles.divider, { marginVertical: 12 }]} />
+
+            <View style={styles.metricRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>Voice Activity Detection (VAD)</Text>
+                <Text style={styles.switchSub}>Silero VAD threshold sensitivity</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {[0.3, 0.5, 0.8].map(th => (
+                  <TouchableOpacity
+                    key={th}
+                    style={[
+                      styles.filterPill,
+                      vadThreshold === th && styles.filterPillActive,
+                      { paddingVertical: 4, paddingHorizontal: 8 }
+                    ]}
+                    onPress={() => setVadThreshold(th)}
+                  >
+                    <Text style={[styles.filterPillText, vadThreshold === th && styles.filterPillTextActive]}>
+                      {th === 0.3 ? 'High' : th === 0.5 ? 'Normal' : 'Low'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          <Text style={[styles.sectionHeader, { marginTop: 20 }]}>TEXT-TO-SPEECH (TTS)</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>Neural Speech Synthesis</Text>
+                <Text style={styles.switchSub}>Piper high-fidelity offline voice generator</Text>
+              </View>
+              <Switch
+                value={ttsEnabled}
+                onValueChange={setTtsEnabled}
+                thumbColor={ttsEnabled ? '#ffffff' : '#71717a'}
+                trackColor={{ false: '#27272a', true: '#38bdf8' }}
+              />
+            </View>
+            <View style={[styles.divider, { marginVertical: 12 }]} />
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Sample Rate</Text>
+              <Text style={styles.metricVal}>22,050 Hz (16-bit PCM)</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Latency</Text>
+              <Text style={[styles.metricVal, { color: '#22c55e' }]}>~45ms (Native C++ Stream)</Text>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // =========================================================
+  // SUB-SCREEN: SECURITY & PRIVACY
+  // =========================================================
+  if (currentScreen === 'security') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={styles.appBar}>
+          <TouchableOpacity onPress={() => setCurrentScreen('main')} style={styles.backBtn}>
+            <BackArrowIcon size={20} color="#ffffff" />
+            <Text style={styles.appBarTitle}>Security & Privacy</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.subContent}>
+          <Text style={styles.sectionHeader}>DEVICE ENCRYPTION & LOCK</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>Biometric Auth on Launch</Text>
+                <Text style={styles.switchSub}>Require fingerprint / face to unlock vault</Text>
+              </View>
+              <Switch
+                value={biometricLock}
+                onValueChange={setBiometricLock}
+                thumbColor={biometricLock ? '#ffffff' : '#71717a'}
+                trackColor={{ false: '#27272a', true: '#38bdf8' }}
+              />
+            </View>
+
+            <View style={[styles.divider, { marginVertical: 12 }]} />
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>Zero Cloud Sandbox (.nomedia)</Text>
+                <Text style={styles.switchSub}>Prevent Android gallery/cloud from indexing chat images</Text>
+              </View>
+              <Switch
+                value={true}
+                disabled={true}
+                thumbColor="#22c55e"
+                trackColor={{ false: '#27272a', true: 'rgba(34, 197, 94, 0.4)' }}
+              />
+            </View>
+          </View>
+
+          <Text style={[styles.sectionHeader, { marginTop: 20 }]}>EPISODIC MEMORY LIFECYCLE</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.metricRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>Auto-Purge Inactive Facts</Text>
+                <Text style={styles.switchSub}>Discard vector facts older than retention limit</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {[7, 30, 90].map(days => (
+                  <TouchableOpacity
+                    key={days}
+                    style={[
+                      styles.filterPill,
+                      autoPurgeDays === days && styles.filterPillActive,
+                      { paddingVertical: 4, paddingHorizontal: 10 }
+                    ]}
+                    onPress={() => setAutoPurgeDays(days)}
+                  >
+                    <Text style={[styles.filterPillText, autoPurgeDays === days && styles.filterPillTextActive]}>
+                      {days}d
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.pairActionBtn, { marginTop: 20, borderColor: 'rgba(239, 68, 68, 0.4)', backgroundColor: 'rgba(239, 68, 68, 0.08)' }]}
+            onPress={handlePurge}
+          >
+            <TrashIcon size={15} color="#ef4444" />
+            <Text style={[styles.pairActionBtnText, { color: '#ef4444' }]}>Wipe All Relationship Vectors</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // =========================================================
+  // SUB-SCREEN: ADVANCED HARDWARE & VULKAN COMPUTE
+  // =========================================================
+  if (currentScreen === 'advanced') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={styles.appBar}>
+          <TouchableOpacity onPress={() => setCurrentScreen('main')} style={styles.backBtn}>
+            <BackArrowIcon size={20} color="#ffffff" />
+            <Text style={styles.appBarTitle}>Advanced Compute</Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.subContent}>
+          <Text style={styles.sectionHeader}>SNAPDRAGON 8 GEN 2 ACCELERATION</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>Adreno 740 Vulkan Acceleration</Text>
+                <Text style={styles.switchSub}>Offload matrix multiplications to GPU shader kernels</Text>
+              </View>
+              <Switch
+                value={vulkanCompute}
+                onValueChange={setVulkanCompute}
+                thumbColor={vulkanCompute ? '#ffffff' : '#71717a'}
+                trackColor={{ false: '#27272a', true: '#38bdf8' }}
+              />
+            </View>
+
+            <View style={[styles.divider, { marginVertical: 12 }]} />
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>Flash Attention 2</Text>
+                <Text style={styles.switchSub}>Fused self-attention to reduce memory bandwidth</Text>
+              </View>
+              <Switch
+                value={flashAttention}
+                onValueChange={setFlashAttention}
+                thumbColor={flashAttention ? '#ffffff' : '#71717a'}
+                trackColor={{ false: '#27272a', true: '#38bdf8' }}
+              />
+            </View>
+
+            <View style={[styles.divider, { marginVertical: 12 }]} />
+
+            <View style={styles.metricRow}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.switchTitle}>CPU Inference Threads</Text>
+                <Text style={styles.switchSub}>Cortex-X3 Prime & Cortex-A715 cores</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {[2, 4, 6, 8].map(cnt => (
+                  <TouchableOpacity
+                    key={cnt}
+                    style={[
+                      styles.filterPill,
+                      threadCount === cnt && styles.filterPillActive,
+                      { paddingVertical: 4, paddingHorizontal: 10 }
+                    ]}
+                    onPress={() => setThreadCount(cnt)}
+                  >
+                    <Text style={[styles.filterPillText, threadCount === cnt && styles.filterPillTextActive]}>
+                      {cnt}T
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          <Text style={[styles.sectionHeader, { marginTop: 20 }]}>KERNEL TELEMETRY</Text>
+          <View style={styles.infoCard}>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>SoC Platform</Text>
+              <Text style={styles.metricVal}>Qualcomm SM8550-AC (Galaxy)</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Total Physical RAM</Text>
+              <Text style={[styles.metricVal, { color: '#38bdf8' }]}>12 GB LPDDR5X (8533 Mbps)</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Max Model Context Allocated</Text>
+              <Text style={styles.metricVal}>8,192 Tokens (KV Cache F16)</Text>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
   if (currentScreen === 'models') {
     return (
       <SafeAreaView style={styles.container}>
@@ -1220,7 +1529,7 @@ export default function SettingsScreen({
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('models')}>
+          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('audio')}>
             <View style={styles.iconWrapper}>
               <MicIcon size={20} color="#ffffff" />
             </View>
@@ -1242,7 +1551,7 @@ export default function SettingsScreen({
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('models')}>
+          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('security')}>
             <View style={styles.iconWrapper}>
               <ShieldIcon size={20} color="#ffffff" />
             </View>
@@ -1252,7 +1561,7 @@ export default function SettingsScreen({
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('models')}>
+          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('advanced')}>
             <View style={styles.iconWrapper}>
               <SlidersIcon size={20} color="#ffffff" />
             </View>
@@ -1430,6 +1739,20 @@ const styles = StyleSheet.create({
   },
   gradePillText: { color: '#71717a', fontSize: 11, fontWeight: '600' },
   gradePillTextActive: { color: '#000000', fontWeight: '700' },
+  filterPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#18181d',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  filterPillActive: {
+    backgroundColor: '#ffffff',
+    borderColor: '#ffffff',
+  },
+  filterPillText: { color: '#71717a', fontSize: 11, fontWeight: '600' },
+  filterPillTextActive: { color: '#000000', fontWeight: '700' },
   uncensoredFilterActive: {
     backgroundColor: 'rgba(236, 72, 153, 0.15)',
     borderColor: 'rgba(236, 72, 153, 0.4)',

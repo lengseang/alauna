@@ -29,6 +29,12 @@ export default function ThreadSoulModal({
   const [pad, setPad] = useState<PADVector>(config.pad);
   const [backstory, setBackstory] = useState(config.customBackstory || '');
 
+  React.useEffect(() => {
+    setSelectedArch(config.archetype);
+    setPad(config.pad);
+    setBackstory(config.customBackstory || '');
+  }, [config, visible]);
+
   const handleApply = () => {
     onSave({
       archetype: selectedArch,

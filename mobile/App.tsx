@@ -13,6 +13,8 @@ import {
   Dimensions,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { ARCHETYPES, SoulArchetypeKey, PADVector } from './src/types/soul';
 import { MobileOrchestrator } from './src/engine/orchestrator';
@@ -56,6 +58,7 @@ export default function App() {
   // Multimodal Attachments State
   const [selectedMedia, setSelectedMedia] = useState<{ uri: string; type: 'image' | 'file'; name?: string }[]>([]);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   // Voice Pulse Animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -160,15 +163,16 @@ export default function App() {
   };
 
   const handleSend = async () => {
+    if (isGenerating) return;
     if (!inputText.trim() && selectedMedia.length === 0) return;
 
     const userText = inputText.trim();
     const mediaUris = selectedMedia.map(m => m.uri);
-    
-    // 1. Process turn with this thread's specific soul and PAD
-    const threadArch = currentThread.soulConfig.archetype;
-    const threadPAD = currentThread.soulConfig.pad;
-    const result = MobileOrchestrator.processTurn(userText, threadArch, threadPAD);
+
+    // Immediately clear input fields to prevent double submissions
+    setInputText('');
+    setSelectedMedia([]);
+    setIsGenerating(true);
 
     const userMsg: ChatMessage = {
       id: `u_${Date.now()}`,
@@ -176,45 +180,63 @@ export default function App() {
       text: userText,
       timestamp: Date.now(),
       mediaUris: mediaUris.length > 0 ? mediaUris : undefined,
-      tokenCountEst: Math.floor(userText.length / 4),
+      tokenCountEst: Math.floor((userText.length || 20) / 4),
     };
 
-    const botMsg: ChatMessage = {
-      id: `a_${Date.now() + 1}`,
-      sender: 'assistant',
-      text: result.response,
-      timestamp: Date.now() + 1,
-      tokenCountEst: Math.floor(result.response.length / 4),
-      meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category}`,
-    };
-
-    // 2. Append messages
-    const updatedMessages = [...currentThread.messages, userMsg, botMsg];
-
-    // Auto-derive thread title if it's the first user turn
     const threadTitle = currentThread.title === 'New Conversation' ? (userText ? userText.slice(0, 32) : 'Photo Analysis') : currentThread.title;
 
-    let updatedThread: ChatThread = {
-      ...currentThread,
+    // Immediately append user message to feed
+    setCurrentThread(prev => ({
+      ...prev,
       title: threadTitle,
-      messages: updatedMessages,
-      soulConfig: {
-        ...currentThread.soulConfig,
-        pad: result.updatedPAD,
-      },
+      messages: [...prev.messages, userMsg],
       updatedAt: Date.now(),
-    };
+    }));
 
-    // 3. Claude-Style Automatic Session Compaction if conversation exceeds token ceiling
-    updatedThread = VaultStorage.compactSession(updatedThread, 2048);
+    try {
+      // Execute turn asynchronously through on-device streaming generator
+      const threadArch = currentThread.soulConfig.archetype;
+      const threadPAD = currentThread.soulConfig.pad;
+      const result = await MobileOrchestrator.processTurnAsync(
+        userText || 'Analyze attached document/image',
+        threadArch,
+        threadPAD,
+        activeModelId
+      );
 
-    setCurrentThread(updatedThread);
-    setInputText('');
-    setSelectedMedia([]);
+      const botMsg: ChatMessage = {
+        id: `a_${Date.now() + 1}`,
+        sender: 'assistant',
+        text: result.response,
+        timestamp: Date.now() + 1,
+        tokenCountEst: Math.floor(result.response.length / 4),
+        meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category}`,
+      };
 
-    // 4. Persist sovereign thread to disk
-    await VaultStorage.saveThread(updatedThread);
-    loadSavedThreads();
+      setCurrentThread(prev => {
+        let updated: ChatThread = {
+          ...prev,
+          title: threadTitle,
+          messages: [...prev.messages, botMsg],
+          soulConfig: {
+            ...prev.soulConfig,
+            pad: result.updatedPAD,
+          },
+          updatedAt: Date.now(),
+        };
+
+        // Claude-Style Automatic Session Compaction if conversation exceeds token threshold
+        updated = VaultStorage.compactSession(updated, 2048);
+        VaultStorage.saveThread(updated);
+        return updated;
+      });
+
+      loadSavedThreads();
+    } catch (err: any) {
+      Alert.alert('Inference Notice', `Local generation interrupted: ${err?.message || 'Check model weights'}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleSelectThread = async (threadId: string) => {
@@ -419,8 +441,17 @@ export default function App() {
                 <MicIcon size={18} color="#ffffff" />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.sendBtn} onPress={handleSend}>
-                <Text style={styles.sendBtnText}>↑</Text>
+              <TouchableOpacity
+                style={[styles.sendBtn, (isGenerating || (!inputText.trim() && selectedMedia.length === 0)) && { opacity: 0.4 }]}
+                onPress={handleSend}
+                disabled={isGenerating}
+                activeOpacity={0.7}
+              >
+                {isGenerating ? (
+                  <ActivityIndicator size="small" color="#000000" />
+                ) : (
+                  <Text style={styles.sendBtnText}>↑</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
