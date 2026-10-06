@@ -11,9 +11,7 @@
  * 6. Pure TypeScript streaming SHA-256 verification (no native crypto dependencies, zero OOM).
  */
 
-import { Paths, File, Directory } from 'expo-file-system';
-import { FileMode } from 'expo-file-system';
-import type { DownloadTask } from 'expo-file-system';
+import { Paths, File, Directory, DownloadTask, FileMode } from 'expo-file-system';
 
 // ============================================================================
 // Types and Interfaces
@@ -866,7 +864,7 @@ export class HFModelDownloader {
   }
 
   /**
-   * Resumable transfer engine using Expo File.createDownloadTask or HTTP Range headers.
+   * Resumable transfer engine using Expo DownloadTask or File.downloadFileAsync.
    */
   private async executeResumableTransfer(startByte: number): Promise<void> {
     const headers: Record<string, string> = {};
@@ -880,10 +878,10 @@ export class HFModelDownloader {
 
     this.abortController = new AbortController();
 
-    // Check if modern Expo DownloadTask is available
-    if (typeof File.createDownloadTask === 'function') {
+    // Strategy 1: Use official Expo SDK 57 DownloadTask
+    if (typeof DownloadTask === 'function') {
       try {
-        const task = File.createDownloadTask(
+        const task = new DownloadTask(
           this.downloadUrl,
           this.partialFile,
           {
@@ -891,7 +889,7 @@ export class HFModelDownloader {
             signal: this.abortController.signal,
             onProgress: (p) => {
               if (this.pauseRequested) return;
-              const currentTotalWritten = startByte + p.bytesWritten;
+              const currentTotalWritten = startByte + (p.bytesWritten || 0);
               this.bytesWritten = currentTotalWritten;
               if (p.totalBytes > 0 && this.totalBytes <= 0) {
                 this.totalBytes = startByte + p.totalBytes;
@@ -909,92 +907,37 @@ export class HFModelDownloader {
       } catch (err: unknown) {
         this.activeDownloadTask = null;
         if (this.pauseRequested) return;
-        // If native task fails or was aborted, rethrow
-        throw err;
+        // Fallback to File.downloadFileAsync
       }
     }
 
-    // Fallback: Fetch chunk stream transfer with Range header
-    await this.executeFetchChunkStream(startByte, headers);
-  }
-
-  /**
-   * Fallback chunk stream implementation for environments without Expo native DownloadTask.
-   */
-  private async executeFetchChunkStream(
-    startByte: number,
-    headers: Record<string, string>
-  ): Promise<void> {
-    const response = await fetch(this.downloadUrl, {
-      headers,
-      signal: this.abortController?.signal,
-    });
-
-    if (!response.ok && response.status !== 206) {
-      throw new HFDownloadError(
-        `Remote server returned HTTP ${response.status}`,
-        this.filename,
-        startByte
-      );
-    }
-
-    if (response.status === 200 && startByte > 0) {
-      // Server did not accept Range header; restarted from 0
-      startByte = 0;
-      this.bytesWritten = 0;
-    }
-
-    const contentLength = response.headers.get('content-length');
-    if (contentLength && this.totalBytes <= 0) {
-      this.totalBytes = startByte + parseInt(contentLength, 10);
-    }
-
-    if (!response.body) {
-      throw new HFDownloadError('Response body is null', this.filename, startByte);
-    }
-
-    // Open partial file for appending or writing
-    let handle: {
-      writeBytes: (b: Uint8Array) => void;
-      close: () => void;
-    } | null = null;
-
-    if (typeof this.partialFile.open === 'function') {
-      handle = this.partialFile.open(
-        startByte > 0 ? FileMode.Append : FileMode.WriteOnly
-      );
-    }
-
-    const reader = response.body.getReader();
+    // Strategy 2: High-reliability static File.downloadFileAsync
     try {
-      while (true) {
-        if (this.pauseRequested) {
-          await reader.cancel();
-          break;
+      await File.downloadFileAsync(
+        this.downloadUrl,
+        this.partialFile,
+        {
+          headers,
+          idempotent: true,
+          signal: this.abortController?.signal,
+          onProgress: (p) => {
+            if (this.pauseRequested) return;
+            const currentTotalWritten = startByte + (p.bytesWritten || 0);
+            this.bytesWritten = currentTotalWritten;
+            if (p.totalBytes > 0 && this.totalBytes <= 0) {
+              this.totalBytes = startByte + p.totalBytes;
+            }
+            this.calculateSpeedAndETA(currentTotalWritten);
+            this.notifyProgress();
+          },
         }
-
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        if (value) {
-          if (handle) {
-            handle.writeBytes(value);
-          } else {
-            // In environments where handle is unavailable, write chunk
-            this.partialFile.write(value, { append: true });
-          }
-
-          this.bytesWritten += value.length;
-          this.calculateSpeedAndETA(this.bytesWritten);
-          this.notifyProgress();
-        }
-      }
-    } finally {
-      if (handle) {
-        handle.close();
-      }
+      );
+    } catch (err: unknown) {
+      if (this.pauseRequested) return;
+      throw err;
     }
   }
+
 
   /**
    * Pause the active download safely. Preserves partial file on disk.

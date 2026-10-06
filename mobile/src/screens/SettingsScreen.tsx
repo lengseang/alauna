@@ -12,11 +12,13 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import { Paths, Directory } from 'expo-file-system';
 import Svg, { Rect } from 'react-native-svg';
 import { ARCHETYPES, SoulArchetypeKey, PADVector } from '../types/soul';
 import { ModelManager } from '../services/modelManager';
 import { MemoryEngine } from '../services/memoryEngine';
 import { HardwareProfiler } from '../services/hardwareProfiler';
+import { StorageConfigService } from '../services/storageConfig';
 import { S23_MODEL_DATABASE, LocalModelSpec, ModelGrade } from '../types/settings';
 import {
   SoulIcon,
@@ -237,16 +239,14 @@ export default function SettingsScreen({
   const [downloads, setDownloads] = useState<Record<string, ModelDownloadState>>(() => {
     const initial: Record<string, ModelDownloadState> = {};
     for (const m of S23_MODEL_DATABASE) {
-      if (m.status === 'installed' || m.id === 'llama-3.2-1b' || m.id === activeModelId) {
-        const mb = parseSizeToMb(m.sizeFormatted);
-        initial[m.id] = {
-          status: 'completed',
-          progress: 100,
-          speedMbPerSec: 0,
-          downloadedMb: mb,
-          totalMb: mb,
-        };
-      }
+      const mb = parseSizeToMb(m.sizeFormatted);
+      initial[m.id] = {
+        status: 'idle',
+        progress: 0,
+        speedMbPerSec: 0,
+        downloadedMb: 0,
+        totalMb: mb,
+      };
     }
     return initial;
   });
@@ -254,6 +254,7 @@ export default function SettingsScreen({
   // Track active real downloaders in memory
   const downloadersRef = useRef<Record<string, any>>({});
   const [installedFiles, setInstalledFiles] = useState<{ filename: string; sizeFormatted: string }[]>([]);
+  const [currentVaultPath, setCurrentVaultPath] = useState<string>('');
 
   useEffect(() => {
     loadStats();
@@ -269,6 +270,9 @@ export default function SettingsScreen({
 
   const loadStats = async () => {
     try {
+      const config = await StorageConfigService.getConfig();
+      setCurrentVaultPath(config.vaultUri);
+
       const storage = await ModelManager.getTotalStorageUsed();
       setStorageUsed(storage.formatted);
       setMemoryCount(MemoryEngine.getCount());
@@ -745,7 +749,58 @@ export default function SettingsScreen({
         <ScrollView contentContainerStyle={styles.subContent}>
           {/* Storage Overview Card */}
           <View style={styles.infoCard}>
-            <Text style={styles.sectionHeader}>STORAGE CONSUMPTION</Text>
+            <Text style={styles.sectionHeader}>STORAGE CONSUMPTION & LOCATION</Text>
+            <View style={styles.metricRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.switchTitle}>Storage Folder</Text>
+                <Text style={styles.switchSub} numberOfLines={1}>
+                  {currentVaultPath || (Paths?.document ? `${Paths.document}/vault` : 'Device App Sandboxed Storage')}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <TouchableOpacity
+                  style={[styles.filterPill, { paddingHorizontal: 10, paddingVertical: 6 }]}
+                  onPress={async () => {
+                    try {
+                      if (typeof Directory?.pickDirectoryAsync === 'function') {
+                        const picked = await Directory.pickDirectoryAsync();
+                        if (picked) {
+                          await StorageConfigService.setCustomVaultDirectory(picked);
+                          setCurrentVaultPath(picked.uri);
+                          await loadStats();
+                          Alert.alert('Storage Vault Updated', `Root directory mapped to:\n${picked.uri}`);
+                        }
+                      } else {
+                        Alert.alert('Notice', 'System directory picker is unavailable on this OS version. Using internal sandboxed storage.');
+                      }
+                    } catch (e: any) {
+                      Alert.alert('Notice', 'Directory selection: ' + (e?.message || 'Default sandbox preserved.'));
+                    }
+                  }}
+                >
+                  <Text style={[styles.filterPillText, { color: '#38bdf8' }]}>Change Folder</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.filterPill, { paddingHorizontal: 10, paddingVertical: 6 }]}
+                  onPress={async () => {
+                    try {
+                      await StorageConfigService.useDefaultSandbox();
+                      setCurrentVaultPath(StorageConfigService.getDefaultVaultDirectory().uri);
+                      await loadStats();
+                      Alert.alert('Storage Reset', 'Default sovereign internal sandbox restored.');
+                    } catch (e: any) {
+                      Alert.alert('Notice', 'Reset failed: ' + e?.message);
+                    }
+                  }}
+                >
+                  <Text style={[styles.filterPillText, { color: '#71717a' }]}>Reset</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={[styles.divider, { marginVertical: 10 }]} />
+
             <View style={styles.metricRow}>
               <Text style={styles.metricLabel}>Total Vault Usage</Text>
               <Text style={[styles.metricVal, { color: '#38bdf8' }]}>{storageUsed}</Text>

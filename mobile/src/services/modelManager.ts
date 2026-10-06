@@ -5,6 +5,7 @@
 
 import { Paths, File, Directory } from 'expo-file-system';
 import { LocalModelSpec, AVAILABLE_MODELS } from '../types/settings';
+import { StorageConfigService } from './storageConfig';
 import {
   HFModelDownloader,
   HFModelResolver,
@@ -13,17 +14,32 @@ import {
 } from './hfModelDownloader';
 
 export class ModelManager {
-  private static get modelsDirectory(): Directory {
+  private static cachedModelsDir: Directory | null = null;
+
+  public static async getModelsDirectory(): Promise<Directory> {
+    const dir = await StorageConfigService.getModelsDirectory();
+    this.cachedModelsDir = dir;
+    return dir;
+  }
+
+  public static get modelsDirectory(): Directory {
+    if (this.cachedModelsDir) return this.cachedModelsDir;
     return new Directory(Paths.document, 'models');
+  }
+
+  public static setModelsDirectory(dir: Directory): void {
+    this.cachedModelsDir = dir;
   }
 
   /**
    * Ensure the private models sandbox directory exists.
    */
   public static async initSandbox(): Promise<void> {
-    const dir = this.modelsDirectory;
+    const dir = await this.getModelsDirectory();
     if (!dir.exists) {
-      dir.create();
+      try {
+        dir.create();
+      } catch {}
     }
   }
 
@@ -55,6 +71,7 @@ export class ModelManager {
    * Check if model is downloaded and intact on disk.
    */
   public static async isModelDownloaded(filename: string): Promise<boolean> {
+    await this.initSandbox();
     const file = this.getModelFile(filename);
     return file.exists;
   }
@@ -83,8 +100,9 @@ export class ModelManager {
   public static async downloadModel(spec: LocalModelSpec): Promise<string> {
     await this.initSandbox();
     const targetFile = this.getModelFile(spec.filename);
+    const directUrl = this.resolveDirectModelUrl(spec);
 
-    const downloaded = await File.downloadFileAsync(spec.downloadUrl, targetFile, {
+    const downloaded = await File.downloadFileAsync(directUrl, targetFile, {
       idempotent: true,
     });
 
@@ -102,6 +120,7 @@ export class ModelManager {
       repoId: spec.repo,
       filename: spec.filename,
       targetFilename: spec.filename,
+      destinationDir: this.modelsDirectory,
       onProgress,
     });
   }

@@ -23,6 +23,9 @@ import { VaultStorage, ChatThread, ChatMessage, ThreadSoulConfig } from './src/s
 import SettingsScreen from './src/screens/SettingsScreen';
 import ThreadSoulModal from './src/components/ThreadSoulModal';
 import { HardwareProfiler } from './src/services/hardwareProfiler';
+import { StorageConfigService } from './src/services/storageConfig';
+import { ModelManager } from './src/services/modelManager';
+import { Directory, Paths } from 'expo-file-system';
 import {
   SoulIcon,
   SlidersIcon,
@@ -36,6 +39,7 @@ import {
   MenuIcon,
   PlusIcon,
   ChevronDownIcon,
+  StorageIcon,
 } from './src/components/Icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -59,17 +63,70 @@ export default function App() {
   const [threadSoulModalOpen, setThreadSoulModalOpen] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
 
-  // Multimodal Attachments State
   const [selectedMedia, setSelectedMedia] = useState<{ uri: string; type: 'image' | 'file'; name?: string }[]>([]);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null);
+  const [expandedThoughts, setExpandedThoughts] = useState<Record<string, boolean>>({});
+  const [storageModalOpen, setStorageModalOpen] = useState(false);
+  const [configuredVaultPath, setConfiguredVaultPath] = useState<string>('');
 
   // Voice Pulse Animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    checkStorageVault();
     loadSavedThreads();
   }, []);
+
+  const checkStorageVault = async () => {
+    try {
+      const isConfigured = await StorageConfigService.isStorageConfigured();
+      if (!isConfigured) {
+        setStorageModalOpen(true);
+      } else {
+        const config = await StorageConfigService.getConfig();
+        setConfiguredVaultPath(config.vaultUri);
+        await VaultStorage.initVault();
+        await ModelManager.initSandbox();
+      }
+    } catch {
+      setStorageModalOpen(true);
+    }
+  };
+
+  const handlePickStorageFolder = async () => {
+    try {
+      if (typeof Directory?.pickDirectoryAsync === 'function') {
+        const picked = await Directory.pickDirectoryAsync();
+        if (picked) {
+          const config = await StorageConfigService.setCustomVaultDirectory(picked);
+          setConfiguredVaultPath(config.vaultUri);
+          setStorageModalOpen(false);
+          await VaultStorage.initVault();
+          await ModelManager.initSandbox();
+          Alert.alert('Storage Vault Configured', `Vault directory mounted at:\n${picked.uri}`);
+        }
+      } else {
+        await handleUseDefaultSandbox();
+      }
+    } catch (e: any) {
+      Alert.alert('Selection Interrupted', e?.message || 'Please select a valid folder or use internal sandbox.');
+    }
+  };
+
+  const handleUseDefaultSandbox = async () => {
+    try {
+      const config = await StorageConfigService.useDefaultSandbox();
+      setConfiguredVaultPath(config.vaultUri);
+      setStorageModalOpen(false);
+      await VaultStorage.initVault();
+      await ModelManager.initSandbox();
+      Alert.alert('Internal Vault Initialized', 'Using sovereign app sandbox.');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to initialize default sandbox.');
+    }
+  };
 
   const loadSavedThreads = async () => {
     try {
@@ -170,6 +227,13 @@ export default function App() {
     if (isGenerating) return;
     if (!inputText.trim() && selectedMedia.length === 0) return;
 
+    // Check if storage vault is initialized
+    const isConfigured = await StorageConfigService.isStorageConfigured();
+    if (!isConfigured) {
+      setStorageModalOpen(true);
+      return;
+    }
+
     const userText = inputText.trim();
     const mediaUris = selectedMedia.map(m => m.uri);
 
@@ -189,11 +253,24 @@ export default function App() {
 
     const threadTitle = currentThread.title === 'New Conversation' ? (userText ? userText.slice(0, 32) : 'Photo Analysis') : currentThread.title;
 
-    // Immediately append user message to feed
+    const botMsgId = `a_${Date.now() + 1}`;
+    setStreamingMsgId(botMsgId);
+
+    const initialBotMsg: ChatMessage = {
+      id: botMsgId,
+      sender: 'assistant',
+      text: '',
+      thoughts: 'Reasoning on device with local weights...',
+      timestamp: Date.now() + 1,
+      tokenCountEst: 0,
+      meta: `${activeModelId} • Processing`,
+    };
+
+    // Immediately append user message AND streaming bot placeholder
     setCurrentThread(prev => ({
       ...prev,
       title: threadTitle,
-      messages: [...prev.messages, userMsg],
+      messages: [...prev.messages, userMsg, initialBotMsg],
       updatedAt: Date.now(),
     }));
 
@@ -201,27 +278,39 @@ export default function App() {
       // Execute turn asynchronously through on-device streaming generator
       const threadArch = currentThread.soulConfig.archetype;
       const threadPAD = currentThread.soulConfig.pad;
+
+      let accumulatedText = '';
       const result = await MobileOrchestrator.processTurnAsync(
         userText || 'Analyze attached document/image',
         threadArch,
         threadPAD,
-        activeModelId
+        activeModelId,
+        (token) => {
+          accumulatedText += token;
+          setCurrentThread(prev => ({
+            ...prev,
+            messages: prev.messages.map(m =>
+              m.id === botMsgId ? { ...m, text: accumulatedText } : m
+            ),
+          }));
+        }
       );
-
-      const botMsg: ChatMessage = {
-        id: `a_${Date.now() + 1}`,
-        sender: 'assistant',
-        text: result.response,
-        timestamp: Date.now() + 1,
-        tokenCountEst: Math.floor(result.response.length / 4),
-        meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category}`,
-      };
 
       setCurrentThread(prev => {
         let updated: ChatThread = {
           ...prev,
           title: threadTitle,
-          messages: [...prev.messages, botMsg],
+          messages: prev.messages.map(m =>
+            m.id === botMsgId
+              ? {
+                  ...m,
+                  text: result.response,
+                  thoughts: result.thoughts,
+                  tokenCountEst: Math.floor(result.response.length / 4),
+                  meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category}`,
+                }
+              : m
+          ),
           soulConfig: {
             ...prev.soulConfig,
             pad: result.updatedPAD,
@@ -238,8 +327,14 @@ export default function App() {
       loadSavedThreads();
     } catch (err: any) {
       Alert.alert('Inference Notice', `Local generation interrupted: ${err?.message || 'Check model weights'}`);
+      // Remove empty bot placeholder if it had zero tokens
+      setCurrentThread(prev => ({
+        ...prev,
+        messages: prev.messages.filter(m => m.id !== botMsgId || m.text.length > 0),
+      }));
     } finally {
       setIsGenerating(false);
+      setStreamingMsgId(null);
     }
   };
 
@@ -401,6 +496,42 @@ export default function App() {
                       m.sender === 'user' ? styles.userBubble : styles.assistantBubble,
                     ]}
                   >
+                    {/* Claude-Style Thinking / Process Accordion */}
+                    {m.sender === 'assistant' && (m.thoughts || (isGenerating && m.id === streamingMsgId)) && (
+                      <View style={styles.thinkingContainer}>
+                        <TouchableOpacity
+                          style={styles.thinkingHeader}
+                          onPress={() => {
+                            setExpandedThoughts(prev => ({ ...prev, [m.id]: !prev[m.id] }));
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <ZapIcon size={12} color={isGenerating && m.id === streamingMsgId ? '#38bdf8' : '#a1a1aa'} />
+                            <Text style={[styles.thinkingHeaderTitle, isGenerating && m.id === streamingMsgId && { color: '#38bdf8' }]}>
+                              {isGenerating && m.id === streamingMsgId
+                                ? 'Reasoning on device...'
+                                : expandedThoughts[m.id]
+                                ? 'Hide thinking process'
+                                : 'Thought for a few seconds'}
+                            </Text>
+                          </View>
+                          <ChevronDownIcon
+                            size={12}
+                            color="#71717a"
+                          />
+                        </TouchableOpacity>
+
+                        {(expandedThoughts[m.id] ?? (isGenerating && m.id === streamingMsgId)) && (
+                          <View style={styles.thinkingBody}>
+                            <Text style={styles.thinkingText}>
+                              {m.thoughts || 'Evaluating local context, neural weights & memory vectors...'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
                     {/* Attached Media Previews */}
                     {m.mediaUris && m.mediaUris.length > 0 && (
                       <View style={styles.attachedMediaGrid}>
@@ -409,7 +540,14 @@ export default function App() {
                         ))}
                       </View>
                     )}
-                    {m.text ? <Text style={styles.messageText}>{m.text}</Text> : null}
+                    {m.text ? (
+                      <Text style={styles.messageText}>{m.text}</Text>
+                    ) : isGenerating && m.id === streamingMsgId ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <ActivityIndicator size="small" color="#38bdf8" />
+                        <Text style={[styles.messageText, { color: '#71717a', fontSize: 13 }]}>Synthesizing tokens...</Text>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
               ))
@@ -634,6 +772,55 @@ export default function App() {
           </View>
         </Modal>
 
+        {/* Sovereign Storage Vault Initialization Modal (First Launch Gate) */}
+        <Modal
+          visible={storageModalOpen}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+        >
+          <View style={styles.storageModalOverlay}>
+            <View style={styles.storageModalCard}>
+              <View style={styles.storageModalHeader}>
+                <View style={styles.storageIconCircle}>
+                  <StorageIcon size={24} color="#38bdf8" />
+                </View>
+                <Text style={styles.storageModalTitle}>STORAGE VAULT SETUP</Text>
+                <Text style={styles.storageModalSubtitle}>Zero Cloud • Sovereign On-Device Storage</Text>
+              </View>
+
+              <Text style={styles.storageModalDesc}>
+                Chiwiwi operates 100% locally on your handset. Before initializing neural weights and chat sessions, designate a local folder where your GGUF models, encrypted vaults, and memory cache will be stored.
+              </Text>
+
+              <View style={styles.storagePathPreview}>
+                <Text style={styles.storagePathLabel}>CURRENT CONFIGURATION</Text>
+                <Text style={styles.storagePathText} numberOfLines={2}>
+                  {configuredVaultPath || (Paths?.document ? `${Paths.document}/vault` : 'Device Local Storage')}
+                </Text>
+              </View>
+
+              <View style={styles.storageActionsColumn}>
+                <TouchableOpacity
+                  style={styles.storagePrimaryBtn}
+                  onPress={handlePickStorageFolder}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.storagePrimaryBtnText}>CHOOSE STORAGE FOLDER</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.storageSecondaryBtn}
+                  onPress={handleUseDefaultSandbox}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.storageSecondaryBtnText}>USE APP INTERNAL SANDBOX</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     </View>
   );
@@ -775,6 +962,42 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.06)',
     borderBottomLeftRadius: 4,
   },
+  // Claude-Style Thinking Accordion Styles
+  thinkingContainer: {
+    marginBottom: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    overflow: 'hidden',
+  },
+  thinkingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  thinkingHeaderTitle: {
+    color: '#a1a1aa',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  thinkingBody: {
+    paddingHorizontal: 10,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.04)',
+    paddingTop: 6,
+  },
+  thinkingText: {
+    color: '#71717a',
+    fontSize: 11,
+    lineHeight: 16,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+
   messageText: { color: '#e4e4e7', fontSize: 14, lineHeight: 21 },
 
   inputDeck: {
@@ -1013,4 +1236,108 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+
+  // Sovereign Storage Vault Modal Styles
+  storageModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  storageModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#111114',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 24,
+    gap: 16,
+  },
+  storageModalHeader: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  storageIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  storageModalTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1.5,
+  },
+  storageModalSubtitle: {
+    color: '#38bdf8',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  storageModalDesc: {
+    color: '#a1a1aa',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  storagePathPreview: {
+    backgroundColor: '#09090b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 12,
+    gap: 4,
+  },
+  storagePathLabel: {
+    color: '#71717a',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  storagePathText: {
+    color: '#e4e4e7',
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  storageActionsColumn: {
+    gap: 10,
+    marginTop: 4,
+  },
+  storagePrimaryBtn: {
+    backgroundColor: '#38bdf8',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storagePrimaryBtnText: {
+    color: '#000000',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  storageSecondaryBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  storageSecondaryBtnText: {
+    color: '#a1a1aa',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
 });
+

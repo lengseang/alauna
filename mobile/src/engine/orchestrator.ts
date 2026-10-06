@@ -13,6 +13,7 @@ export interface TurnExecutionResult {
   updatedPAD: PADVector;
   synthesizedPrompt: string;
   response: string;
+  thoughts?: string;
   groundedFactsCount: number;
 }
 
@@ -64,8 +65,17 @@ export class MobileOrchestrator {
       onToken
     );
 
-    for await (const token of stream) {
-      responseText += token;
+    let thoughts = '';
+    while (true) {
+      const { value, done } = await stream.next();
+      if (done) {
+        if (value && typeof value === 'object') {
+          thoughts = value.thoughts;
+          if (value.cleanResponse) responseText = value.cleanResponse;
+        }
+        break;
+      }
+      responseText += value;
     }
 
     return {
@@ -73,6 +83,7 @@ export class MobileOrchestrator {
       updatedPAD,
       synthesizedPrompt,
       response: responseText,
+      thoughts,
       groundedFactsCount: MemoryEngine.queryMemories(3).length,
     };
   }

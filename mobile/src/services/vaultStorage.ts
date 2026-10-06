@@ -7,11 +7,13 @@
 
 import { Paths, File, Directory } from 'expo-file-system';
 import { PADVector, SoulArchetypeKey, ARCHETYPES } from '../types/soul';
+import { StorageConfigService } from './storageConfig';
 
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';
   text: string;
+  thoughts?: string; // Deep reasoning & process trace (Claude-style)
   timestamp: number;
   mediaUris?: string[]; // Private sandboxed media
   tokenCountEst: number;
@@ -38,7 +40,14 @@ export interface ChatThread {
 }
 
 export class VaultStorage {
+  private static cachedVaultDir: Directory | null = null;
+
+  public static setVaultDir(dir: Directory): void {
+    this.cachedVaultDir = dir;
+  }
+
   private static get vaultDir(): Directory {
+    if (this.cachedVaultDir) return this.cachedVaultDir;
     return new Directory(Paths.document, 'vault');
   }
 
@@ -54,15 +63,23 @@ export class VaultStorage {
    * Initialize secure folders and write .nomedia so phone Gallery/Photos NEVER see private AI assets.
    */
   public static async initVault(): Promise<void> {
-    if (!this.vaultDir.exists) this.vaultDir.create();
-    if (!this.chatsDir.exists) this.chatsDir.create();
+    const config = await StorageConfigService.getConfig();
+    this.cachedVaultDir = new Directory(config.vaultUri);
+
+    if (!this.vaultDir.exists) {
+      try { this.vaultDir.create(); } catch {}
+    }
+    if (!this.chatsDir.exists) {
+      try { this.chatsDir.create(); } catch {}
+    }
     if (!this.mediaDir.exists) {
-      this.mediaDir.create();
-      // Android .nomedia flag file
-      const noMediaFile = new File(this.mediaDir, '.nomedia');
-      if (!noMediaFile.exists) {
-        await noMediaFile.write('');
-      }
+      try {
+        this.mediaDir.create();
+        const noMediaFile = new File(this.mediaDir, '.nomedia');
+        if (!noMediaFile.exists) {
+          noMediaFile.write('');
+        }
+      } catch {}
     }
   }
 
