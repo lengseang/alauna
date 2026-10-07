@@ -292,10 +292,13 @@ export default function SettingsScreen({
       setStorageSlots(slots);
 
       // Check physical files in vault
+      const seenFilenames = new Set<string>();
       const files: { filename: string; sizeFormatted: string }[] = [];
       for (const m of S23_MODEL_DATABASE) {
+        if (seenFilenames.has(m.filename)) continue;
         const downloaded = await ModelManager.isModelDownloaded(m.filename);
         if (downloaded) {
+          seenFilenames.add(m.filename);
           files.push({ filename: m.filename, sizeFormatted: m.sizeFormatted });
           setDownloads(prev => ({
             ...prev,
@@ -947,9 +950,9 @@ export default function SettingsScreen({
                   <View style={{ gap: 8, marginTop: 4 }}>
                     {installedFiles.length > 0 && (
                       <View style={{ gap: 6 }}>
-                        {installedFiles.map(f => (
+                        {installedFiles.map((f, idx) => (
                           <View
-                            key={f.filename}
+                            key={`${f.filename}_${idx}`}
                             style={{
                               flexDirection: 'row',
                               justifyContent: 'space-between',
