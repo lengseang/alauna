@@ -39,7 +39,7 @@ test('Speculative Benchmark runs complete prompt and measures acceleration ratio
 });
 
 test('S23 Model Database aligns with Hugging Face repos and RAM budgets', () => {
-  assert.strictEqual(S23_MODEL_DATABASE.length, 22);
+  assert.strictEqual(S23_MODEL_DATABASE.length, 23);
   for (const model of S23_MODEL_DATABASE) {
     assert.ok(model.repo.includes('/'), `Model ${model.id} must specify valid HF repo`);
     assert.ok(model.filename.endsWith('.gguf'), `Model ${model.id} must be a GGUF file`);

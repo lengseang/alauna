@@ -268,8 +268,25 @@ export const S23_MODEL_DATABASE: LocalModelSpec[] = [
   },
 
   // -------------------------------------------------------------
-  // GRADE C: THE ULTRA-LIGHTWEIGHTS (1B to 2B) - Requires 1.3 to 2.0 GB RAM
+  // GRADE C: THE ULTRA-LIGHTWEIGHTS (100M to 2B) - Requires 0.5 to 2.0 GB RAM
   // -------------------------------------------------------------
+  {
+    id: 'smollm2-135m-nano',
+    name: 'SmolLM2 (135M) Nano',
+    grade: 'C',
+    repo: 'bartowski/SmolLM2-135M-Instruct-GGUF',
+    filename: 'SmolLM2-135M-Instruct-Q4_K_M.gguf',
+    downloadUrl: 'https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf?download=true',
+    sizeFormatted: '105 MB',
+    quantization: 'Q4_K_M',
+    ramRequiredFormatted: '0.6 GB',
+    ramRequiredGb: 0.6,
+    capabilities: ['Text'],
+    contentPolicy: 'Standard',
+    description: 'Ultra-lightweight 105MB edge model. Ideal for instant downloads and testing on-device inference.',
+    status: 'available',
+    isActive: false,
+  },
   {
     id: 'llama-3.2-1b',
     name: 'Llama 3.2 (1B)',

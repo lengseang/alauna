@@ -72,8 +72,8 @@ test('Voice Controller executes turn and emits chunked audio packets', async () 
 });
 
 test('Model Vault Search and Boolean AND / OR Filter logic', () => {
-  // Test 1: S23 database has exactly 22 cataloged models
-  assert.equal(S23_MODEL_DATABASE.length, 22);
+  // Test 1: S23 database has exactly 23 cataloged models
+  assert.equal(S23_MODEL_DATABASE.length, 23);
 
   // Test 2: Search by text query
   const gemmaModels = S23_MODEL_DATABASE.filter(m => m.name.toLowerCase().includes('gemma'));
@@ -97,6 +97,6 @@ test('Model Vault Search and Boolean AND / OR Filter logic', () => {
 
   // Test 5: Sorting by RAM Required ascending
   const sortedByRam = [...S23_MODEL_DATABASE].sort((a, b) => a.ramRequiredGb - b.ramRequiredGb);
-  assert.equal(sortedByRam[0].name, 'Llama 3.2 (1B)'); // 1.2 GB RAM (lowest)
+  assert.equal(sortedByRam[0].name, 'SmolLM2 (135M) Nano'); // 0.6 GB RAM (lowest)
   assert.equal(sortedByRam[sortedByRam.length - 1].grade, 'S'); // Highest Titan
 });

@@ -54,12 +54,16 @@ export class StorageConfigService {
     }
 
     const defaultVault = this.getDefaultVaultDirectory();
+    const defaultModels = new Directory(defaultVault, 'models');
+    const defaultChats = new Directory(defaultVault, 'chats');
+    const defaultMedia = new Directory(defaultVault, 'media');
+
     const defaultConfig: StorageConfig = {
       isConfigured: false,
       vaultUri: defaultVault.uri,
-      modelsUri: new Directory(defaultVault, 'models').uri,
-      chatsUri: new Directory(defaultVault, 'chats').uri,
-      mediaUri: new Directory(defaultVault, 'media').uri,
+      modelsUri: defaultModels.uri,
+      chatsUri: defaultChats.uri,
+      mediaUri: defaultMedia.uri,
       selectedByPicker: false,
       configuredAt: 0,
     };
@@ -155,6 +159,12 @@ export class StorageConfigService {
         dir.create();
       } catch {}
     }
+    try {
+      const nomedia = new File(dir, '.nomedia');
+      if (!nomedia.exists) {
+        nomedia.write('');
+      }
+    } catch {}
     return dir;
   }
 

@@ -260,14 +260,7 @@ export default function SettingsScreen({
 
   useEffect(() => {
     loadStats();
-    return () => {
-      // Pause all active downloads gracefully on unmount
-      Object.values(downloadersRef.current).forEach(d => {
-        try {
-          if (d && typeof d.pause === 'function') d.pause();
-        } catch {}
-      });
-    };
+    // Background downloads persist across screens and continue in the background
   }, []);
 
   const loadStats = async () => {

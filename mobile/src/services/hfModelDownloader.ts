@@ -630,7 +630,7 @@ export class HFModelDownloader {
    * Sovereign models vault directory.
    */
   public static get modelsDirectory(): Directory {
-    return new Directory(Paths.document, 'models');
+    return new Directory(new Directory(Paths.document, 'vault'), 'models');
   }
 
   /**

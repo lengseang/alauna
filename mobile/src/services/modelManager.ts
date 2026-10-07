@@ -24,7 +24,7 @@ export class ModelManager {
 
   public static get modelsDirectory(): Directory {
     if (this.cachedModelsDir) return this.cachedModelsDir;
-    return new Directory(Paths.document, 'models');
+    return new Directory(new Directory(Paths.document, 'vault'), 'models');
   }
 
   public static setModelsDirectory(dir: Directory): void {
@@ -41,13 +41,29 @@ export class ModelManager {
         dir.create();
       } catch {}
     }
+    try {
+      const nomedia = new File(dir, '.nomedia');
+      if (!nomedia.exists) {
+        nomedia.write('');
+      }
+    } catch {}
   }
 
   /**
    * Get File handle for target model.
+   * If not found in primary vault models directory, also inspects legacy sandbox directory.
    */
   public static getModelFile(filename: string): File {
-    return new File(this.modelsDirectory, filename);
+    const primary = new File(this.modelsDirectory, filename);
+    if (primary.exists) {
+      return primary;
+    }
+    // Fallback: check legacy sandbox document/models path if it exists
+    const legacy = new File(new Directory(Paths.document, 'models'), filename);
+    if (legacy.exists) {
+      return legacy;
+    }
+    return primary;
   }
 
   /**
