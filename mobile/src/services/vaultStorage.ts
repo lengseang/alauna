@@ -311,7 +311,12 @@ export class VaultStorage {
   /**
    * Create default thread config with per-chat personality.
    */
-  public static createNewThread(title = 'New Conversation', archetype: SoulArchetypeKey = 'empath'): ChatThread {
+  public static createNewThread(
+    title = 'New Conversation',
+    archetype: SoulArchetypeKey = 'empath',
+    pad?: PADVector,
+    toneIntensity = 0.8
+  ): ChatThread {
     return {
       id: `thread_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       title,
@@ -319,8 +324,8 @@ export class VaultStorage {
       updatedAt: Date.now(),
       soulConfig: {
         archetype,
-        pad: ARCHETYPES[archetype].defaultPAD,
-        toneIntensity: 0.8,
+        pad: pad || ARCHETYPES[archetype].defaultPAD,
+        toneIntensity,
       },
       messages: [
         {

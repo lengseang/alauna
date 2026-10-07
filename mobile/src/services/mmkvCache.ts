@@ -207,6 +207,7 @@ export const CACHE_KEYS = {
   ACTIVE_MODEL_ID: 'chiwiwi_active_model_id',
   GLOBAL_ARCHETYPE: 'chiwiwi_global_archetype',
   GLOBAL_PAD: 'chiwiwi_global_pad',
+  GLOBAL_TONE_INTENSITY: 'chiwiwi_global_tone_intensity',
   EPISODIC_MEMORIES: 'chiwiwi_episodic_memories',
   HARDWARE_PROFILE: 'chiwiwi_hardware_profile',
 } as const;

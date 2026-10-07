@@ -70,6 +70,9 @@ export default function App() {
   const [globalPAD, setGlobalPAD] = useState<PADVector>(() => {
     return MMKVCache.getObject<PADVector>(CACHE_KEYS.GLOBAL_PAD) || ARCHETYPES.empath.defaultPAD;
   });
+  const [globalToneIntensity, setGlobalToneIntensity] = useState<number>(() => {
+    return MMKVCache.getNumber(CACHE_KEYS.GLOBAL_TONE_INTENSITY) ?? 0.8;
+  });
 
   // Overlays
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -563,7 +566,7 @@ export default function App() {
   };
 
   const handleNewConversation = () => {
-    const fresh = VaultStorage.createNewThread('New Conversation', globalArchetype);
+    const fresh = VaultStorage.createNewThread('New Conversation', globalArchetype, globalPAD, globalToneIntensity);
     setCurrentThread(fresh);
     try {
       MMKVCache.setString(CACHE_KEYS.ACTIVE_THREAD_ID, fresh.id);
@@ -592,9 +595,19 @@ export default function App() {
           onSelectArchetype={(key) => {
             setGlobalArchetype(key);
             setGlobalPAD(ARCHETYPES[key].defaultPAD);
+            MMKVCache.setString(CACHE_KEYS.GLOBAL_ARCHETYPE, key);
+            MMKVCache.setObject(CACHE_KEYS.GLOBAL_PAD, ARCHETYPES[key].defaultPAD);
           }}
           pad={globalPAD}
-          onUpdatePAD={setGlobalPAD}
+          onUpdatePAD={(newPad) => {
+            setGlobalPAD(newPad);
+            MMKVCache.setObject(CACHE_KEYS.GLOBAL_PAD, newPad);
+          }}
+          toneIntensity={globalToneIntensity}
+          onUpdateToneIntensity={(intensity) => {
+            setGlobalToneIntensity(intensity);
+            MMKVCache.setNumber(CACHE_KEYS.GLOBAL_TONE_INTENSITY, intensity);
+          }}
         />
       </KeyboardProvider>
     );

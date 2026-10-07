@@ -5,12 +5,12 @@ import {
   Text,
   Modal,
   TouchableOpacity,
-  TextInput,
   ScrollView,
 } from 'react-native';
-import { ARCHETYPES, SoulArchetypeKey, PADVector } from '../types/soul';
+import { SoulArchetypeKey, PADVector } from '../types/soul';
 import { ThreadSoulConfig } from '../services/vaultStorage';
 import { CrossIcon } from './Icons';
+import { SoulCustomizer } from './SoulCustomizer';
 
 interface ThreadSoulModalProps {
   visible: boolean;
@@ -27,11 +27,13 @@ export default function ThreadSoulModal({
 }: ThreadSoulModalProps) {
   const [selectedArch, setSelectedArch] = useState<SoulArchetypeKey>(config.archetype);
   const [pad, setPad] = useState<PADVector>(config.pad);
+  const [toneIntensity, setToneIntensity] = useState<number>(config.toneIntensity ?? 0.8);
   const [backstory, setBackstory] = useState(config.customBackstory || '');
 
   React.useEffect(() => {
     setSelectedArch(config.archetype);
     setPad(config.pad);
+    setToneIntensity(config.toneIntensity ?? 0.8);
     setBackstory(config.customBackstory || '');
   }, [config, visible]);
 
@@ -40,7 +42,7 @@ export default function ThreadSoulModal({
       archetype: selectedArch,
       pad,
       customBackstory: backstory.trim(),
-      toneIntensity: config.toneIntensity,
+      toneIntensity,
     });
     onClose();
   };
@@ -51,65 +53,35 @@ export default function ThreadSoulModal({
         <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.modalSheet}>
           <View style={styles.handle} />
-          
-            <View style={styles.headerRow}>
+
+          <View style={styles.headerRow}>
+            <View>
               <Text style={styles.title}>Chat Personality & Soul</Text>
-              <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <CrossIcon size={16} color="#71717a" />
-              </TouchableOpacity>
-            </View>
-
-          <Text style={styles.subtext}>
-            Customize how the AI behaves exclusively within this conversation.
-          </Text>
-
-          <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ gap: 14 }}>
-            {/* Archetype Row */}
-            <Text style={styles.label}>ARCHETYPE FOR THIS THREAD</Text>
-            <View style={styles.archRow}>
-              {(Object.keys(ARCHETYPES) as SoulArchetypeKey[]).map(key => {
-                const arch = ARCHETYPES[key];
-                const isSelected = selectedArch === key;
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    style={[styles.archBtn, isSelected && styles.archBtnActive]}
-                    onPress={() => {
-                      setSelectedArch(key);
-                      setPad(ARCHETYPES[key].defaultPAD);
-                    }}
-                  >
-                    <Text style={[styles.archText, isSelected && { color: '#000', fontWeight: '700' }]}>
-                      {arch.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Custom Backstory / Roleplay Prompt */}
-            <Text style={styles.label}>THREAD ROLEPLAY / BACKSTORY</Text>
-            <TextInput
-              style={styles.backstoryInput}
-              placeholder="e.g. You are an expert Rust backend architect reviewing microservices..."
-              placeholderTextColor="#52525b"
-              multiline
-              numberOfLines={3}
-              value={backstory}
-              onChangeText={setBackstory}
-            />
-
-            {/* PAD Readout */}
-            <View style={styles.padInfoBox}>
-              <Text style={styles.label}>EMOTIONAL ATTUNEMENT</Text>
-              <Text style={styles.padText}>
-                Pleasure: {pad.pleasure > 0 ? `+${pad.pleasure}` : pad.pleasure} • Arousal: {pad.arousal} • Dominance: {pad.dominance}
+              <Text style={styles.subtext}>
+                Customize tone, emotional attunement, and backstory for this conversation.
               </Text>
             </View>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <CrossIcon size={16} color="#71717a" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ paddingBottom: 16 }}>
+            <SoulCustomizer
+              archetype={selectedArch}
+              onSelectArchetype={setSelectedArch}
+              pad={pad}
+              onUpdatePAD={setPad}
+              toneIntensity={toneIntensity}
+              onUpdateToneIntensity={setToneIntensity}
+              customBackstory={backstory}
+              onUpdateCustomBackstory={setBackstory}
+              showBackstory={true}
+            />
           </ScrollView>
 
-          <TouchableOpacity style={styles.saveBtn} onPress={handleApply}>
-            <Text style={styles.saveBtnText}>Apply to This Chat</Text>
+          <TouchableOpacity style={styles.saveBtn} onPress={handleApply} activeOpacity={0.85}>
+            <Text style={styles.saveBtnText}>Apply Persona to This Chat</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -118,70 +90,46 @@ export default function ThreadSoulModal({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
   modalSheet: {
-    backgroundColor: '#0c0c0f',
+    backgroundColor: '#0a0a0d',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.08)',
-    padding: 20,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 36,
     gap: 12,
   },
   handle: {
-    width: 36,
+    width: 38,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignSelf: 'center',
     marginBottom: 4,
   },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  title: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  subtext: { color: '#71717a', fontSize: 12, lineHeight: 16, marginBottom: 4 },
-  label: { color: '#52525b', fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
-
-  archRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  archBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: '#18181d',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingBottom: 4,
   },
-  archBtnActive: { backgroundColor: '#ffffff', borderColor: '#ffffff' },
-  archText: { color: '#d4d4d8', fontSize: 12, fontWeight: '600' },
-
-  backstoryInput: {
-    backgroundColor: '#111114',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 12,
-    padding: 12,
-    color: '#ffffff',
-    fontSize: 13,
-    minHeight: 70,
-    textAlignVertical: 'top',
-  },
-
-  padInfoBox: {
-    backgroundColor: '#111114',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-    gap: 4,
-  },
-  padText: { color: '#ffffff', fontSize: 12, fontWeight: '600' },
+  title: { color: '#ffffff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  subtext: { color: '#71717a', fontSize: 11, marginTop: 2 },
 
   saveBtn: {
     backgroundColor: '#ffffff',
-    paddingVertical: 12,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: 4,
+    shadowColor: '#ffffff',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  saveBtnText: { color: '#000000', fontSize: 14, fontWeight: '700' },
+  saveBtnText: { color: '#000000', fontSize: 14, fontWeight: '800' },
 });
