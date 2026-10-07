@@ -29,7 +29,7 @@ test('config: only permissions that a shipped feature uses are declared', () => 
   }
 });
 
-test('config: builds only arm64 (the multi-hour build was 4 ABIs of llama.cpp)', () => {
+test('config: builds only arm64 (every native module was being compiled four times)', () => {
   const plugin = appJson.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-build-properties');
   assert.ok(plugin, 'expo-build-properties plugin missing');
   assert.deepEqual(plugin[1].android.buildArchs, ['arm64-v8a']);
@@ -39,4 +39,22 @@ test('config: builds only arm64 (the multi-hour build was 4 ABIs of llama.cpp)',
 test('config: llama.rn is pinned to an exact stable version (no ^, no rc)', () => {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.match(pkg.dependencies['llama.rn'], /^\d+\.\d+\.\d+$/);
+});
+
+test('config: no "draw over other apps" permission (Expo template adds it; a release build does not need it)', () => {
+  assert.ok(appJson.android.blockedPermissions?.includes('android.permission.SYSTEM_ALERT_WINDOW'));
+});
+
+test('config: native splash is black, not the template white (dark app, no white flash at launch)', () => {
+  const plugin = appJson.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-splash-screen');
+  assert.ok(plugin, 'expo-splash-screen plugin missing (the top-level "splash" key is legacy in SDK 57)');
+  assert.equal(plugin[1].backgroundColor, '#000000');
+  assert.ok(!('splash' in appJson), 'legacy top-level splash key should not be used');
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.ok(pkg.dependencies['expo-splash-screen'], 'expo-splash-screen must be installed for its plugin to run');
+});
+
+test('config: icon assets referenced by app.json exist', () => {
+  const files = [appJson.icon, appJson.android.adaptiveIcon.foregroundImage, ...appJson.plugins.filter((p: unknown) => Array.isArray(p) && p[0] === 'expo-splash-screen').map((p: any) => p[1].image)];
+  for (const f of files) assert.ok(readFileSync(join(root, f)).length > 1000, `${f} missing or empty`);
 });

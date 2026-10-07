@@ -11,6 +11,7 @@
     "expo-haptics": "~57.0.3",
     "expo-intent-launcher": "~57.0.1",
     "expo-keep-awake": "~57.0.2",
+    "expo-splash-screen": "~57.0.9",
     "expo-system-ui": "~57.0.4",
     "llama.rn": "0.12.9",
     "react": "19.2.3",
