@@ -11,22 +11,22 @@ import type { ModelSpec } from './catalog.ts';
 
 export type FitRating = 'great' | 'ok' | 'tight' | 'too_heavy' | 'unknown';
 
-/** Rough KV-cache cost per token of context, per billion parameters. */
+/** Fallback KV-cache cost per token of context, per billion parameters (used only when a spec has no measured value). */
 const KV_BYTES_PER_TOKEN_PER_B = 18_000;
-/** Runtime buffers, compute graph, tokenizer, JS heap, etc. */
-const OVERHEAD_BYTES = 350_000_000;
+/** Runtime buffers (batch 512), compute graph, llama.rn's 160 MB prompt-state cache, tokenizer, JS heap. */
+const OVERHEAD_BYTES = 600_000_000;
 
-export function estimateRamBytes(spec: Pick<ModelSpec, 'sizeBytes' | 'paramsB'>, nCtx: number): number {
-  const kv = nCtx * spec.paramsB * KV_BYTES_PER_TOKEN_PER_B;
+export function estimateRamBytes(spec: Pick<ModelSpec, 'sizeBytes' | 'paramsB'> & { kvBytesPerToken?: number }, nCtx: number): number {
+  const kv = nCtx * (spec.kvBytesPerToken ?? spec.paramsB * KV_BYTES_PER_TOKEN_PER_B);
   return Math.round(spec.sizeBytes * 1.05 + kv + OVERHEAD_BYTES);
 }
 
 export function rateFit(requiredBytes: number, totalRamBytes: number | null): FitRating {
   if (!totalRamBytes || totalRamBytes <= 0) return 'unknown';
   const ratio = requiredBytes / totalRamBytes;
-  if (ratio <= 0.45) return 'great';
-  if (ratio <= 0.6) return 'ok';
-  if (ratio <= 0.75) return 'tight';
+  if (ratio <= 0.4) return 'great';
+  if (ratio <= 0.55) return 'ok';
+  if (ratio <= 0.7) return 'tight';
   return 'too_heavy';
 }
 
@@ -52,13 +52,17 @@ export function fitFor(spec: ModelSpec, totalRamBytes: number | null, nCtx: numb
   return rateFit(estimateRamBytes(spec, nCtx), totalRamBytes);
 }
 
-const FIT_ORDER: FitRating[] = ['great', 'ok', 'tight', 'too_heavy', 'unknown'];
-
 /**
- * The model we highlight: the most capable one that still rates "ok" or better.
- * "Most capable" = most parameters among non-uncensored, non-tiny models.
+ * The model we highlight and auto-download on first run.
+ *
+ * NOT "the biggest that fits": on a 12 GB phone that is an 8-9B model at 3-6 tok/s, a poor first impression.
+ * Instead each catalog entry has an explicit `priority` (the 4B "Balanced (default)" model is highest), and we take
+ * the highest-priority entry that rates "great" or "ok" on THIS phone. Heavier models stay available as opt-in.
+ * Unknown RAM -> the "Fast" small model; nothing fits -> the smallest model overall.
  */
 export function recommendModel(catalog: ModelSpec[], totalRamBytes: number | null): ModelSpec | null {
+  const bySize = [...catalog].sort((a, b) => a.sizeBytes - b.sizeBytes);
+  if (!totalRamBytes || totalRamBytes <= 0) return catalog.find((m) => m.role === 'Fast') ?? bySize[0] ?? null;
   const nCtx = defaultContext(totalRamBytes);
   const eligible = catalog.filter((m) => {
     if (m.contentPolicy === 'Uncensored') return false;
@@ -66,10 +70,6 @@ export function recommendModel(catalog: ModelSpec[], totalRamBytes: number | nul
     const rating = fitFor(m, totalRamBytes, nCtx);
     return rating === 'great' || rating === 'ok';
   });
-  if (eligible.length === 0) {
-    // Very small phone: fall back to the smallest model overall.
-    return [...catalog].sort((a, b) => a.sizeBytes - b.sizeBytes)[0] ?? null;
-  }
-  // Prefer mid-size sweet spot first (<= 4B) on small phones; otherwise the biggest that fits.
-  return eligible.sort((a, b) => b.paramsB - a.paramsB || FIT_ORDER.indexOf(fitFor(a, totalRamBytes, nCtx)) - FIT_ORDER.indexOf(fitFor(b, totalRamBytes, nCtx)))[0];
+  if (eligible.length === 0) return bySize[0] ?? null;
+  return eligible.sort((a, b) => b.priority - a.priority || b.paramsB - a.paramsB)[0];
 }

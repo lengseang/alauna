@@ -1,61 +1,41 @@
 import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, AppState, BackHandler, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getDeviceProfile } from './src/services/device';
 import { bootstrap, recheckStorage } from './src/services/lifecycle';
 import { useSettings } from './src/services/settings';
 import { useStorage } from './src/services/storage';
-import { ChatScreen } from './src/ui/ChatScreen';
-import { ToastHost } from './src/ui/kit';
-import { ModelsScreen } from './src/ui/ModelsScreen';
-import { pop, push, useRoute } from './src/ui/nav';
+import { ThemeProvider, makeStyles } from './src/theme';
+import { Ambient } from './src/ui/Ambient';
+import { EmptyState } from './src/ui/EmptyState';
+import { pop, push } from './src/ui/nav';
 import { OnboardingScreen } from './src/ui/OnboardingScreen';
-import { AboutSettings, AdvancedSettings, MemorySettings, SettingsHome, SoulSettings, StorageSettings } from './src/ui/SettingsScreens';
-import { colors } from './src/ui/theme';
+import { RouteStack } from './src/ui/Stack';
+import { ToastHost } from './src/ui/Toast';
+import { Wordmark } from './src/ui/Wordmark';
 
-function Splash({ message }: { message?: string }) {
+// Hold the native splash until the theme and fonts are ready, so the first painted frame is already themed.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+let splashHidden = false;
+const hideSplash = () => {
+  if (splashHidden) return;
+  splashHidden = true;
+  void SplashScreen.hideAsync().catch(() => {});
+};
+
+function Boot() {
+  const s = useStyles();
   return (
-    <View style={styles.center}>
-      <Text style={styles.logo}>千</Text>
-      <Text style={styles.name}>CHIWIWI</Text>
-      <ActivityIndicator color={colors.accent} style={{ marginTop: 20 }} />
-      {message ? <Text style={styles.msg}>{message}</Text> : null}
+    <View style={s.boot}>
+      <Ambient />
+      <Wordmark breathing />
     </View>
   );
-}
-
-function Unsupported({ reason }: { reason: string }) {
-  return (
-    <View style={styles.center}>
-      <Text style={styles.name}>CHIWIWI</Text>
-      <Text style={[styles.msg, { color: colors.bad, marginTop: 16 }]}>{reason}</Text>
-    </View>
-  );
-}
-
-function Routes() {
-  const route = useRoute();
-  switch (route) {
-    case 'models':
-      return <ModelsScreen />;
-    case 'settings':
-      return <SettingsHome />;
-    case 'settings/soul':
-      return <SoulSettings />;
-    case 'settings/storage':
-      return <StorageSettings />;
-    case 'settings/memory':
-      return <MemorySettings />;
-    case 'settings/advanced':
-      return <AdvancedSettings />;
-    case 'settings/about':
-      return <AboutSettings />;
-    default:
-      return <ChatScreen />;
-  }
 }
 
 function Root() {
+  const s = useStyles();
   const settings = useSettings();
   const storage = useStorage();
   const device = getDeviceProfile();
@@ -66,7 +46,7 @@ function Root() {
     void bootstrap();
   }, []);
 
-  // Android Back: close screens in order; at the root let Android minimise the app.
+  // Android Back: close the top screen; at Chat let Android minimise the app. (The open drawer/sheet handle Back first.)
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => pop());
     return () => sub.remove();
@@ -83,7 +63,7 @@ function Root() {
   const ready = storage.status === 'ready';
   const gated = settings.loaded && !ready && storage.status !== 'loading';
 
-  // First time through the gate -> send the user straight to the Model Hub (flow step 4).
+  // First time through the storage gate -> send the user straight to Models (they have no model yet).
   useEffect(() => {
     if (gated) wasGated.current = true;
     if (ready && wasGated.current) {
@@ -92,28 +72,31 @@ function Root() {
     }
   }, [gated, ready]);
 
-  if (!device.supported) return <Unsupported reason={device.unsupportedReason ?? 'This device is not supported.'} />;
-  if (!settings.loaded || storage.status === 'loading') return <Splash />;
-  if (!ready) return <OnboardingScreen />;
-  return <Routes />;
+  let body: React.ReactNode;
+  if (!device.supported) body = <EmptyState brand title="This phone cannot run CHIWIWI" body={device.unsupportedReason ?? 'This device is not supported.'} />;
+  else if (!settings.loaded || storage.status === 'loading') body = <Boot />;
+  else if (!ready) body = <OnboardingScreen />;
+  else body = <RouteStack />;
+
+  return (
+    <View style={s.root} onLayout={hideSplash}>
+      {body}
+      <ToastHost />
+    </View>
+  );
 }
 
 export default function App() {
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      <View style={styles.root}>
+      <ThemeProvider>
         <Root />
-        <ToastHost />
-      </View>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors }) => ({
   root: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  logo: { color: colors.white, fontSize: 44, fontWeight: '800' },
-  name: { color: colors.white, fontSize: 20, fontWeight: '800', letterSpacing: 4, marginTop: 6 },
-  msg: { color: colors.muted, fontSize: 14, textAlign: 'center', marginTop: 12 },
-});
+  boot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+}));

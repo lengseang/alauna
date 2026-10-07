@@ -1,43 +1,54 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BackArrowIcon } from '../components/Icons';
-import { colors, font } from './theme';
+import { hit, makeStyles } from '../theme';
+import { Ambient } from './Ambient';
+import { IconButton } from './IconButton';
+import { Text } from './Text';
 
-interface Props {
+export interface ScreenProps {
   title: string;
-  subtitle?: string;
+  /** Shows the back arrow. Pushed screens always pass `goBack`. */
   onBack?: () => void;
+  /** At most one small control (e.g. a text Button). */
   right?: React.ReactNode;
+  /** Stars/sun behind the content (empty and onboarding states only). */
+  ambient?: boolean;
+  /** Wrap children in a padded ScrollView (16dp gutter, 16dp gap). Pass false for screens that own a list. */
+  scroll?: boolean;
   children: React.ReactNode;
 }
 
-/** Standard screen: status-bar safe, header with a real Back button, content below. */
-export function Screen({ title, subtitle, onBack, right, children }: Props) {
+/** Safe-area aware page: header (back, title) + content. The status bar and gesture bar are handled here. */
+export function Screen({ title, onBack, right, ambient, scroll = false, children }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  const s = useStyles();
   return (
-    <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <View style={styles.header}>
-        {onBack ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} onPress={onBack} style={styles.back}>
-            <BackArrowIcon size={20} color={colors.text} />
-          </Pressable>
-        ) : null}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title} numberOfLines={1}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
-        </View>
+    <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      {ambient ? <Ambient /> : null}
+      <View style={s.header}>
+        {onBack ? <IconButton icon="back" label="Back" onPress={onBack} /> : null}
+        <Text variant="title" numberOfLines={1} style={[s.title, !onBack && s.titleLone]}>
+          {title}
+        </Text>
         {right}
       </View>
-      <View style={{ flex: 1 }}>{children}</View>
+      {scroll ? (
+        <ScrollView style={s.fill} contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+          {children}
+        </ScrollView>
+      ) : (
+        <View style={s.fill}>{children}</View>
+      )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles(({ colors, space }) => ({
   root: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, minHeight: 56, borderBottomWidth: 1, borderBottomColor: colors.border },
-  back: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
-  title: { color: colors.text, fontSize: font.lg, fontWeight: '700' },
-  subtitle: { color: colors.faint, fontSize: font.xs, marginTop: 1 },
-});
+  header: { minHeight: hit + space.sm, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm, gap: space.xs },
+  title: { flex: 1 },
+  titleLone: { paddingLeft: space.sm },
+  fill: { flex: 1 },
+  scroll: { padding: space.lg, paddingBottom: space.xxl, gap: space.lg },
+}));

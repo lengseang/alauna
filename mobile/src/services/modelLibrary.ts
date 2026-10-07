@@ -113,35 +113,58 @@ export interface CancelToken {
   cancelled: boolean;
 }
 
+const yieldToUi = (): Promise<void> => new Promise<void>((r) => setTimeout(r, 0));
+
 /**
- * Optional full SHA-256 check against the Hub's LFS hash. Slow on phones (pure
- * JS), so it runs in small chunks and yields between them to keep the UI alive.
+ * SHA-256 of a whole file in pure JavaScript, in time slices: hash 64 KB blocks for ~12 ms, hand the thread back,
+ * repeat. Slow on a phone (Hermes has no JIT) but never freezes the UI, reports progress ~4x/second and stops within
+ * one slice when `shouldStop()` turns true.
  */
+export async function hashFile(
+  file: File,
+  onProgress: (fraction: number) => void,
+  shouldStop: () => boolean,
+  sliceMs = 12,
+): Promise<{ actual: string; stopped: boolean }> {
+  const total = fileSize(file);
+  const digest = new Sha256Digest();
+  const handle = file.open(FileMode.ReadOnly);
+  const CHUNK = 64 * 1024;
+  let done = 0;
+  let sliceStart = Date.now();
+  let lastReport = 0;
+  try {
+    for (;;) {
+      if (shouldStop()) return { actual: '', stopped: true };
+      const chunk = handle.readBytes(CHUNK);
+      if (chunk.length === 0) break;
+      digest.update(chunk);
+      done += chunk.length;
+      const now = Date.now();
+      if (now - lastReport >= 250) {
+        lastReport = now;
+        onProgress(total > 0 ? Math.min(1, done / total) : 0);
+      }
+      if (now - sliceStart >= sliceMs) {
+        await yieldToUi();
+        sliceStart = Date.now();
+      }
+    }
+  } finally {
+    handle.close();
+  }
+  onProgress(1);
+  return { actual: digest.digestHex(), stopped: false };
+}
+
+/** Optional, user-triggered full SHA-256 check of an INSTALLED model against the Hub's LFS hash. */
 export async function deepVerify(
   spec: ModelSpec,
   expectedSha256: string,
   onProgress: (fraction: number) => void,
   token: CancelToken,
 ): Promise<{ ok: boolean; actual: string; cancelled: boolean }> {
-  const file = modelFile(spec);
-  const total = fileSize(file);
-  const digest = new Sha256Digest();
-  const handle = file.open(FileMode.ReadOnly);
-  const CHUNK = 256 * 1024;
-  let done = 0;
-  try {
-    for (;;) {
-      if (token.cancelled) return { ok: false, actual: '', cancelled: true };
-      const chunk = handle.readBytes(CHUNK);
-      if (chunk.length === 0) break;
-      digest.update(chunk);
-      done += chunk.length;
-      onProgress(total > 0 ? Math.min(1, done / total) : 0);
-      await new Promise<void>((r) => setTimeout(r, 0));
-    }
-  } finally {
-    handle.close();
-  }
-  const actual = digest.digestHex();
-  return { ok: actual === expectedSha256.toLowerCase(), actual, cancelled: false };
+  const r = await hashFile(modelFile(spec), onProgress, () => token.cancelled);
+  if (r.stopped) return { ok: false, actual: '', cancelled: true };
+  return { ok: r.actual === expectedSha256.toLowerCase(), actual: r.actual, cancelled: false };
 }

@@ -111,6 +111,30 @@ Do not use the `appops` shortcut when you are testing the permission screens the
 Developer options > **Wireless debugging** > *Pair device with pairing code*, then on the PC
 `adb pair <ip>:<pairing-port>` and `adb connect <ip>:<port>` (phone and PC on the same Wi-Fi). Everything above works the same, including `adb reverse`.
 
+### 1.8 No cable at all: EAS development-client APK + Metro over Wi-Fi
+
+This is the path when no USB cable is available. One cloud build gives you an app that loads its JavaScript from your PC,
+so after the first install every `.ts`/`.tsx` change appears on the phone in about a second.
+
+```bash
+cd mobile
+git add -A && git commit -m "wip"        # EAS packs the git tree: uncommitted files are not in the build
+npx eas-cli@latest login                 # once
+npx eas-cli@latest build --platform android --profile development --no-wait
+```
+
+1. Open the build page printed by the CLI (expo.dev), wait for **Finished** (free tier: low-priority queue, can be 90+ min; 15 Android builds/month;
+   a build that fails still costs one, so run `npm run check` and `npx expo export --platform android` first).
+2. On the phone open the build page / scan its QR, download the APK, allow "install unknown apps" for that browser, install.
+3. On the PC: `npx expo start --dev-client`. Phone and PC on the same Wi-Fi. Open the CHIWIWI app: the dev launcher lists the server, or scan the QR from the terminal.
+   - Corporate/guest Wi-Fi blocks it, or Windows firewall: run `npx expo start --dev-client --tunnel`, or turn on the phone's hotspot and join the PC to it.
+   - Windows firewall prompt for Node: allow **Private** networks.
+4. Only a native change (new native package, `app.json` plugin, `plugins/`, `llama.rn` version) needs a new build. Everything under `src/` does not.
+5. Native crash logs (llama.cpp aborts show only there) need wireless adb, section 1.7. JavaScript `console.log` already appears in the Metro terminal.
+
+What this build contains: `llama.rn` 0.12.9 (arm64-v8a only), `expo-dev-client`, `expo-device`, `expo-file-system`, fonts. The first thing to run on it is the
+smoke test in `docs/audit/04-validation-core.md` (section 4).
+
 ---
 
 ## 2. Release builds: what takes the time (measured)
@@ -184,8 +208,8 @@ cd android && ./gradlew :app:assembleRelease
 ```
 Keep `mobile/android` between builds: the second build is incremental. Only re-run `prebuild --clean` when `app.json` or plugins change.
 
-**C. EAS cloud**: `cd mobile && npx eas-cli build -p android --profile preview` (subject to the queue).
-The `development` profile builds a debug APK (it does not use `expo-dev-client`; JS still comes from Metro).
+**C. EAS cloud**: `cd mobile && npx eas-cli build -p android --profile preview` (subject to the queue; standalone APK, no Metro needed).
+The `development` profile builds a **development client** APK (`developmentClient: true`, `expo-dev-client` is installed): see section 1.8.
 
 On Windows: keep the project on a local SSD (not OneDrive/Google Drive), and exclude the project and `~/.gradle` from antivirus
 real-time scanning; both are common causes of very slow Gradle builds (general advice, not measured here).
@@ -195,7 +219,7 @@ real-time scanning; both are common causes of very slow Gradle builds (general a
 ```bash
 cd mobile && npm run check          # strict typecheck (app + tests) + all unit tests
 npx expo export --platform android  # compile the JS with Metro/Hermes
-node scripts/verify-catalog.mjs     # every model URL/size/sha256 vs the live Hugging Face Hub (needs internet)
+node scripts/verify-catalog.mjs     # every model: repo ungated, exact size + sha256, and a Range request on the real download URL (needs internet; works on Windows)
 ```
 
 ## 5. Troubleshooting

@@ -1,21 +1,19 @@
 /** User-managed memory facts, stored in <vault>/memory.json. */
-import { File } from 'expo-file-system';
+import { readWithFallback, writeAtomic } from '../core/atomicFile.ts';
 import { addFact, removeFact, sanitizeFacts, type MemoryFact } from '../core/memory.ts';
 import { newId } from '../core/chatTypes.ts';
 import { createStore } from '../core/store.ts';
+import { directoryIO } from './atomicIo.ts';
 import { isStorageReady, vaultRoot } from './storage.ts';
 
 export const memoryStore = createStore<{ facts: MemoryFact[]; loaded: boolean }>({ facts: [], loaded: false });
 
-function file(): File {
-  return new File(vaultRoot(), 'memory.json');
-}
+const FILE = 'memory.json';
+const io = () => directoryIO(vaultRoot);
 
 function persist(facts: MemoryFact[]): void {
   try {
-    const f = file();
-    if (!f.exists) f.create({ intermediates: true });
-    f.write(JSON.stringify(facts));
+    writeAtomic(io(), FILE, JSON.stringify(facts));
   } catch {
     // The in-memory list stays correct for this session.
   }
@@ -24,8 +22,7 @@ function persist(facts: MemoryFact[]): void {
 export async function loadMemory(): Promise<void> {
   if (!isStorageReady()) return;
   try {
-    const f = file();
-    const facts = f.exists ? sanitizeFacts(JSON.parse(await f.text())) : [];
+    const facts = (await readWithFallback(io(), FILE, (text) => sanitizeFacts(JSON.parse(text)))) ?? [];
     memoryStore.setState({ facts, loaded: true });
   } catch {
     memoryStore.setState({ facts: [], loaded: true });

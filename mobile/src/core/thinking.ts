@@ -21,9 +21,12 @@ export interface ParsedOutput {
   reasoningComplete: boolean;
 }
 
-const OPEN_TAGS = ['<think>', '<thinking>'];
-const CLOSE_TAGS = ['</think>', '</thinking>'];
-const LEAKED_TOKENS = /<\|(?:im_end|im_start|eot_id|end_of_text|endoftext|end|assistant)\|>|<end_of_turn>|<start_of_turn>(?:model|user)?|<｜(?:end▁of▁sentence|User|Assistant)｜>/g;
+// Qwen / DeepSeek / SmolLM use <think>; Gemma 4 wraps its thoughts in <|channel>thought ... <channel|> (read from its chat template).
+const OPEN_TAGS = ['<think>', '<thinking>', '<|channel>thought'];
+const CLOSE_TAGS = ['</think>', '</thinking>', '<channel|>'];
+// ChatML / Llama 3 | Gemma 2-3 | Gemma 4 | BOS/EOS text | DeepSeek
+const LEAKED_TOKENS =
+  /<\|(?:im_end|im_start|eot_id|end_of_text|endoftext|end|assistant)\|>|<end_of_turn>|<start_of_turn>(?:model|user)?|<turn\|>|<\|turn>(?:model|user)?|<bos>|<eos>|<｜(?:end▁of▁sentence|User|Assistant)｜>/g;
 
 function findFirst(text: string, tags: string[], from = 0): { index: number; tag: string } | null {
   let best: { index: number; tag: string } | null = null;
@@ -58,7 +61,10 @@ export function parseThinking(raw: string, opts: { startInThinking?: boolean } =
   }
 
   const open = findFirst(raw, OPEN_TAGS);
-  const startsThinking = open !== null || !!opts.startInThinking;
+  // A closing tag with no opening tag means the prompt pre-opened the block and the engine did not tell us
+  // (template not recognised): everything before the close tag is reasoning, never part of the answer.
+  const strayClose = open === null && !opts.startInThinking ? findFirst(raw, CLOSE_TAGS) : null;
+  const startsThinking = open !== null || !!opts.startInThinking || strayClose !== null;
 
   if (!startsThinking) {
     const hide = partialTagSuffix(raw, OPEN_TAGS);

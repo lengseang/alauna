@@ -25,6 +25,9 @@ export interface Settings {
   pendingMountModelId: string | null;
 }
 
+/** Upper bound for a user-chosen context size (tokens). */
+export const MAX_CONTEXT = 32768;
+
 export const DEFAULT_SETTINGS: Settings = {
   archetype: 'empath',
   pad: { ...ARCHETYPES.empath.defaultPAD },
@@ -58,7 +61,10 @@ export function sanitizeSettings(raw: unknown): Settings {
       }
     }
   }
-  if (typeof r.contextOverride === 'number' && r.contextOverride >= 512) out.contextOverride = r.contextOverride;
+  // A hand-edited / corrupt value must not make llama.cpp allocate a gigantic KV cache (instant out-of-memory kill).
+  if (typeof r.contextOverride === 'number' && Number.isFinite(r.contextOverride) && r.contextOverride >= 512) {
+    out.contextOverride = Math.min(MAX_CONTEXT, Math.round(r.contextOverride));
+  }
   if (typeof r.threads === 'number' && r.threads >= 1 && r.threads <= 16) out.threads = Math.round(r.threads);
   if (typeof r.useGpu === 'boolean') out.useGpu = r.useGpu;
   if (typeof r.thinkingEnabled === 'boolean') out.thinkingEnabled = r.thinkingEnabled;

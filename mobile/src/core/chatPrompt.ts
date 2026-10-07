@@ -18,9 +18,27 @@ export interface HistoryMessage {
   content: string;
 }
 
-/** Conservative token estimate (real tokenizers average ~3.5-4 chars/token for English). */
-export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 3.2);
+/**
+ * Conservative token estimate. Undercounting overflows the model's context (a hard "Context is full"
+ * error), overcounting only drops older history a little sooner, so every guess leans high:
+ *  - English letters/spaces: ~3.2 chars per token
+ *  - digits: one token each (Qwen / Llama tokenise numbers digit by digit)
+ *  - punctuation, brackets, operators (code): half a token each
+ *  - accented Latin: 1.2 tokens; everything else (Khmer, Thai, CJK, Arabic, emoji halves...): 2.5 tokens per UTF-16 unit
+ * `scale` lets callers calibrate against the engine's real count (see core/chatTurn.ts).
+ */
+export function estimateTokens(text: string, scale = 1): number {
+  let cost = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c < 128) {
+      if (c >= 48 && c <= 57) cost += 1;
+      else if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 32 || c === 10 || c === 13) cost += 1 / 3.2;
+      else cost += 0.5;
+    } else if (c <= 0x024f) cost += 1.2;
+    else cost += 2.5;
+  }
+  return Math.ceil(cost * scale);
 }
 
 export function normalizeHistory(history: HistoryMessage[]): HistoryMessage[] {
@@ -47,6 +65,8 @@ export interface BuildPromptInput {
   nCtx: number;
   /** Tokens kept free for the model's reply. */
   replyBudget: number;
+  /** Multiplier applied to every estimate (1 = default heuristic; raise it after the engine reported a larger real count). */
+  tokenScale?: number;
 }
 
 export interface BuiltPrompt {
@@ -60,23 +80,27 @@ export interface BuiltPrompt {
 
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   const { system, nCtx, replyBudget } = input;
+  const scale = input.tokenScale ?? 1;
+  const tokens = (text: string) => estimateTokens(text, scale);
   const budget = Math.max(256, nCtx - replyBudget);
-  const systemTokens = system ? estimateTokens(system) + 8 : 0;
+  const systemTokens = system ? tokens(system) + 8 : 0;
 
   let userMessage = input.userMessage.trim();
   let truncatedUserMessage = false;
   const maxUserTokens = Math.max(64, budget - systemTokens - 16);
-  if (estimateTokens(userMessage) > maxUserTokens) {
-    const keepChars = Math.floor(maxUserTokens * 3.2);
+  if (tokens(userMessage) > maxUserTokens) {
+    // Cut by estimated cost, not by a fixed chars-per-token ratio, so Khmer/CJK/digit-heavy text shrinks enough.
+    let keepChars = Math.max(64, Math.floor((maxUserTokens * 3.2) / scale));
+    while (keepChars > 64 && tokens(userMessage.slice(0, keepChars)) > maxUserTokens) keepChars = Math.floor(keepChars * 0.8);
     userMessage = `${userMessage.slice(0, keepChars)}\n\n[...message shortened to fit the model's context window]`;
     truncatedUserMessage = true;
   }
 
-  let used = systemTokens + estimateTokens(userMessage) + 8;
+  let used = systemTokens + tokens(userMessage) + 8;
   const history = normalizeHistory(input.history);
   const kept: HistoryMessage[] = [];
   for (let i = history.length - 1; i >= 0; i--) {
-    const cost = estimateTokens(history[i].content) + 8;
+    const cost = tokens(history[i].content) + 8;
     if (used + cost > budget) break;
     used += cost;
     kept.unshift(history[i]);

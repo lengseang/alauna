@@ -31,6 +31,9 @@ import { settingsStore } from './settings.ts';
 import { isStorageReady } from './storage.ts';
 import { showToast } from './toast.ts';
 
+/** How often the in-progress answer is written to disk while it streams. */
+const PARTIAL_SAVE_MS = 2000;
+
 export interface ChatState {
   thread: ChatThread;
   threads: ThreadMeta[];
@@ -70,13 +73,13 @@ function patchMessage(id: string, patch: Partial<ChatMessage>): void {
   setMessages((ms) => ms.map((m) => (m.id === id ? { ...m, ...patch } : m)));
 }
 
-async function persist(): Promise<void> {
+async function persist(refreshList = true): Promise<void> {
   const { thread } = chatStore.getState();
   if (thread.incognito || thread.messages.length === 0) return;
   try {
     await saveThread({ ...thread, updatedAt: Date.now() });
     chatStore.setState({ saveError: null });
-    void refreshThreadList();
+    if (refreshList) void refreshThreadList();
   } catch (e) {
     chatStore.setState({ saveError: `Could not save this chat to your storage folder (${e instanceof Error ? e.message : 'unknown error'}).` });
   }
@@ -210,6 +213,9 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
     ],
     wasBlank || chatStore.getState().thread.title === DEFAULT_TITLE ? { title: titleFrom(userMessage.text || userMessage.attachments?.[0]?.name || '') } : {},
   );
+  // Save NOW: the user's message must survive an app kill / swipe-away / out-of-memory kill mid-answer.
+  // (A message still "streaming" on disk reloads as "stopped"; see toPersistable.)
+  void persist(false);
 
   try {
     if (needsLoad) {
@@ -233,11 +239,17 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
     // Coalesce token updates (~15 fps) so long answers do not flood React with renders.
     let pending: Partial<ChatMessage> | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastSaved = Date.now();
     const flush = () => {
       timer = null;
       if (pending) {
         patchMessage(assistantId, pending);
         pending = null;
+        // Throttled partial save (every ~2 s) so a kill mid-answer keeps what was already written.
+        if (Date.now() - lastSaved >= PARTIAL_SAVE_MS) {
+          lastSaved = Date.now();
+          void persist(false);
+        }
       }
     };
 
@@ -250,6 +262,7 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
       system,
       thinkingEnabled: settings.thinkingEnabled,
       generate: (p) => engine.generate(p),
+      countPromptTokens: (messages, thinking) => engine.countPromptTokens(messages, thinking),
       now: () => Date.now(),
       onUpdate: (patch) => {
         pending = { ...(pending ?? {}), ...patch };

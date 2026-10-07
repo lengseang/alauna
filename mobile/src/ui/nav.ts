@@ -1,17 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { BackHandler } from 'react-native';
-import { useSyncExternalStore } from 'react';
 import { createStore } from '../core/store.ts';
 
-export type Route =
-  | 'chat'
-  | 'models'
-  | 'settings'
-  | 'settings/soul'
-  | 'settings/storage'
-  | 'settings/memory'
-  | 'settings/advanced'
-  | 'settings/about';
+/**
+ * Chat is home and always mounted. Everything else is pushed on top of it and closed with the back arrow
+ * (or Android Back). There is no tab bar; the drawer is the only menu.
+ */
+export type Route = 'chat' | 'models' | 'persona' | 'persona/memory' | 'settings' | 'settings/storage' | 'settings/advanced' | 'settings/about';
 
 const navStore = createStore<{ stack: Route[] }>({ stack: ['chat'] });
 
@@ -21,7 +16,7 @@ export function push(route: Route): void {
   navStore.setState({ stack: [...stack, route] });
 }
 
-/** Go back one screen. Returns false when already at the root (let Android exit/minimise). */
+/** Go back one screen. Returns false when already at the root (let Android minimise the app). */
 export function pop(): boolean {
   const { stack } = navStore.getState();
   if (stack.length <= 1) return false;
@@ -44,14 +39,16 @@ export function resetTo(route: Route): void {
   navStore.setState({ stack: [route] });
 }
 
-export function useRoute(): Route {
-  return useSyncExternalStore(navStore.subscribe, () => {
-    const s = navStore.getState().stack;
-    return s[s.length - 1];
-  });
+export function useStack(): Route[] {
+  return useSyncExternalStore(navStore.subscribe, () => navStore.getState().stack);
 }
 
-/** Android Back: handlers registered later run first (sheets/drawers register while open). */
+export function useRoute(): Route {
+  const stack = useStack();
+  return stack[stack.length - 1];
+}
+
+/** Android Back: handlers registered later run first (the open drawer / sheets register while open). */
 export function useBackHandler(enabled: boolean, handler: () => boolean): void {
   useEffect(() => {
     if (!enabled) return;

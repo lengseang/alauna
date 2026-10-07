@@ -45,16 +45,34 @@ test('config: no "draw over other apps" permission (Expo template adds it; a rel
   assert.ok(appJson.android.blockedPermissions?.includes('android.permission.SYSTEM_ALERT_WINDOW'));
 });
 
-test('config: native splash is black, not the template white (dark app, no white flash at launch)', () => {
+test('config: native splash never flashes white in dark mode (themed splash: warm light + dark variant)', () => {
   const plugin = appJson.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-splash-screen');
   assert.ok(plugin, 'expo-splash-screen plugin missing (the top-level "splash" key is legacy in SDK 57)');
-  assert.equal(plugin[1].backgroundColor, '#000000');
   assert.ok(!('splash' in appJson), 'legacy top-level splash key should not be used');
+  const luminance = (hex: string) => {
+    const n = parseInt(hex.replace('#', ''), 16);
+    return (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  };
+  const lightBg: string = plugin[1].backgroundColor;
+  const darkBg: string = plugin[1].dark?.backgroundColor ?? lightBg;
+  assert.ok(luminance(darkBg) < 0.15, `dark-mode splash background ${darkBg} must be dark`);
+  assert.notEqual(lightBg.toLowerCase(), '#ffffff', 'light splash is the warm ivory, not template white');
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   assert.ok(pkg.dependencies['expo-splash-screen'], 'expo-splash-screen must be installed for its plugin to run');
 });
 
 test('config: icon assets referenced by app.json exist', () => {
-  const files = [appJson.icon, appJson.android.adaptiveIcon.foregroundImage, ...appJson.plugins.filter((p: unknown) => Array.isArray(p) && p[0] === 'expo-splash-screen').map((p: any) => p[1].image)];
+  const files = [appJson.icon, appJson.android.adaptiveIcon.foregroundImage, ...appJson.plugins.filter((p: unknown) => Array.isArray(p) && p[0] === 'expo-splash-screen').flatMap((p: any) => [p[1].image, p[1].dark?.image].filter(Boolean))];
   for (const f of files) assert.ok(readFileSync(join(root, f)).length > 1000, `${f} missing or empty`);
+});
+
+test('config: EAS "development" profile builds a real dev client APK (Metro over Wi-Fi needs expo-dev-client)', () => {
+  const eas = JSON.parse(readFileSync(join(root, 'eas.json'), 'utf8'));
+  const dev = eas.build.development;
+  assert.equal(dev.developmentClient, true, 'without it the APK has no launcher to type/scan the Metro URL');
+  assert.equal(dev.distribution, 'internal');
+  assert.equal(dev.android.buildType, 'apk', 'an installable APK, not an AAB');
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  assert.ok(pkg.dependencies['expo-dev-client'], 'expo-dev-client must be installed for developmentClient builds');
+  assert.ok(pkg.dependencies['expo-device'], 'expo-device supplies the real RAM the fit logic needs');
 });

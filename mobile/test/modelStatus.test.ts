@@ -22,13 +22,15 @@ test('status: installed shows whether it has been verified on THIS phone', () =>
   const done = dl({ status: 'completed', bytesWritten: 5, totalBytes: 5 });
   assert.match(st(done, idleEngine, false).label, /Load it to verify/);
   assert.match(st(done, idleEngine, true).label, /Verified on this phone/);
+  assert.match(st(dl({ status: 'completed', verified: true }), idleEngine, false).label, /Checksum OK/);
+  assert.match(st(dl({ status: 'finalizing', verifyFraction: 0.42 })).label, /Verifying download 42%/);
 });
 
 test('status: engine state for THIS model wins; other models are unaffected', () => {
   const done = dl({ status: 'completed' });
   const mounting = (stage: any, p = 0.4) => ({ status: 'mounting' as const, modelId: 'm', stage, loadProgress: p });
   assert.equal(st(done, mounting('loading')).label, 'Loading into memory 40%');
-  assert.equal(st(done, mounting('testing')).label, 'Testing a reply...');
+  assert.equal(st(done, mounting('warming')).label, 'Testing first words...');
   assert.equal(st(done, mounting('checking')).label, 'Checking file...');
   assert.deepEqual([st(done, { status: 'ready', modelId: 'm', stage: null, loadProgress: 1 }).kind, st(done, { status: 'generating', modelId: 'm', stage: null, loadProgress: 1 }).kind], ['active', 'active']);
   // A different model being active does not change this card.
@@ -50,7 +52,7 @@ test('actions: each status offers exactly the controls that make sense (no dead 
   assert.deepEqual(actionsFor('paused', false), ['resume', 'cancel']);
   assert.deepEqual(actionsFor('download_error', true), ['retry', 'cancel']);
   assert.deepEqual(actionsFor('download_error', false), ['cancel'], 'permanent errors (404/gated) offer no Retry');
-  assert.deepEqual(actionsFor('finalizing', false), [], 'no buttons while the app is checking the file');
+  assert.deepEqual(actionsFor('finalizing', false), ['pause', 'cancel'], 'the checksum check can take minutes: it must be stoppable');
   assert.deepEqual(actionsFor('loading', false), []);
   assert.ok(actionsFor('installed', false).includes('load'));
   assert.ok(actionsFor('active', false).includes('start_chat') && actionsFor('active', false).includes('unload'));

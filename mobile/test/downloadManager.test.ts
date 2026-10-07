@@ -8,22 +8,33 @@ const GGUF = new Uint8Array([0x47, 0x47, 0x55, 0x46]);
 const HTML = new TextEncoder().encode('<!DO');
 
 const specA: ModelSpec = {
-  id: 'a', name: 'A', family: 'A', paramsB: 1, grade: 'C', repo: 'o/a', filename: 'a.gguf', sizeBytes: 1000,
+  id: 'a', name: 'A', family: 'A', paramsB: 1, grade: 'C', role: 'Fast', priority: 1, kvBytesPerToken: 1000, repo: 'o/a', filename: 'a.gguf', sizeBytes: 1000,
   sha256: '', quantization: 'Q4_K_M', capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', description: '',
 };
 const specB: ModelSpec = { ...specA, id: 'b', name: 'B', repo: 'o/b', filename: 'b.gguf' };
+const HASH = 'ab'.repeat(32);
+const HUB_HASH = 'cd'.repeat(32);
 
 type Behavior =
   | { kind: 'complete'; header?: 'gguf' | 'html'; stopAt?: number }
   | { kind: 'fail'; at: number; message: string }
-  | { kind: 'hang'; at: number };
+  | { kind: 'hang'; at: number }
+  /** A broken native layer: after `at` bytes it never reports back, and ignores pause and cancel. */
+  | { kind: 'deaf'; at: number };
 
 interface Disk {
   dest: { size: number; head: Uint8Array } | null;
   part: { size: number; head: Uint8Array } | null;
 }
 
-function makeWorld(opts: { total?: number; free?: number | null; storageReady?: boolean; behaviors?: Behavior[]; fetchError?: Error; manager?: DownloadManagerOptions } = {}) {
+interface VerifyOpts {
+  ok?: boolean;
+  steps?: number;
+  /** Block the check at this step until `releaseVerify()`. */
+  holdAt?: number;
+}
+
+function makeWorld(opts: { total?: number; free?: number | null; storageReady?: boolean; behaviors?: Behavior[]; fetchError?: Error; manager?: DownloadManagerOptions; verify?: VerifyOpts; noVerify?: boolean; intent?: string[] } = {}) {
   const total = opts.total ?? 1000;
   const disks = new Map<string, Disk>();
   const diskOf = (id: string): Disk => {
@@ -31,7 +42,10 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
     return disks.get(id)!;
   };
   const behaviors = [...(opts.behaviors ?? [{ kind: 'complete' } as Behavior])];
-  const log = { awake: [] as boolean[], sleeps: [] as number[], tasksCreated: 0, runs: 0, resumeOffsets: [] as number[] };
+  const log = { awake: [] as boolean[], sleeps: [] as number[], tasksCreated: 0, runs: 0, resumeOffsets: [] as number[], verifies: [] as string[], intents: [] as string[][] };
+  let intent: string[] = [...(opts.intent ?? [])];
+  let releaseVerify: () => void = () => undefined;
+  const verifyGate = new Promise<void>((r) => { releaseVerify = r; });
   let clock = 1_000_000;
   let storageReady = opts.storageReady ?? true;
   let free = opts.free ?? null;
@@ -77,14 +91,17 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
           const target = beh.kind === 'complete' ? (beh.stopAt ?? total) : beh.at;
           let pos = resumeFrom;
           while (pos < target) {
-            if (cancelled) throw new Error('cancelled');
-            if (paused) return 'paused';
+            if (beh.kind !== 'deaf') {
+              if (cancelled) throw new Error('cancelled');
+              if (paused) return 'paused';
+            }
             pos = Math.min(target, pos + 100);
             d.part.size = pos;
             onProgress(pos);
             await Promise.resolve();
           }
           if (beh.kind === 'fail') throw new Error(beh.message);
+          if (beh.kind === 'deaf') await new Promise<void>(() => undefined); // never settles
           if (beh.kind === 'hang') {
             // Stay "in flight" until the user pauses/cancels (pause may already have been requested).
             if (!paused && !cancelled) await new Promise<void>((r) => { wake = r; });
@@ -95,6 +112,21 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
         },
       };
     },
+    verifySha256: opts.noVerify
+      ? undefined
+      : async (_spec, expected, onProgress, shouldStop) => {
+          log.verifies.push(expected);
+          const steps = opts.verify?.steps ?? 4;
+          for (let i = 1; i <= steps; i++) {
+            if (shouldStop()) return { ok: false, actual: '', stopped: true };
+            onProgress(i / steps);
+            await new Promise<void>((r) => setTimeout(r, 0));
+            if (opts.verify?.holdAt === i) await verifyGate;
+          }
+          return { ok: opts.verify?.ok ?? true, actual: 'computed', stopped: false };
+        },
+    saveIntent: (ids) => { log.intents.push([...ids]); intent = [...ids]; },
+    loadIntent: () => [...intent],
     keepAwake: (on) => { log.awake.push(on); },
     now: () => (clock += 300),
     sleep: async (ms) => {
@@ -104,13 +136,15 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
     },
   };
 
-  const manager = new DownloadManager(platform, { maxRetries: 3, backoffMs: [10, 20, 30], spaceMarginBytes: 0, stallTimeoutMs: 0, ...opts.manager });
+  const manager = new DownloadManager(platform, { maxRetries: 3, backoffMs: [10, 20, 30], spaceMarginBytes: 0, stallTimeoutMs: 0, stopGraceMs: 40, ...opts.manager });
   return {
     manager, log, diskOf, platform,
     setMeta: (m: Partial<RemoteFileInfo>) => { meta = { ...meta, ...m }; },
     setFree: (f: number | null) => { free = f; },
     setStorage: (r: boolean) => { storageReady = r; },
     pushBehaviors: (...b: Behavior[]) => behaviors.push(...b),
+    releaseVerify: () => releaseVerify(),
+    intentNow: () => [...intent],
   };
 }
 
@@ -442,4 +476,195 @@ test('retry budget refills when a retry made real progress (long download, flaky
   assert.equal(done.status, 'completed');
   assert.equal(w.diskOf('a').dest?.size, 1000);
   await w.manager.settled();
+});
+
+// ---------------------------------------------------------------- SHA-256 is mandatory when a hash is known
+
+test('a hash that matches is required BEFORE the file is installed; progress and ETA are published while it runs', async () => {
+  const w = makeWorld({ verify: { steps: 4 } });
+  w.setMeta({ sha256: HUB_HASH });
+  const seen: DownloadState[] = [];
+  w.manager.store.subscribe(() => { const s = w.manager.stateOf('a'); if (s.status === 'finalizing') seen.push(s); });
+  await w.manager.start(specA);
+  const done = await waitFor(w.manager, 'a', terminal);
+  assert.equal(done.status, 'completed');
+  assert.equal(done.verified, true, 'the finished state says the checksum was verified');
+  assert.deepEqual(w.log.verifies, [HUB_HASH]);
+  assert.ok(seen.some((s) => s.verifyFraction !== undefined && s.verifyFraction > 0 && s.verifyFraction < 1), 'fractions published');
+  assert.ok(seen.some((s) => /Verifying the download/.test(s.note ?? '')), 'note says what is happening');
+  assert.ok(seen.some((s) => s.etaSec > 0), 'an ETA is shown for the check');
+  assert.equal(w.diskOf('a').dest?.size, 1000);
+  assert.equal(w.diskOf('a').part, null);
+});
+
+test('the Hub hash wins over the catalog hash; the catalog hash is used when the Hub gives none', async () => {
+  const w = makeWorld();
+  w.setMeta({ sha256: HUB_HASH });
+  await w.manager.start({ ...specA, sha256: HASH });
+  await waitFor(w.manager, 'a', terminal);
+  assert.deepEqual(w.log.verifies, [HUB_HASH]);
+
+  const w2 = makeWorld();
+  await w2.manager.start({ ...specA, sha256: HASH });
+  await waitFor(w2.manager, 'a', terminal);
+  assert.deepEqual(w2.log.verifies, [HASH]);
+});
+
+test('a checksum MISMATCH is never installed: partial deleted, retryable error, a fresh Try again redownloads from zero', async () => {
+  const w = makeWorld({ verify: { ok: false }, behaviors: [{ kind: 'complete' }, { kind: 'complete' }] });
+  w.setMeta({ sha256: HUB_HASH });
+  await w.manager.start(specA);
+  const err = await waitFor(w.manager, 'a', terminal);
+  assert.equal(err.status, 'error');
+  assert.equal(err.retryable, true);
+  assert.match(err.error!, /does not match the official checksum/i);
+  assert.equal(w.diskOf('a').dest, null, 'corrupt model never promoted');
+  assert.equal(w.diskOf('a').part, null, 'corrupt partial removed so the next try cannot reuse it');
+  await w.manager.settled();
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.status === 'error' || s.status === 'completed');
+  assert.deepEqual(w.log.resumeOffsets, [0, 0], 'second attempt started from byte 0');
+});
+
+test('no hash anywhere, verifyMode "off", or a platform without hashing -> installed on size + GGUF header, not flagged verified', async () => {
+  const none = makeWorld();
+  await none.manager.start(specA);
+  const a = await waitFor(none.manager, 'a', terminal);
+  assert.deepEqual([a.status, a.verified, none.log.verifies.length], ['completed', undefined, 0]);
+
+  const off = makeWorld({ manager: { verifyMode: 'off' } });
+  off.setMeta({ sha256: HUB_HASH });
+  await off.manager.start(specA);
+  assert.deepEqual([(await waitFor(off.manager, 'a', terminal)).verified, off.log.verifies.length], [undefined, 0]);
+
+  const bare = makeWorld({ noVerify: true });
+  bare.setMeta({ sha256: HUB_HASH });
+  await bare.manager.start(specA);
+  assert.equal((await waitFor(bare.manager, 'a', terminal)).status, 'completed');
+});
+
+test('pausing DURING the checksum pauses (never completes); Resume re-checks and then installs', async () => {
+  const w = makeWorld({ verify: { steps: 4, holdAt: 2 } });
+  w.setMeta({ sha256: HUB_HASH });
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.status === 'finalizing' && (s.verifyFraction ?? 0) >= 0.5);
+  await w.manager.pause('a');
+  w.releaseVerify();
+  const paused = await waitFor(w.manager, 'a', (s) => s.status === 'paused');
+  assert.equal(paused.verified, undefined);
+  await w.manager.settled();
+  assert.equal(w.manager.stateOf('a').status, 'paused', 'a pause never ends up as "completed"');
+  assert.equal(w.diskOf('a').dest, null, 'not installed while unverified');
+  assert.equal(w.diskOf('a').part?.size, 1000, 'the full partial is kept');
+
+  await w.manager.start(specA);
+  const done = await waitFor(w.manager, 'a', (s) => s.status === 'completed');
+  assert.equal(done.verified, true);
+  assert.equal(w.log.verifies.length, 2, 'verified again from scratch');
+  assert.equal(w.log.runs, 1, 'no second download: the partial was already complete');
+});
+
+test('cancelling DURING the checksum stops it and deletes the partial', async () => {
+  const w = makeWorld({ verify: { steps: 4, holdAt: 1 } });
+  w.setMeta({ sha256: HUB_HASH });
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.status === 'finalizing' && s.verifyFraction !== undefined);
+  const cancelled = w.manager.cancel(specA, true);
+  w.releaseVerify();
+  await cancelled;
+  assert.equal(w.manager.stateOf('a').status, 'idle');
+  assert.equal(w.diskOf('a').part, null);
+  assert.equal(w.diskOf('a').dest, null);
+});
+
+// ---------------------------------------------------------------- native layer misbehaves
+
+test('Cancel never waits forever on a native task that does not report back (expo-file-system Android cancel race)', async () => {
+  const w = makeWorld({ behaviors: [{ kind: 'deaf', at: 300 }] });
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.bytesWritten >= 300);
+  const t0 = Date.now();
+  await w.manager.cancel(specA, true);
+  assert.ok(Date.now() - t0 < 1500, 'cancel returned within the grace period');
+  assert.equal(w.manager.stateOf('a').status, 'idle');
+  assert.equal(w.diskOf('a').part, null);
+  await w.manager.settled();
+  assert.deepEqual(w.log.awake, [true, false], 'screen is allowed to sleep again');
+});
+
+test('Pause on a native task that never reports back still lets Resume start a fresh transfer', async () => {
+  const w = makeWorld({ behaviors: [{ kind: 'deaf', at: 300 }, { kind: 'complete' }] });
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.bytesWritten >= 300);
+  await w.manager.pause('a');
+  assert.equal(w.manager.stateOf('a').status, 'paused');
+  assert.deepEqual(await w.manager.start(specA), { ok: true });
+  const done = await waitFor(w.manager, 'a', (s) => s.status === 'completed', 3000);
+  assert.equal(done.bytesWritten, 1000);
+  assert.equal(w.diskOf('a').dest?.size, 1000);
+});
+
+// ---------------------------------------------------------------- survive background / process kill
+
+test('process kill mid-download: relaunch finds the partial, shows Paused at N%, and Resume continues from that byte', async () => {
+  const first = makeWorld({ behaviors: [{ kind: 'hang', at: 400 }] });
+  await first.manager.start(specA);
+  await waitFor(first.manager, 'a', (s) => s.bytesWritten >= 400);
+  // The process dies here: the manager object is gone, only the disk (and the intent note) survive.
+  const disk = first.diskOf('a');
+  assert.deepEqual(first.intentNow(), ['a'], 'the in-flight download was recorded');
+
+  const second = makeWorld({ behaviors: [{ kind: 'complete' }], intent: first.intentNow() });
+  second.diskOf('a').part = { ...disk.part! };
+  second.manager.refresh([specA]);
+  const shown = second.manager.stateOf('a');
+  assert.deepEqual([shown.status, shown.bytesWritten, shown.totalBytes], ['paused', 400, 1000]);
+  second.manager.resumeInterrupted([specA]); // what the app does at launch
+  const done = await waitFor(second.manager, 'a', (s) => s.status === 'completed');
+  assert.equal(done.bytesWritten, 1000);
+  assert.deepEqual(second.log.resumeOffsets, [400], 'continued at byte 400, not 0');
+  assert.equal(second.diskOf('a').dest?.size, 1000);
+});
+
+test('a download the user paused or cancelled is NOT silently restarted at the next launch', async () => {
+  const w = makeWorld({ behaviors: [{ kind: 'hang', at: 300 }] });
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.bytesWritten >= 300);
+  await w.manager.pause('a');
+  await w.manager.settled();
+  assert.deepEqual(w.intentNow(), [], 'pause clears the intent');
+
+  const relaunch = makeWorld({ intent: w.intentNow() });
+  relaunch.diskOf('a').part = { size: 300, head: GGUF };
+  relaunch.manager.refresh([specA]);
+  relaunch.manager.resumeInterrupted([specA]);
+  assert.equal(relaunch.manager.stateOf('a').status, 'paused');
+  assert.equal(relaunch.log.tasksCreated, 0, 'nothing started by itself');
+});
+
+test('the intent note is cleared when a download finishes or fails (no phantom resume later)', async () => {
+  const w = makeWorld();
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', terminal);
+  await w.manager.settled();
+  assert.deepEqual(w.intentNow(), []);
+  assert.ok(w.log.intents.some((i) => i.includes('a')), 'it was recorded while running');
+
+  const bad = makeWorld({ behaviors: [{ kind: 'fail', at: 0, message: 'HTTP 404' }] });
+  await bad.manager.start(specA);
+  await waitFor(bad.manager, 'a', terminal);
+  await bad.manager.settled();
+  assert.deepEqual(bad.intentNow(), []);
+});
+
+test('pause mid-download is "paused", never "completed 100%" (the old app marked it complete)', async () => {
+  const w = makeWorld({ behaviors: [{ kind: 'hang', at: 500 }] });
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.bytesWritten >= 500);
+  await w.manager.pause('a');
+  await w.manager.settled();
+  const s = w.manager.stateOf('a');
+  assert.equal(s.status, 'paused');
+  assert.equal(s.bytesWritten, 500);
+  assert.equal(w.diskOf('a').dest, null);
 });

@@ -7,7 +7,7 @@
  * numbers come from the engine's own timings.
  */
 import type { ModelSpec } from './catalog.ts';
-import { buildPrompt, type HistoryMessage } from './chatPrompt.ts';
+import { buildPrompt, type BuiltPrompt, type HistoryMessage, type PromptMessage } from './chatPrompt.ts';
 import { withAttachments, type Attachment, type ChatMessage, type MessageStats } from './chatTypes.ts';
 import { friendlyEngineError, type GenerateParams, type GenerateResult } from './engineTypes.ts';
 import { parseThinking, type OutputPhase } from './thinking.ts';
@@ -25,6 +25,11 @@ export interface TurnInput {
   /** Called for every streamed update (the caller should coalesce for rendering). */
   onUpdate: (patch: Partial<ChatMessage>) => void;
   temperature?: number;
+  /**
+   * Exact prompt size from the model's own tokenizer (null = cannot count). When given, the prompt is re-trimmed until
+   * it really fits, which the character-based estimate cannot guarantee for Khmer, CJK, digits or code.
+   */
+  countPromptTokens?: (messages: PromptMessage[], enableThinking: boolean) => Promise<number | null>;
 }
 
 export type TurnOutcome = Pick<ChatMessage, 'text' | 'reasoning' | 'status' | 'stats' | 'thinkSeconds' | 'error' | 'phase' | 'notice'>;
@@ -46,13 +51,32 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
   const thinking = wantsThinking(spec, input.thinkingEnabled);
   const replyBudget = replyBudgetFor(spec, input.nCtx, thinking);
   const userContent = withAttachments(input.userText, input.attachments);
-  const built = buildPrompt({
-    system: input.system,
-    history: input.history,
-    userMessage: userContent,
-    nCtx: input.nCtx,
-    replyBudget,
-  });
+  const build = (tokenScale: number): BuiltPrompt =>
+    buildPrompt({
+      system: input.system,
+      history: input.history,
+      userMessage: userContent,
+      nCtx: input.nCtx,
+      replyBudget,
+      tokenScale,
+    });
+  let built = build(1);
+  if (input.countPromptTokens) {
+    const allowance = Math.max(256, input.nCtx - replyBudget);
+    let scale = 1;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let real: number | null = null;
+      try {
+        real = await input.countPromptTokens(built.messages, thinking);
+      } catch {
+        real = null;
+      }
+      if (real === null || real <= allowance) break;
+      // The estimate was too low for this text: scale it by the error we just observed (+5%) and trim again.
+      scale *= Math.max(1.1, (real / Math.max(1, built.estimatedPromptTokens)) * 1.05);
+      built = build(scale);
+    }
+  }
 
   const notes: string[] = [];
   if (built.droppedMessages > 0) notes.push(`${built.droppedMessages} older message${built.droppedMessages === 1 ? '' : 's'} did not fit the model's memory and were left out of this reply.`);

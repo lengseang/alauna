@@ -4,7 +4,9 @@
  * placebo toggles from the old version were removed.
  */
 import { useSyncExternalStore } from 'react';
-import { File, Paths } from 'expo-file-system';
+import { Paths } from 'expo-file-system';
+import { readWithFallback, writeAtomic } from '../core/atomicFile.ts';
+import { directoryIO } from './atomicIo.ts';
 import { createStore } from '../core/store.ts';
 import { DEFAULT_SETTINGS, sanitizeSettings, type Settings } from '../core/settingsModel.ts';
 
@@ -17,18 +19,15 @@ export interface SettingsState extends Settings {
 const FILE_NAME = 'chiwiwi_settings.json';
 export const settingsStore = createStore<SettingsState>({ ...DEFAULT_SETTINGS, loaded: false });
 
-function file(): File {
-  return new File(Paths.document, FILE_NAME);
-}
+const io = () => directoryIO(() => Paths.document);
 
 let loadPromise: Promise<void> | null = null;
 export function initSettings(): Promise<void> {
   if (!loadPromise) {
     loadPromise = (async () => {
       try {
-        const f = file();
-        if (f.exists) {
-          const parsed = sanitizeSettings(JSON.parse(await f.text()));
+        const parsed = await readWithFallback(io(), FILE_NAME, (text) => sanitizeSettings(JSON.parse(text)));
+        if (parsed) {
           settingsStore.setState({ ...parsed, loaded: true });
           return;
         }
@@ -65,9 +64,7 @@ export async function flushSettings(): Promise<void> {
     pendingMountModelId: state.pendingMountModelId,
   };
   try {
-    const f = file();
-    if (!f.exists) f.create({ intermediates: true });
-    f.write(JSON.stringify(settings));
+    writeAtomic(io(), FILE_NAME, JSON.stringify(settings));
   } catch {
     // Settings are a convenience; a failed write must never crash the app.
   }

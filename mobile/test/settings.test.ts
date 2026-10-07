@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SETTINGS, sanitizeSettings } from '../src/core/settingsModel.ts';
+import { DEFAULT_SETTINGS, MAX_CONTEXT, sanitizeSettings } from '../src/core/settingsModel.ts';
 
 test('settings: garbage input yields safe defaults and never throws', () => {
   for (const bad of [null, undefined, 5, 'x', [], true]) {
@@ -16,9 +16,9 @@ test('settings: garbage input yields safe defaults and never throws', () => {
 
 test('settings: valid values round-trip; invalid fields fall back individually', () => {
   const good = {
-    archetype: 'mentor', pad: { pleasure: 0.1, arousal: 0.2, dominance: 0.3 }, activeModelId: 'qwen3-4b',
-    verified: { 'qwen3-4b': { at: 5, tokensPerSecond: 11.5, loadMs: 900 } },
-    contextOverride: 4096, threads: 6, useGpu: true, thinkingEnabled: false, pendingMountModelId: 'llama-3.1-8b',
+    archetype: 'mentor', pad: { pleasure: 0.1, arousal: 0.2, dominance: 0.3 }, activeModelId: 'qwen3.5-4b',
+    verified: { 'qwen3.5-4b': { at: 5, tokensPerSecond: 11.5, loadMs: 900 } },
+    contextOverride: 4096, threads: 6, useGpu: true, thinkingEnabled: false, pendingMountModelId: 'qwen3.5-9b',
   };
   assert.deepEqual(sanitizeSettings(JSON.parse(JSON.stringify(good))), good);
 
@@ -31,4 +31,11 @@ test('settings: valid values round-trip; invalid fields fall back individually',
   assert.equal(s.thinkingEnabled, true);
   assert.deepEqual(Object.keys(s.verified), ['c']);
   assert.deepEqual(s.verified.c, { at: 3, tokensPerSecond: 0, loadMs: 0 });
+});
+
+test('settings: an absurd context size cannot make the engine allocate gigabytes of KV cache', () => {
+  assert.equal(sanitizeSettings({ contextOverride: 10_000_000 }).contextOverride, MAX_CONTEXT);
+  assert.equal(sanitizeSettings({ contextOverride: 4096.7 }).contextOverride, 4097);
+  assert.equal(sanitizeSettings({ contextOverride: Infinity }).contextOverride, null);
+  assert.equal(sanitizeSettings({ contextOverride: NaN }).contextOverride, null);
 });

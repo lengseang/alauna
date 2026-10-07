@@ -6,9 +6,10 @@ import { getModel } from '../src/core/catalog.ts';
 import { makeAttachment, toHistory, titleFrom, newThread, type ChatMessage } from '../src/core/chatTypes.ts';
 import { buildSystemPrompt, ARCHETYPES, describePad, clampPad } from '../src/core/persona.ts';
 
-const plain = getModel('llama-3.2-1b')!;
-const hybrid = getModel('qwen3-4b')!;
-const always = getModel('deepseek-r1-1.5b')!;
+const plain = getModel('qwen3-4b-instruct-2507')!;
+const hybrid = getModel('qwen3.5-4b')!;
+// No catalog model is "always thinks" any more, but the app still supports that mode (DeepSeek-R1 style).
+const always = { ...getModel('qwen3.5-2b')!, id: 'always-thinks', thinking: 'always' as const };
 
 function res(over: Partial<GenerateResult> = {}): GenerateResult {
   return { text: '', promptTokens: 20, generatedTokens: 5, promptMs: 100, predictedMs: 500, tokensPerSecond: 10, interrupted: false, contextFull: false, thinkingForcedOpen: false, ...over };
@@ -47,7 +48,7 @@ test('turn: plain model streams a clean answer; phases go reading -> answering; 
   assert.equal(out.stats!.generatedTokens, 3);
   assert.equal(out.stats!.tokensPerSecond, 12.5);
   assert.equal(out.stats!.promptTokens, 18);
-  assert.equal(out.stats!.modelId, 'llama-3.2-1b');
+  assert.equal(out.stats!.modelId, 'qwen3-4b-instruct-2507');
   assert.equal(updates[0].phase, 'reading');
   assert.ok(updates[0].promptTokensEst! > 0);
   assert.deepEqual(updates.slice(1).map((u) => u.phase), ['answering', 'answering', 'answering']);
@@ -241,4 +242,35 @@ test('memory: add / dedupe / limits / remove / sanitize / slash command', () => 
   assert.equal(parseRememberCommand('/REMEMBER   x '), 'x');
   assert.equal(parseRememberCommand('remember this'), null);
   assert.equal(parseRememberCommand('/remember'), null);
+});
+
+test('turn: when the engine can count tokens, the prompt is re-trimmed until it REALLY fits (Khmer/CJK/digits)', async () => {
+  const history = Array.from({ length: 12 }, (_, i) => ({ role: i % 2 === 0 ? 'user' : 'assistant', content: 'abcdefgh '.repeat(45) })) as any[];
+  const counted: number[] = [];
+  // Worst case tokenizer: one token per character. The character-based estimate is 3x too low for this.
+  const countPromptTokens = async (msgs: Array<{ content: string }>) => {
+    const n = msgs.reduce((sum, m) => sum + m.content.length, 0);
+    counted.push(n);
+    return n;
+  };
+  const s = streamer(['ok']);
+  const { inp } = input(plain, s.generate, { history, nCtx: 2048, countPromptTokens });
+  const out = await runAssistantTurn(inp);
+  assert.equal(out.status, 'done');
+  const allowance = 2048 - replyBudgetFor(plain, 2048, false);
+  assert.ok(counted.length >= 2, 'it measured, trimmed and measured again');
+  assert.ok(counted.length <= 4, 'bounded number of rounds');
+  assert.ok(counted[0] > allowance, 'the first build overflowed by the real count');
+  const sent = s.seen[0].messages.reduce((sum, m) => sum + m.content.length, 0);
+  assert.ok(sent <= allowance, `what was sent (${sent} real tokens) fits the allowance ${allowance}`);
+  assert.match(out.notice ?? '', /older message/);
+});
+
+test('turn: a counting failure or an engine that cannot count never blocks the reply', async () => {
+  const s = streamer(['fine']);
+  const { inp } = input(plain, s.generate, { countPromptTokens: async () => { throw new Error('tokenizer exploded'); } });
+  assert.equal((await runAssistantTurn(inp)).text, 'fine');
+  const s2 = streamer(['fine']);
+  const { inp: inp2 } = input(plain, s2.generate, { countPromptTokens: async () => null });
+  assert.equal((await runAssistantTurn(inp2)).text, 'fine');
 });

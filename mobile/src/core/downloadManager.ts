@@ -28,6 +28,10 @@ export interface DownloadState {
   retryable: boolean;
   /** Transient info line, e.g. "Connection lost - retrying (1/4)". */
   note?: string;
+  /** True when the finished file was checked against the official SHA-256 (set on 'completed' by a download made in this app). */
+  verified?: boolean;
+  /** 0..1 while the SHA-256 check runs (status 'finalizing'). */
+  verifyFraction?: number;
 }
 
 export const IDLE_STATE: DownloadState = {
@@ -69,6 +73,19 @@ export interface DownloadPlatform {
   files(spec: ModelSpec): ModelFiles;
   fetchInfo(spec: ModelSpec): Promise<RemoteFileInfo>;
   createTask(args: { spec: ModelSpec; url: string; onProgress: (absoluteBytes: number) => void }): TransferTask;
+  /**
+   * Full SHA-256 of the partial file, in small time slices so the UI stays alive. Must poll `shouldStop()` often and
+   * return `stopped: true` as soon as it says so. Optional: a platform without it skips verification.
+   */
+  verifySha256?(
+    spec: ModelSpec,
+    expected: string,
+    onProgress: (fraction: number) => void,
+    shouldStop: () => boolean,
+  ): Promise<{ ok: boolean; actual: string; stopped: boolean }>;
+  /** Remember which downloads are in flight so the next app launch can continue them (process kill / swipe-away). */
+  saveIntent?(modelIds: string[]): void;
+  loadIntent?(): string[];
   keepAwake(on: boolean): void;
   now(): number;
   sleep(ms: number): Promise<void>;
@@ -106,6 +123,22 @@ export function toFailure(e: unknown): { message: string; retryable: boolean; ra
   return { message: 'The connection was interrupted. Check your internet, then tap Resume.', retryable: true, rangeNotSatisfiable: false };
 }
 
+// -------------------------------------------------------------------- helpers
+
+/** `promise`, or give up waiting after `ms` (never rejects because of the timeout; the timer is always cleared). */
+async function withTimeout(promise: Promise<unknown> | undefined, ms: number): Promise<void> {
+  if (!promise) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, ms);
+  });
+  try {
+    await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // -------------------------------------------------------------------- manager
 
 export type StartResult = { ok: true } | { ok: false; message: string };
@@ -122,6 +155,8 @@ interface Run {
   /** Absolute bytes seen so far and when they last increased (stall watchdog). */
   lastBytes: number;
   lastProgressAt: number;
+  /** Force-settles the transfer promise (set only while a transfer is in flight). */
+  abandon: (() => void) | null;
   done: Promise<void>;
 }
 
@@ -139,6 +174,13 @@ export interface DownloadManagerOptions {
   stallCheckMs?: number;
   /** If a retry made at least this many new bytes, the retry budget starts over (long downloads on flaky networks). */
   retryResetBytes?: number;
+  /**
+   * 'always' (default): a file is only installed after its SHA-256 matches the Hub's (or the catalog's) hash.
+   * 'off': size + GGUF header only. Exists because the check is pure JavaScript and may be slow on a phone.
+   */
+  verifyMode?: 'always' | 'off';
+  /** How long pause/cancel wait for the native transfer to report back before the run is abandoned (native cancel can hang). */
+  stopGraceMs?: number;
 }
 
 export class DownloadManager {
@@ -151,6 +193,8 @@ export class DownloadManager {
   private readonly stallMs: number;
   private readonly stallCheckMs: number;
   private readonly retryResetBytes: number;
+  private readonly verifyMode: 'always' | 'off';
+  private readonly stopGraceMs: number;
   private awakeCount = 0;
 
   constructor(platform: DownloadPlatform, options: DownloadManagerOptions = {}) {
@@ -161,6 +205,8 @@ export class DownloadManager {
     this.stallMs = options.stallTimeoutMs ?? 45_000;
     this.stallCheckMs = options.stallCheckMs ?? 5_000;
     this.retryResetBytes = options.retryResetBytes ?? 8 * 1024 * 1024;
+    this.verifyMode = options.verifyMode ?? 'always';
+    this.stopGraceMs = options.stopGraceMs ?? 4000;
   }
 
   // ---------------------------------------------------------------- queries
@@ -216,6 +262,7 @@ export class DownloadManager {
       lastEmit: 0,
       lastBytes: 0,
       lastProgressAt: 0,
+      abandon: null,
       done: Promise.resolve(),
     };
     run.pausing = false;
@@ -223,10 +270,12 @@ export class DownloadManager {
     run.active = true;
     this.runs.set(spec.id, run);
     this.setAwake(+1);
-    this.patch(spec.id, { status: 'resolving', error: undefined, retryable: false, note: undefined, speedBps: 0, etaSec: 0 });
+    this.syncIntent();
+    this.patch(spec.id, { status: 'resolving', error: undefined, retryable: false, note: undefined, speedBps: 0, etaSec: 0, verified: undefined, verifyFraction: undefined });
     run.done = this.execute(run).finally(() => {
       run.active = false;
       this.setAwake(-1);
+      this.syncIntent();
     });
     return { ok: true };
   }
@@ -235,12 +284,18 @@ export class DownloadManager {
     const run = this.runs.get(id);
     if (!run || !run.active) return;
     run.pausing = true;
+    this.syncIntent();
     try {
-      await run.task?.pause();
+      await withTimeout(run.task?.pause(), this.stopGraceMs);
     } catch {
       // The transfer promise settles on its own; execute() records the outcome.
     }
-    this.patch(id, { status: 'paused', speedBps: 0, etaSec: 0, note: undefined });
+    this.patch(id, { status: 'paused', speedBps: 0, etaSec: 0, note: undefined, verifyFraction: undefined });
+    // The native layer is supposed to report back after a pause. If it never does, Resume would wait on it forever.
+    const timer = setTimeout(() => {
+      if (run.active && run.pausing) run.abandon?.();
+    }, this.stopGraceMs);
+    void run.done.finally(() => clearTimeout(timer));
   }
 
   /** Cancel; by default the partial file is deleted too. */
@@ -248,8 +303,19 @@ export class DownloadManager {
     const run = this.runs.get(spec.id);
     if (run) {
       run.cancelling = true;
-      run.task?.cancel();
-      await run.done.catch(() => undefined);
+      this.syncIntent();
+      try {
+        run.task?.cancel();
+      } catch {
+        // already gone
+      }
+      // expo-file-system's Android cancel can return without ever settling the transfer promise (it returns
+      // from its read loop without resuming the coroutine): never let "Cancel" wait on it forever.
+      await withTimeout(run.done.catch(() => undefined), this.stopGraceMs);
+      if (run.active) {
+        run.abandon?.();
+        await run.done.catch(() => undefined);
+      }
       this.runs.delete(spec.id);
     }
     if (deletePartial) {
@@ -303,7 +369,36 @@ export class DownloadManager {
     }
   }
 
+  /**
+   * Call once after `refresh()` at startup: downloads that were running when the app was killed continue from their
+   * partial file. Only runs the user never paused or cancelled, and only one at a time.
+   */
+  resumeInterrupted(specs: ModelSpec[]): void {
+    let ids: string[] = [];
+    try {
+      ids = this.platform.loadIntent?.() ?? [];
+    } catch {
+      ids = [];
+    }
+    for (const spec of specs) {
+      if (!ids.includes(spec.id)) continue;
+      if (this.stateOf(spec.id).status !== 'paused') continue; // refresh() found a partial file
+      void this.start(spec);
+      return;
+    }
+    if (ids.length > 0) this.syncIntent();
+  }
+
   // ---------------------------------------------------------------- internals
+
+  private syncIntent(): void {
+    try {
+      const ids = [...this.runs.entries()].filter(([, r]) => r.active && !r.pausing && !r.cancelling).map(([id]) => id);
+      this.platform.saveIntent?.(ids);
+    } catch {
+      // best effort
+    }
+  }
 
   private patch(id: string, patch: Partial<DownloadState>): void {
     this.store.setState((s) => ({ items: { ...s.items, [id]: { ...(s.items[id] ?? IDLE_STATE), ...patch } } }));
@@ -364,11 +459,11 @@ export class DownloadManager {
         if (outcome === 'paused') return this.afterStop(run);
       }
       if (this.stopped(run)) return this.afterStop(run);
-      await this.finalize(run, meta);
+      if ((await this.finalize(run, meta)) === 'stopped') return this.afterStop(run);
     } catch (e) {
       if (this.stopped(run)) return this.afterStop(run);
       const f = toFailure(e);
-      this.patch(spec.id, { status: 'error', error: f.message, retryable: f.retryable, speedBps: 0, etaSec: 0, note: undefined });
+      this.patch(spec.id, { status: 'error', error: f.message, retryable: f.retryable, speedBps: 0, etaSec: 0, note: undefined, verifyFraction: undefined });
     }
   }
 
@@ -381,7 +476,7 @@ export class DownloadManager {
     } catch {
       bytes = 0;
     }
-    this.patch(run.spec.id, { status: 'paused', bytesWritten: bytes, speedBps: 0, etaSec: 0, note: undefined });
+    this.patch(run.spec.id, { status: 'paused', bytesWritten: bytes, speedBps: 0, etaSec: 0, note: undefined, verifyFraction: undefined });
   }
 
   private async transfer(run: Run, meta: RemoteFileInfo): Promise<'completed' | 'paused' | 'cancelled'> {
@@ -443,34 +538,31 @@ export class DownloadManager {
   /**
    * task.run() plus a watchdog: if no new bytes arrive for `stallMs` (and the user has not paused),
    * the transfer is cancelled and reported as a retryable failure so transfer() resumes from the partial file.
+   * `run.abandon` lets pause()/cancel() force-settle the promise when the native layer never answers.
    */
   private runWatched(run: Run, task: TransferTask): Promise<'completed' | 'paused'> {
-    if (this.stallMs <= 0) return task.run();
     const p = this.platform;
     return new Promise((resolve, reject) => {
       let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        run.abandon = null;
+        fn();
+      };
+      run.abandon = () => finish(() => reject(new DownloadFailure('The transfer was stopped.', false)));
       task.run().then(
-        (r) => {
-          if (!settled) {
-            settled = true;
-            resolve(r);
-          }
-        },
-        (e) => {
-          if (!settled) {
-            settled = true;
-            reject(e);
-          }
-        },
+        (r) => finish(() => resolve(r)),
+        (e) => finish(() => reject(e)),
       );
+      if (this.stallMs <= 0) return;
       void (async () => {
         while (!settled) {
           await p.sleep(this.stallCheckMs);
           if (settled) return;
           if (run.pausing || run.cancelling) continue;
           if (p.now() - run.lastProgressAt >= this.stallMs) {
-            settled = true;
-            reject(new DownloadFailure('The download stopped receiving data. Check your internet, then tap Resume.', true));
+            finish(() => reject(new DownloadFailure('The download stopped receiving data. Check your internet, then tap Resume.', true)));
             try {
               task.cancel(); // frees the stuck connection; the partial file stays on disk
             } catch {
@@ -503,10 +595,11 @@ export class DownloadManager {
     });
   }
 
-  private async finalize(run: Run, meta: RemoteFileInfo): Promise<void> {
+  private async finalize(run: Run, meta: RemoteFileInfo): Promise<'done' | 'stopped'> {
     const { spec } = run;
-    const files = this.platform.files(spec);
-    this.patch(spec.id, { status: 'finalizing', bytesWritten: meta.size, speedBps: 0, etaSec: 0, note: 'Checking the file...' });
+    const p = this.platform;
+    const files = p.files(spec);
+    this.patch(spec.id, { status: 'finalizing', bytesWritten: meta.size, speedBps: 0, etaSec: 0, note: 'Checking the file...', verifyFraction: undefined });
 
     const size = files.partExists() ? files.partSize() : 0;
     if (size > meta.size) {
@@ -521,11 +614,44 @@ export class DownloadManager {
       files.deletePart();
       throw new DownloadFailure('The downloaded file is not a valid model (it was probably an error page). It was removed. Please try again.', true);
     }
+
+    // Mandatory integrity check: the Hub's hash is for the file that was actually served, so it wins over the catalog copy.
+    const expected = (meta.sha256 || run.spec.sha256 || '').toLowerCase();
+    let verified = false;
+    if (expected && this.verifyMode === 'always' && p.verifySha256) {
+      const t0 = p.now();
+      const r = await p.verifySha256(
+        spec,
+        expected,
+        (fraction) => {
+          const elapsed = Math.max(1, p.now() - t0);
+          const f = Math.min(1, Math.max(0, fraction));
+          this.patch(spec.id, {
+            status: 'finalizing',
+            verifyFraction: f,
+            speedBps: f > 0 ? (meta.size * f * 1000) / elapsed : 0,
+            etaSec: f > 0.01 ? Math.round((elapsed / f - elapsed) / 1000) : 0,
+            note: `Verifying the download (one time) ${Math.round(f * 100)}%`,
+          });
+        },
+        () => this.stopped(run),
+      );
+      if (r.stopped || this.stopped(run)) return 'stopped';
+      if (!r.ok) {
+        files.deletePart();
+        throw new DownloadFailure(
+          'The downloaded file does not match the official checksum (it is damaged), so it was deleted. Tap Try again to download it fresh.',
+          true,
+        );
+      }
+      verified = true;
+    }
     files.promotePart();
-    this.complete(spec.id, meta.size);
+    this.complete(spec.id, meta.size, verified);
+    return 'done';
   }
 
-  private complete(id: string, size: number): void {
-    this.set(id, { ...IDLE_STATE, status: 'completed', bytesWritten: size, totalBytes: size });
+  private complete(id: string, size: number, verified?: boolean): void {
+    this.set(id, { ...IDLE_STATE, status: 'completed', bytesWritten: size, totalBytes: size, ...(verified ? { verified: true } : {}) });
   }
 }

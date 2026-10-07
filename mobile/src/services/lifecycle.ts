@@ -4,8 +4,10 @@
  * Order matters (docs/REQUIREMENTS.md ST-1/ST-2): settings -> storage -> crash check ->
  * only then data that lives inside the vault (downloads, chats, memory).
  */
+import { AppState } from 'react-native';
+import { MemoryGuard } from '../core/memoryGuard.ts';
 import { engine } from './engine.ts';
-import { initChat } from './chat.ts';
+import { chatStore, initChat } from './chat.ts';
 import { refreshDownloads } from './downloads.ts';
 import { loadMemory } from './memory.ts';
 import { initSettings, updateSettings } from './settings.ts';
@@ -25,9 +27,33 @@ export async function onStorageChanged(): Promise<void> {
   await onStorageReady();
 }
 
+let guardInstalled = false;
+
+/**
+ * Release the model's RAM when the app has been in the background for a while or the OS warns about memory.
+ * Never interrupts a reply or a load; `inactive` (permission dialog, folder picker) does not count as background.
+ */
+export function installMemoryGuard(): void {
+  if (guardInstalled) return;
+  guardInstalled = true;
+  const guard = new MemoryGuard({
+    isBusy: () => engine.state.status === 'generating' || engine.state.status === 'mounting' || chatStore.getState().sending,
+    isLoaded: () => engine.isReady(),
+    release: (reason) => engine.releaseIdle(reason),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+  });
+  AppState.addEventListener('change', (next) => {
+    if (next === 'background') guard.onBackground();
+    else if (next === 'active') guard.onForeground();
+  });
+  AppState.addEventListener('memoryWarning', () => guard.onMemoryWarning());
+}
+
 let started: Promise<void> | null = null;
 export function bootstrap(): Promise<void> {
   if (!started) {
+    installMemoryGuard();
     started = (async () => {
       await initSettings();
       await initStorage();

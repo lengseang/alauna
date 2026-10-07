@@ -12,12 +12,12 @@
  *    restart the partial is discarded and the download restarts. (Best effort.)
  */
 import { Platform } from 'react-native';
-import { DownloadTask } from 'expo-file-system';
+import { DownloadTask, File, Paths } from 'expo-file-system';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import type { DownloadPlatform, ModelFiles, TransferTask } from '../core/downloadManager.ts';
 import type { ModelSpec } from '../core/catalog.ts';
 import { fetchRemoteFileInfo } from './hfClient.ts';
-import { fileSize, modelFile, partialFile, readHeader } from './modelLibrary.ts';
+import { fileSize, hashFile, modelFile, partialFile, readHeader } from './modelLibrary.ts';
 import { freeSpaceBytes, isStorageReady } from './storage.ts';
 
 const KEEP_AWAKE_TAG = 'chiwiwi-download';
@@ -97,12 +97,46 @@ class ExpoTransfer implements TransferTask {
   }
 }
 
+const INTENT_FILE = 'chiwiwi_downloads.json';
+
+/** App-private note of which downloads were running, so a process kill / swipe-away can be continued at next launch. */
+function saveIntent(ids: string[]): void {
+  try {
+    const f = new File(Paths.document, INTENT_FILE);
+    if (ids.length === 0) {
+      if (f.exists) f.delete();
+      return;
+    }
+    if (!f.exists) f.create({ intermediates: true });
+    f.write(JSON.stringify({ active: ids }));
+  } catch {
+    // best effort: without it the partial file still shows "Paused - tap Resume"
+  }
+}
+
+function loadIntent(): string[] {
+  try {
+    const f = new File(Paths.document, INTENT_FILE);
+    if (!f.exists) return [];
+    const parsed = JSON.parse(f.textSync()) as { active?: unknown };
+    return Array.isArray(parsed.active) ? parsed.active.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 export const expoDownloadPlatform: DownloadPlatform = {
   isStorageReady,
   freeSpaceBytes,
   files: filesFor,
   fetchInfo: (spec) => fetchRemoteFileInfo(spec.repo, spec.filename),
   createTask: ({ spec, url, onProgress }) => new ExpoTransfer(spec, url, onProgress),
+  async verifySha256(spec, expected, onProgress, shouldStop) {
+    const r = await hashFile(partialFile(spec), onProgress, shouldStop);
+    return { ok: !r.stopped && r.actual === expected.toLowerCase(), actual: r.actual, stopped: r.stopped };
+  },
+  saveIntent,
+  loadIntent,
   keepAwake: (on) => {
     if (on) void activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);
     else void deactivateKeepAwake(KEEP_AWAKE_TAG).catch(() => undefined);

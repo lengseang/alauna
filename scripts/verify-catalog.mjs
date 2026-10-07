@@ -6,16 +6,34 @@
  *   node scripts/verify-catalog.mjs --write    # also write exact sizes + sha256 back into catalog.ts
  *
  * Checks per entry: repo reachable & ungated, file exists, is a real GGUF (LFS),
- * size/sha256 match (or are filled in with --write), and no two entries share a file.
- * Needs Node >= 22.6 (type stripping) and network access to huggingface.co.
+ * size/sha256 match (or are filled in with --write), the resolve URL answers a Range request
+ * with 206 + the right total + the "GGUF" magic, and no two entries share a file.
+ * Needs Node >= 22.6 (type stripping; the script re-launches itself with the flag when needed)
+ * and network access to huggingface.co. Works on Windows, macOS and Linux.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const catalogPath = join(here, '..', 'mobile', 'src', 'core', 'catalog.ts');
-const { MODEL_CATALOG } = await import(catalogPath);
+
+// import() needs a file:// URL (a bare "D:\..." path fails on Windows), and Node < 22.18 needs a flag to load .ts.
+let MODEL_CATALOG;
+try {
+  ({ MODEL_CATALOG } = await import(pathToFileURL(catalogPath).href));
+} catch (err) {
+  const needsFlag = /ERR_UNKNOWN_FILE_EXTENSION|Unknown file extension/i.test(`${err?.code ?? ''} ${err?.message ?? ''}`);
+  if (needsFlag && !process.env.CHIWIWI_VERIFY_CHILD) {
+    const r = spawnSync(process.execPath, ['--experimental-strip-types', '--no-warnings', fileURLToPath(import.meta.url), ...process.argv.slice(2)], {
+      stdio: 'inherit',
+      env: { ...process.env, CHIWIWI_VERIFY_CHILD: '1' },
+    });
+    process.exit(r.status ?? 1);
+  }
+  throw err;
+}
 
 const write = process.argv.includes('--write');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -79,6 +97,15 @@ for (const m of MODEL_CATALOG) {
     }
     const size = file.lfs.size;
     const sha = file.lfs.oid;
+
+    // The URL the app downloads from must really serve the file: Range works (206), total matches, first bytes are "GGUF".
+    const probe = await fetch(`https://huggingface.co/${m.repo}/resolve/main/${m.filename}?download=true`, { headers: { Range: 'bytes=0-3' } });
+    const total = Number(/\/(\d+)$/.exec(probe.headers.get('content-range') ?? '')?.[1] ?? NaN);
+    const magic = Buffer.from(await probe.arrayBuffer()).subarray(0, 4).toString('ascii');
+    if (probe.status !== 206 || total !== size || magic !== 'GGUF') {
+      fail(m.id, `download URL: HTTP ${probe.status}, content-range total ${total} (Hub ${size}), magic "${magic}"`);
+      continue;
+    }
     const sizeOk = size === m.sizeBytes;
     const shaOk = !m.sha256 || m.sha256 === sha;
     if (write) {

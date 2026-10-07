@@ -39,7 +39,7 @@ test('catalog: every entry is well-formed and truthful', () => {
     assert.ok(m.filename.toLowerCase().endsWith('.gguf'), `${m.id}: filename`);
     assert.ok(!/mmproj/i.test(m.filename), `${m.id}: projector files are not models`);
     assert.ok(m.sizeBytes > 100_000_000, `${m.id}: size`);
-    assert.ok(m.sha256 === '' || /^[0-9a-f]{64}$/.test(m.sha256), `${m.id}: sha256 format`);
+    assert.match(m.sha256, /^[0-9a-f]{64}$/, `${m.id}: a real sha256 is mandatory (downloads are verified against it)`);
     // The app is text-chat only: no capability the app cannot deliver.
     for (const c of m.capabilities) assert.ok(['Text', 'Code', 'Reasoning'].includes(c), `${m.id}: capability ${c}`);
     // Reasoning flag must agree with the capability badge.
@@ -49,21 +49,33 @@ test('catalog: every entry is well-formed and truthful', () => {
   }
 });
 
-test('catalog: grades match size, and uncensored entries exist honestly', () => {
+test('catalog: short, every entry has a plain-language role, one clear default', () => {
+  assert.ok(MODEL_CATALOG.length <= 6, 'keep the list short: more choices = more confusion');
+  const roles = MODEL_CATALOG.map((m) => m.role);
+  assert.equal(new Set(roles).size, roles.length, 'each role appears once');
+  const top = [...MODEL_CATALOG].sort((a, b) => b.priority - a.priority)[0];
+  assert.equal(top.role, 'Balanced (default)');
+  assert.equal(top.id, 'qwen3.5-4b', 'the default is the Qwen3.5 4B class model');
+  assert.ok(MODEL_CATALOG.some((m) => m.role === 'Smoke test' && m.sizeBytes < 700_000_000), 'a tiny smoke-test model exists');
+  // Every architecture must exist in the llama.cpp bundled with the pinned llama.rn (b10256).
+  for (const m of MODEL_CATALOG) assert.match(m.repo, /^unsloth\//, `${m.id}: curated, ungated, Apache-2.0 repos only`);
+});
+
+test('catalog: grades match size', () => {
   for (const m of MODEL_CATALOG) {
     if (m.grade === 'S') assert.ok(m.paramsB >= 7, m.id);
     if (m.grade === 'C') assert.ok(m.paramsB < 2.2, m.id);
   }
-  assert.ok(MODEL_CATALOG.some((m) => m.contentPolicy === 'Uncensored'));
 });
 
 test('catalog: lookup and query (search / grade / AND-OR capability / sort)', () => {
-  assert.equal(getModel('qwen3-4b')?.name, 'Qwen3 4B');
+  assert.equal(getModel('qwen3.5-4b')?.name, 'Qwen3.5 4B');
   assert.equal(getModel('nope'), undefined);
   assert.equal(getModel(null), undefined);
 
   const gemma = queryCatalog({ search: 'gemma' });
-  assert.ok(gemma.length >= 2 && gemma.every((m) => /gemma/i.test(m.name)));
+  assert.ok(gemma.length >= 1 && gemma.every((m) => /gemma/i.test(m.name)));
+  assert.equal(queryCatalog({ search: 'balanced' })[0]?.id, 'qwen3.5-4b', 'search also matches the role');
 
   const gradeS = queryCatalog({ grade: 'S' });
   assert.ok(gradeS.length > 0 && gradeS.every((m) => m.grade === 'S'));
@@ -73,8 +85,7 @@ test('catalog: lookup and query (search / grade / AND-OR capability / sort)', ()
   assert.ok(any.length >= all.length);
   assert.ok(all.every((m) => m.capabilities.includes('Reasoning') && m.capabilities.includes('Code')));
 
-  const unc = queryCatalog({ onlyUncensored: true });
-  assert.ok(unc.length >= 2 && unc.every((m) => m.contentPolicy === 'Uncensored'));
+  assert.equal(queryCatalog({ onlyUncensored: true }).length, 0, 'no uncensored entries are offered');
 
   const asc = queryCatalog({ sort: 'size_asc' });
   for (let i = 1; i < asc.length; i++) assert.ok(asc[i - 1].sizeBytes <= asc[i].sizeBytes);
@@ -88,18 +99,17 @@ const GB = 1e9;
 const PHONES = { '4GB': 3.6 * GB, '6GB': 5.4 * GB, '8GB': 7.3 * GB, '12GB': 11.2 * GB, '16GB': 15.0 * GB };
 
 test('fit: ratings scale with real RAM (broad devices, not one phone)', () => {
-  const l8 = getModel('llama-3.1-8b')!;
-  const q4 = getModel('qwen3-4b')!;
-  const l1 = getModel('llama-3.2-1b')!;
-  const g12 = getModel('gemma-4-12b')!;
+  const q9 = getModel('qwen3.5-9b')!;
+  const q4 = getModel('qwen3.5-4b')!;
+  const q08 = getModel('qwen3.5-0.8b')!;
 
-  assert.equal(fitFor(l8, PHONES['4GB']), 'too_heavy');
-  assert.equal(fitFor(l8, PHONES['8GB']), 'too_heavy');
-  assert.ok(['ok', 'tight'].includes(fitFor(l8, PHONES['12GB'])));
-  assert.equal(fitFor(g12, PHONES['12GB']), 'too_heavy');
-  assert.notEqual(fitFor(g12, PHONES['16GB']), 'too_heavy');
+  assert.equal(fitFor(q9, PHONES['4GB']), 'too_heavy');
+  assert.equal(fitFor(q9, PHONES['8GB']), 'too_heavy');
+  assert.ok(['ok', 'tight'].includes(fitFor(q9, PHONES['12GB'])), '9B is the 12 GB ceiling, never "runs great"');
+  assert.notEqual(fitFor(q9, PHONES['16GB']), 'too_heavy');
 
-  assert.equal(fitFor(l1, PHONES['4GB']), 'great');
+  assert.equal(fitFor(q08, PHONES['4GB']), 'great');
+  assert.equal(fitFor(q4, PHONES['12GB']), 'great');
   assert.ok(['great', 'ok'].includes(fitFor(q4, PHONES['8GB'])));
   assert.equal(fitFor(q4, PHONES['4GB']), 'too_heavy');
 });
@@ -115,23 +125,27 @@ test('fit: context default grows with RAM; larger context costs more memory', ()
   assert.equal(defaultContext(PHONES['6GB']), 2048);
   assert.equal(defaultContext(PHONES['8GB']), 3072);
   assert.equal(defaultContext(PHONES['12GB']), 4096);
-  const m = getModel('llama-3.1-8b')!;
+  const m = getModel('qwen3.5-9b')!;
   assert.ok(estimateRamBytes(m, 8192) > estimateRamBytes(m, 2048));
   assert.ok(estimateRamBytes(m, 2048) > m.sizeBytes);
 });
 
-test('fit: recommendation fits the phone and is never uncensored or tiny', () => {
+test('fit: recommendation is the 4B default on 8-16 GB phones, never the 8-9B tier (owner: 12 GB phone)', () => {
+  assert.equal(recommendModel(MODEL_CATALOG, PHONES['12GB'])!.id, 'qwen3.5-4b');
+  assert.equal(recommendModel(MODEL_CATALOG, PHONES['16GB'])!.id, 'qwen3.5-4b', 'more RAM does not change the default');
+  assert.equal(recommendModel(MODEL_CATALOG, PHONES['8GB'])!.id, 'qwen3.5-4b');
+  assert.equal(recommendModel(MODEL_CATALOG, PHONES['6GB'])!.id, 'qwen3.5-2b', '6 GB: the quick model');
+  assert.equal(recommendModel(MODEL_CATALOG, PHONES['4GB'])!.id, 'qwen3.5-2b');
   for (const [label, ram] of Object.entries(PHONES)) {
     const rec = recommendModel(MODEL_CATALOG, ram)!;
-    assert.ok(rec, label);
     assert.equal(rec.contentPolicy, 'Standard', label);
     assert.ok(['great', 'ok'].includes(fitFor(rec, ram)), `${label}: ${rec.id} -> ${fitFor(rec, ram)}`);
+    assert.ok(rec.paramsB < 8, `${label}: ${rec.id} must not be the heavy tier`);
   }
-  const small = recommendModel(MODEL_CATALOG, PHONES['4GB'])!;
-  const big = recommendModel(MODEL_CATALOG, PHONES['12GB'])!;
-  assert.ok(big.paramsB > small.paramsB, 'bigger phone => bigger recommendation');
-  // Very tiny phone still gets *something*.
-  assert.ok(recommendModel(MODEL_CATALOG, 1.5 * GB));
+  // Very tiny phone still gets *something*: the smallest model.
+  assert.equal(recommendModel(MODEL_CATALOG, 1.5 * GB)!.id, 'qwen3.5-0.8b');
+  // RAM unknown (should not happen with expo-device): the quick model, not a guess at the biggest.
+  assert.equal(recommendModel(MODEL_CATALOG, null)!.role, 'Fast');
 });
 
 // --------------------------------------------------------------------------- paths / SAF
@@ -272,6 +286,37 @@ test('prompt: consecutive same-role messages merge; empties and leading assistan
   assert.ok(estimateTokens('abcdefgh') >= 2);
 });
 
+// --------------------------------------------------------------------------- token budget for non-Latin text
+const KHMER = 'សួស្តី តើអ្នកសុខសប្បាយជាទេ? ខ្ញុំចង់ដឹងអំពីប្រវត្តិសាស្ត្រនៃប្រទេសកម្ពុជា';
+
+test('tokens: estimate leans HIGH for Khmer, CJK, digits and code (undercounting overflows the context); English stays sane', () => {
+  assert.ok(estimateTokens(KHMER) >= KHMER.length * 2, 'Khmer is roughly 1-3 tokens per character');
+  assert.ok(estimateTokens('你好，世界！今天天气很好。') >= 2 * '你好，世界！今天天气很好。'.length);
+  assert.equal(estimateTokens('1234567890'), 10, 'digits are one token each');
+  assert.ok(estimateTokens('{"a":[1,2,3],"b":(x=>x*2)}') >= 13, 'code punctuation is dense');
+  const english = 'The quick brown fox jumps over the lazy dog';
+  assert.ok(estimateTokens(english) >= 11 && estimateTokens(english) <= 16, `English estimate ${estimateTokens(english)} should be near the real ~10`);
+  assert.equal(estimateTokens(''), 0);
+  assert.equal(estimateTokens('1234567890', 2), 20, 'the scale multiplies the estimate');
+});
+
+test('prompt: a Khmer conversation is trimmed to the (estimated) budget instead of silently overflowing', () => {
+  const history = Array.from({ length: 20 }, (_, i) => ({ role: i % 2 === 0 ? 'user' : 'assistant', content: KHMER.repeat(3) })) as any[];
+  const r = buildPrompt({ system: 'sys', history, userMessage: KHMER, nCtx: 2048, replyBudget: 819 });
+  assert.ok(r.droppedMessages > 10, 'most of a Khmer history cannot fit in 2k tokens');
+  assert.ok(r.estimatedPromptTokens <= 2048 - 819 + 24, `estimated ${r.estimatedPromptTokens}`);
+  const huge = buildPrompt({ system: '', history: [], userMessage: KHMER.repeat(400), nCtx: 1536, replyBudget: 614 });
+  assert.ok(huge.truncatedUserMessage);
+  assert.ok(estimateTokens(huge.messages[0].content) <= 1536 - 614 + 40, 'an oversized Khmer message is cut by tokens, not by a 3.2 chars/token guess');
+});
+
+test('prompt: tokenScale (from the engine\'s real count) makes the window stricter', () => {
+  const history = Array.from({ length: 12 }, (_, i) => ({ role: i % 2 === 0 ? 'user' : 'assistant', content: 'word '.repeat(60) })) as any[];
+  const base = buildPrompt({ system: 'sys', history, userMessage: 'q', nCtx: 2048, replyBudget: 819 });
+  const strict = buildPrompt({ system: 'sys', history, userMessage: 'q', nCtx: 2048, replyBudget: 819, tokenScale: 3 });
+  assert.ok(strict.droppedMessages > base.droppedMessages);
+});
+
 // --------------------------------------------------------------------------- hugging face parsing
 test('hf: URL building and tree parsing (size + sha256 from LFS)', () => {
   assert.equal(
@@ -349,4 +394,38 @@ test('markdown: fenced code, including an unterminated fence while streaming', (
   assert.deepEqual(parseMarkdown(''), []);
   // Markdown-looking text inside code stays verbatim.
   assert.equal((parseMarkdown('```\n# not a heading\n**x**\n```')[0] as any).code, '# not a heading\n**x**');
+});
+
+test('thinking: Gemma 4 channel markup and a stray closing tag never leak into the answer', () => {
+  const g = parseThinking('<|channel>thought\nplan: add\n<channel|>The answer is 4.<turn|>');
+  assert.deepEqual([g.reasoning, g.answer, g.phase], ['plan: add', 'The answer is 4.', 'answering']);
+  const empty = parseThinking('<|channel>thought\n<channel|>Hi!');
+  assert.deepEqual([empty.reasoning, empty.answer], ['', 'Hi!']);
+  assert.equal(parseThinking('Sure.<turn|>').answer, 'Sure.');
+  assert.equal(parseThinking('<|turn>model\nHello').answer, 'Hello');
+  // Engine failed to report "thinking was pre-opened": the closing tag alone still splits reasoning from answer.
+  const stray = parseThinking('Okay, 2 plus 2.\n</think>\n\n4');
+  assert.deepEqual([stray.reasoning, stray.answer, stray.reasoningComplete], ['Okay, 2 plus 2.', '4', true]);
+  // Plain text that merely contains angle brackets is untouched.
+  assert.equal(parseThinking('if a < b and c > d').answer, 'if a < b and c > d');
+});
+
+// --------------------------------------------------------------------------- hub client (fake fetch)
+import { fetchRemoteFileInfo } from '../src/services/hfClient.ts';
+import { RemoteError } from '../src/core/hf.ts';
+
+test('hfClient: success returns exact size + sha256; every failure is a RemoteError with the right retryability', async () => {
+  const sha = 'a'.repeat(64);
+  const ok = async () => ({ ok: true, status: 200, json: async () => [{ type: 'file', path: 'm.gguf', size: 134, lfs: { oid: sha, size: 777 } }] });
+  assert.deepEqual(await fetchRemoteFileInfo('o/r', 'm.gguf', ok), { filename: 'm.gguf', size: 777, sha256: sha });
+
+  const status = (code: number) => async () => ({ ok: false, status: code, json: async () => ({}) });
+  for (const [code, retryable] of [[404, false], [403, false], [429, true], [503, true]] as const) {
+    await assert.rejects(() => fetchRemoteFileInfo('o/r', 'm.gguf', status(code)), (e: unknown) => e instanceof RemoteError && e.retryable === retryable && e.status === code, `HTTP ${code}`);
+  }
+  await assert.rejects(() => fetchRemoteFileInfo('o/r', 'missing.gguf', ok), (e: unknown) => e instanceof RemoteError && !e.retryable && /not found in/.test(e.message));
+  await assert.rejects(() => fetchRemoteFileInfo('o/r', 'm.gguf', async () => { throw new TypeError('Network request failed'); }), (e: unknown) => e instanceof RemoteError && e.retryable && /internet/i.test(e.message));
+  // A hung request is abandoned (AbortController) and reported as a timeout, not an endless spinner.
+  const hang = (_u: string, init?: { signal?: AbortSignal }) => new Promise<never>((_, reject) => init?.signal?.addEventListener('abort', () => reject(new Error('aborted'))));
+  await assert.rejects(() => fetchRemoteFileInfo('o/r', 'm.gguf', hang as never, 30), (e: unknown) => e instanceof RemoteError && /did not answer in time/.test(e.message));
 });

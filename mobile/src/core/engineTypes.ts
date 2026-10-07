@@ -17,6 +17,8 @@ export interface LoadedModelInfo {
   gpu: boolean;
   nCtx: number;
   modelBytes: number;
+  /** GGUF `general.architecture` (e.g. "qwen35"), when the engine could read it. */
+  architecture?: string;
 }
 
 export interface GenerateParams {
@@ -41,6 +43,8 @@ export interface GenerateResult {
   interrupted: boolean;
   contextFull: boolean;
   thinkingForcedOpen: boolean;
+  /** Time from the start of the call to the first streamed token (prompt processing included). 0/undefined = no token. */
+  ttftMs?: number;
 }
 
 export interface InferenceEngine {
@@ -48,6 +52,11 @@ export interface InferenceEngine {
   generate(params: GenerateParams): Promise<GenerateResult>;
   stop(): Promise<void>;
   release(): Promise<void>;
+  /**
+   * Exact number of prompt tokens these messages will use once the model's own chat template is applied.
+   * Optional: engines that cannot count return nothing and callers fall back to an estimate.
+   */
+  countPromptTokens?(messages: PromptMessage[], enableThinking: boolean): Promise<number>;
 }
 
 export class EngineUnavailableError extends Error {
@@ -60,18 +69,94 @@ export class EngineUnavailableError extends Error {
   }
 }
 
-/** Turn a native load/generate failure into advice the user can act on. */
-export function friendlyEngineError(e: unknown): string {
-  if (e instanceof EngineUnavailableError) return e.message;
+/** A load failure that carries what llama.cpp printed while loading (the thrown message alone is just "Failed to load model"). */
+export class EngineLoadError extends Error {
+  nativeLog: string;
+  constructor(message: string, nativeLog = '') {
+    super(message);
+    this.name = 'EngineLoadError';
+    this.nativeLog = nativeLog;
+  }
+}
+
+export type EngineErrorKind =
+  | 'unavailable'
+  | 'out_of_memory'
+  | 'bad_file'
+  | 'unsupported_model'
+  | 'file_access'
+  | 'context_full'
+  | 'busy'
+  | 'no_output'
+  | 'unknown';
+
+export interface EngineDiagnosis {
+  kind: EngineErrorKind;
+  /** What went wrong, in plain words. */
+  message: string;
+  /** What the user can do about it. */
+  fix: string;
+}
+
+const FIX_SMALLER = 'Pick a smaller model, close other apps, or lower the context size in Settings > Advanced.';
+const FIX_REDOWNLOAD = 'Delete the model and download it again, or pick another model.';
+
+/**
+ * Turn a native load/generate failure into a cause + a next step.
+ * llama.rn only throws "Failed to load model" for every load failure, so the llama.cpp log
+ * lines captured during the load (`EngineLoadError.nativeLog`) are searched as well.
+ */
+export function diagnoseEngineError(e: unknown): EngineDiagnosis {
+  if (e instanceof EngineUnavailableError) {
+    return { kind: 'unavailable', message: e.message, fix: 'Install the CHIWIWI app (APK / development build). It does not run in Expo Go or a browser.' };
+  }
   const raw = e instanceof Error ? e.message : String(e);
-  if (/out of memory|alloc|bad_alloc|ENOMEM|oom/i.test(raw)) {
-    return 'Not enough memory to load this model. Close other apps, or choose a smaller model (or a smaller context in Settings > Advanced).';
+  const log = e instanceof EngineLoadError ? e.nativeLog : '';
+  const hay = `${raw}\n${log}`;
+
+  if (/unknown model architecture|unsupported (model )?architecture|unknown architecture|arch.*not supported/i.test(hay)) {
+    return {
+      kind: 'unsupported_model',
+      message: 'This version of the AI engine does not know this model type yet.',
+      fix: 'Pick a different model (Qwen3 4B Instruct is the safest), or update CHIWIWI to a newer build.',
+    };
   }
-  if (/unknown model architecture|unsupported|invalid.*(magic|gguf)|failed to (load|read)|bad magic|tensor/i.test(raw)) {
-    return 'The engine could not read this model file. It may be damaged or use a format this version does not support. Delete it and download again, or pick another model.';
+  if (/not within the file bounds|file is (too small|truncated)|incomplete|unexpected end|failed to read magic|invalid magic|bad magic|not a valid gguf|gguf_init_from_file|invalid gguf|failed to (read|load) (the )?(model|gguf|file) (header|metadata)/i.test(hay)) {
+    return { kind: 'bad_file', message: 'The model file is damaged or incomplete.', fix: FIX_REDOWNLOAD };
   }
-  if (/no such file|ENOENT|not found|permission|EACCES/i.test(raw)) {
-    return 'The engine could not open the model file. Check the storage folder permission in Settings > Storage.';
+  if (/no such file|ENOENT|failed to open|cannot open|permission denied|EACCES|operation not permitted/i.test(hay)) {
+    return {
+      kind: 'file_access',
+      message: 'The engine could not open the model file.',
+      fix: 'Check the storage folder and "All files access" in Settings > Storage, or switch to app storage and download the model again.',
+    };
   }
-  return `The engine failed: ${raw.slice(0, 200)}`;
+  if (/out of memory|failed to allocate|unable to allocate|cannot allocate|bad_alloc|ENOMEM|alloc.*fail|\boom\b|not enough memory|mmap.*(fail|error)/i.test(hay)) {
+    return { kind: 'out_of_memory', message: 'There is not enough free memory to load this model.', fix: FIX_SMALLER };
+  }
+  if (/context is full|context_full|prompt.*too long|exceeds.*context/i.test(raw)) {
+    return {
+      kind: 'context_full',
+      message: "The conversation no longer fits in the model's memory.",
+      fix: 'Start a new chat, or raise the context size in Settings > Advanced.',
+    };
+  }
+  if (/context is busy/i.test(raw)) {
+    return { kind: 'busy', message: 'The model is still working on the previous request.', fix: 'Wait a moment, or press Stop, then try again.' };
+  }
+  if (/failed to load model/i.test(raw)) {
+    // Nothing more specific was logged. On a phone this is, by far, most often memory.
+    return {
+      kind: 'out_of_memory',
+      message: 'The engine could not load this model (most likely not enough free memory, or the file is damaged).',
+      fix: `${FIX_SMALLER} If it keeps failing, ${FIX_REDOWNLOAD.charAt(0).toLowerCase()}${FIX_REDOWNLOAD.slice(1)}`,
+    };
+  }
+  return { kind: 'unknown', message: `The engine reported: ${raw.slice(0, 200)}`, fix: 'Try again. If it keeps happening, pick another model.' };
+}
+
+/** One-line version of `diagnoseEngineError` (cause + fix) for places that show a single string. */
+export function friendlyEngineError(e: unknown): string {
+  const d = diagnoseEngineError(e);
+  return d.kind === 'unavailable' ? d.message : `${d.message} ${d.fix}`;
 }

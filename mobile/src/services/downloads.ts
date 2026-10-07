@@ -8,6 +8,8 @@ export const downloads = new DownloadManager(expoDownloadPlatform);
 
 export function refreshDownloads(): void {
   downloads.refresh(MODEL_CATALOG);
+  // A download that was running when the app was killed continues from its partial file.
+  downloads.resumeInterrupted(MODEL_CATALOG);
 }
 
 export function useDownloadState(modelId: string): DownloadState {

@@ -36,7 +36,7 @@ export interface StatusInput {
 export function deriveModelStatus(i: StatusInput): ModelStatus {
   const mine = i.engine.modelId === i.modelId;
   if (mine && i.engine.status === 'mounting') {
-    const stage = i.engine.stage === 'testing' ? 'Testing a reply...' : i.engine.stage === 'checking' ? 'Checking file...' : `Loading into memory ${formatPercent(i.engine.loadProgress)}`;
+    const stage = i.engine.stage === 'warming' ? 'Testing first words...' : i.engine.stage === 'checking' ? 'Checking file...' : `Loading into memory ${formatPercent(i.engine.loadProgress)}`;
     return { kind: 'loading', label: stage, tone: 'accent' };
   }
   if (mine && (i.engine.status === 'ready' || i.engine.status === 'generating')) {
@@ -50,7 +50,11 @@ export function deriveModelStatus(i: StatusInput): ModelStatus {
     case 'downloading':
       return { kind: 'downloading', label: d.note ?? 'Downloading', tone: 'accent' };
     case 'finalizing':
-      return { kind: 'finalizing', label: 'Checking the downloaded file...', tone: 'accent' };
+      return {
+        kind: 'finalizing',
+        label: d.verifyFraction !== undefined ? `Verifying download ${formatPercent(d.verifyFraction)}` : 'Checking the downloaded file...',
+        tone: 'accent',
+      };
     case 'paused':
       return { kind: 'paused', label: d.totalBytes > 0 ? `Paused at ${formatPercent(d.bytesWritten / d.totalBytes)}` : 'Paused', tone: 'warn' };
     case 'error':
@@ -59,7 +63,7 @@ export function deriveModelStatus(i: StatusInput): ModelStatus {
       if (mine && i.engine.status === 'error') return { kind: 'load_failed', label: 'Could not load', tone: 'bad' };
       return i.verified
         ? { kind: 'installed', label: 'Installed · Verified on this phone', tone: 'good' }
-        : { kind: 'installed', label: 'Installed · Load it to verify', tone: 'neutral' };
+        : { kind: 'installed', label: d.verified ? 'Installed · Checksum OK · Load it to test' : 'Installed · Load it to verify', tone: 'neutral' };
     default:
       return { kind: 'not_downloaded', label: 'Not downloaded', tone: 'neutral' };
   }
@@ -78,6 +82,8 @@ export function actionsFor(kind: ModelStatusKind, retryable: boolean): ModelActi
     case 'paused':
       return ['resume', 'cancel'];
     case 'finalizing':
+      // The SHA-256 check can take minutes on a phone: it must be stoppable.
+      return ['pause', 'cancel'];
     case 'loading':
       return [];
     case 'download_error':
