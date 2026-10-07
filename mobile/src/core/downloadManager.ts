@@ -119,6 +119,9 @@ interface Run {
   cancelling: boolean;
   meter: SpeedMeter;
   lastEmit: number;
+  /** Absolute bytes seen so far and when they last increased (stall watchdog). */
+  lastBytes: number;
+  lastProgressAt: number;
   done: Promise<void>;
 }
 
@@ -127,6 +130,15 @@ export interface DownloadManagerOptions {
   backoffMs?: number[];
   /** Headroom kept free on top of the file size. */
   spaceMarginBytes?: number;
+  /**
+   * A transfer that reports no new bytes for this long is treated as a lost connection (the phone can
+   * freeze a backgrounded download without any error). 0 disables the watchdog.
+   */
+  stallTimeoutMs?: number;
+  /** How often the watchdog looks. */
+  stallCheckMs?: number;
+  /** If a retry made at least this many new bytes, the retry budget starts over (long downloads on flaky networks). */
+  retryResetBytes?: number;
 }
 
 export class DownloadManager {
@@ -136,6 +148,9 @@ export class DownloadManager {
   private readonly maxRetries: number;
   private readonly backoff: number[];
   private readonly margin: number;
+  private readonly stallMs: number;
+  private readonly stallCheckMs: number;
+  private readonly retryResetBytes: number;
   private awakeCount = 0;
 
   constructor(platform: DownloadPlatform, options: DownloadManagerOptions = {}) {
@@ -143,6 +158,9 @@ export class DownloadManager {
     this.maxRetries = options.maxRetries ?? 4;
     this.backoff = options.backoffMs ?? [2000, 5000, 10000, 20000];
     this.margin = options.spaceMarginBytes ?? 50_000_000;
+    this.stallMs = options.stallTimeoutMs ?? 45_000;
+    this.stallCheckMs = options.stallCheckMs ?? 5_000;
+    this.retryResetBytes = options.retryResetBytes ?? 8 * 1024 * 1024;
   }
 
   // ---------------------------------------------------------------- queries
@@ -196,6 +214,8 @@ export class DownloadManager {
       cancelling: false,
       meter: new SpeedMeter(),
       lastEmit: 0,
+      lastBytes: 0,
+      lastProgressAt: 0,
       done: Promise.resolve(),
     };
     run.pausing = false;
@@ -376,8 +396,14 @@ export class DownloadManager {
           onProgress: (bytes) => this.onProgress(run, bytes, meta.size),
         });
       }
+      // Re-seed from the partial file: a resumed native task restarts at the on-disk length, which can be a
+      // little below the last value we saw, and that must not look like "no progress".
+      const startFiles = p.files(spec);
+      run.lastBytes = startFiles.partExists() ? startFiles.partSize() : 0;
+      const bytesAtStart = run.lastBytes;
+      run.lastProgressAt = p.now();
       try {
-        const result = await run.task.run();
+        const result = await this.runWatched(run, run.task);
         if (run.cancelling) return 'cancelled';
         return result;
       } catch (e) {
@@ -385,12 +411,15 @@ export class DownloadManager {
         if (run.pausing) return 'paused';
         const f = toFailure(e);
         const files = p.files(spec);
+        // A retry that moved the file forward is not "the same failure again": refill the budget.
+        if (run.lastBytes - bytesAtStart >= this.retryResetBytes) attempt = 0;
 
         if (f.rangeNotSatisfiable) {
           // The server rejected our resume offset: either we already have everything, or the partial is stale.
           if (files.partExists() && files.partSize() >= meta.size) return 'completed';
           files.deletePart();
           run.task = null;
+          run.lastBytes = 0;
           run.meter.reset(0, p.now());
           this.patch(spec.id, { bytesWritten: 0 });
           if (attempt++ < this.maxRetries) continue;
@@ -411,9 +440,56 @@ export class DownloadManager {
     }
   }
 
+  /**
+   * task.run() plus a watchdog: if no new bytes arrive for `stallMs` (and the user has not paused),
+   * the transfer is cancelled and reported as a retryable failure so transfer() resumes from the partial file.
+   */
+  private runWatched(run: Run, task: TransferTask): Promise<'completed' | 'paused'> {
+    if (this.stallMs <= 0) return task.run();
+    const p = this.platform;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      task.run().then(
+        (r) => {
+          if (!settled) {
+            settled = true;
+            resolve(r);
+          }
+        },
+        (e) => {
+          if (!settled) {
+            settled = true;
+            reject(e);
+          }
+        },
+      );
+      void (async () => {
+        while (!settled) {
+          await p.sleep(this.stallCheckMs);
+          if (settled) return;
+          if (run.pausing || run.cancelling) continue;
+          if (p.now() - run.lastProgressAt >= this.stallMs) {
+            settled = true;
+            reject(new DownloadFailure('The download stopped receiving data. Check your internet, then tap Resume.', true));
+            try {
+              task.cancel(); // frees the stuck connection; the partial file stays on disk
+            } catch {
+              // already gone
+            }
+            return;
+          }
+        }
+      })();
+    });
+  }
+
   private onProgress(run: Run, bytes: number, total: number): void {
     if (this.stopped(run)) return;
     const now = this.platform.now();
+    if (bytes > run.lastBytes) {
+      run.lastBytes = bytes;
+      run.lastProgressAt = now;
+    }
     const bps = run.meter.push(bytes, now);
     if (now - run.lastEmit < 250 && bytes < total) return;
     run.lastEmit = now;

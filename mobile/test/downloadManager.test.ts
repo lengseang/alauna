@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DownloadManager, type DownloadPlatform, type DownloadState, type ModelFiles, type TransferTask } from '../src/core/downloadManager.ts';
+import { DownloadManager, type DownloadManagerOptions, type DownloadPlatform, type DownloadState, type ModelFiles, type TransferTask } from '../src/core/downloadManager.ts';
 import type { ModelSpec } from '../src/core/catalog.ts';
 import { RemoteError, type RemoteFileInfo } from '../src/core/hf.ts';
 
@@ -23,7 +23,7 @@ interface Disk {
   part: { size: number; head: Uint8Array } | null;
 }
 
-function makeWorld(opts: { total?: number; free?: number | null; storageReady?: boolean; behaviors?: Behavior[]; fetchError?: Error } = {}) {
+function makeWorld(opts: { total?: number; free?: number | null; storageReady?: boolean; behaviors?: Behavior[]; fetchError?: Error; manager?: DownloadManagerOptions } = {}) {
   const total = opts.total ?? 1000;
   const disks = new Map<string, Disk>();
   const diskOf = (id: string): Disk => {
@@ -97,10 +97,14 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
     },
     keepAwake: (on) => { log.awake.push(on); },
     now: () => (clock += 300),
-    sleep: async (ms) => { log.sleeps.push(ms); },
+    sleep: async (ms) => {
+      // The stall watchdog polls with this; yield to the event loop so a hung fake transfer cannot starve the test.
+      if (opts.manager?.stallCheckMs !== undefined && ms === opts.manager.stallCheckMs) await new Promise<void>((r) => setTimeout(r, 0));
+      else log.sleeps.push(ms);
+    },
   };
 
-  const manager = new DownloadManager(platform, { maxRetries: 3, backoffMs: [10, 20, 30], spaceMarginBytes: 0 });
+  const manager = new DownloadManager(platform, { maxRetries: 3, backoffMs: [10, 20, 30], spaceMarginBytes: 0, stallTimeoutMs: 0, ...opts.manager });
   return {
     manager, log, diskOf, platform,
     setMeta: (m: Partial<RemoteFileInfo>) => { meta = { ...meta, ...m }; },
@@ -377,4 +381,65 @@ test('progress updates are throttled but the final value always lands', async ()
   // 1000 progress callbacks of 100 B; the fake clock advances 300 ms per read, so about 1 in 1 passes.
   assert.ok(done.bytesWritten === 100_000);
   assert.ok(emits < 3000);
+});
+
+// ---------------------------------------------------------------- stall watchdog
+
+test('a silent stall (no error, no bytes) is cancelled and resumed from the partial file', async () => {
+  const w = makeWorld({
+    manager: { stallTimeoutMs: 3000, stallCheckMs: 777 },
+    behaviors: [{ kind: 'hang', at: 300 }, { kind: 'complete' }],
+  });
+  const notes: string[] = [];
+  w.manager.store.subscribe(() => { const n = w.manager.stateOf('a').note; if (n && notes.at(-1) !== n) notes.push(n); });
+  await w.manager.start(specA);
+  const done = await waitFor(w.manager, 'a', terminal, 5000);
+  assert.equal(done.status, 'completed');
+  assert.equal(w.log.tasksCreated, 2, 'a fresh task replaced the stuck one');
+  assert.deepEqual(w.log.resumeOffsets, [0, 300], 'second attempt continued from the bytes already on disk');
+  assert.ok(notes.some((n) => /retrying/.test(n)));
+  assert.equal(w.diskOf('a').dest?.size, 1000);
+  await w.manager.settled();
+});
+
+test('the watchdog does not fire while bytes keep arriving, nor while the user has paused', async () => {
+  const ok = makeWorld({ manager: { stallTimeoutMs: 3000, stallCheckMs: 777 } });
+  await ok.manager.start(specA);
+  assert.equal((await waitFor(ok.manager, 'a', terminal, 5000)).status, 'completed');
+  assert.equal(ok.log.tasksCreated, 1);
+  await ok.manager.settled();
+
+  const w = makeWorld({ manager: { stallTimeoutMs: 3000, stallCheckMs: 777 }, behaviors: [{ kind: 'hang', at: 300 }] });
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.bytesWritten >= 300);
+  await w.manager.pause('a');
+  const paused = await waitFor(w.manager, 'a', terminal, 5000);
+  assert.equal(paused.status, 'paused');
+  assert.equal(paused.error, undefined, 'a user pause is not reported as a stall');
+  assert.equal(w.log.tasksCreated, 1);
+  await w.manager.settled();
+});
+
+test('a stall that never recovers ends in a retryable error, not an endless spinner', async () => {
+  const w = makeWorld({
+    manager: { stallTimeoutMs: 3000, stallCheckMs: 777 },
+    behaviors: Array.from({ length: 4 }, () => ({ kind: 'hang', at: 0 } as Behavior)),
+  });
+  await w.manager.start(specA);
+  const err = await waitFor(w.manager, 'a', terminal, 8000);
+  assert.equal(err.status, 'error');
+  assert.equal(err.retryable, true);
+  assert.match(err.error!, /stopped receiving data/i);
+  await w.manager.settled();
+});
+
+test('retry budget refills when a retry made real progress (long download, flaky network)', async () => {
+  const fails: Behavior[] = Array.from({ length: 4 }, (_, i) => ({ kind: 'fail', at: 100 * (i + 1), message: 'timeout' }));
+  // maxRetries is 3, so four failures would normally be fatal (see the test above) - unless each retry moved the file on.
+  const w = makeWorld({ manager: { retryResetBytes: 50 }, behaviors: [...fails, { kind: 'complete' }] });
+  await w.manager.start(specA);
+  const done = await waitFor(w.manager, 'a', terminal);
+  assert.equal(done.status, 'completed');
+  assert.equal(w.diskOf('a').dest?.size, 1000);
+  await w.manager.settled();
 });
