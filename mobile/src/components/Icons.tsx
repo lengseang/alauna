@@ -192,3 +192,16 @@ export const ChevronDownIcon = ({ size = 12, color = '#71717a' }: IconProps) => 
   </Svg>
 );
 
+export const ArrowUpIcon = ({ size = 18, color = '#000000' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+    <Line x1="12" y1="19" x2="12" y2="5" />
+    <Polyline points="5 12 12 5 19 12" />
+  </Svg>
+);
+
+export const SparklesIcon = ({ size = 16, color = '#38bdf8' }: IconProps) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M12 3l1.912 5.885L20 10.5l-6.088 1.615L12 18l-1.912-5.885L4 10.5l6.088-1.615L12 3z" />
+  </Svg>
+);
+

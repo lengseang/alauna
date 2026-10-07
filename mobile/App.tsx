@@ -46,6 +46,7 @@ import {
   ChevronDownIcon,
   StorageIcon,
   DownloadIcon,
+  ArrowUpIcon,
 } from './src/components/Icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -776,13 +777,13 @@ export default function App() {
               <TouchableOpacity
                 style={[styles.sendBtn, (isGenerating || (!inputText.trim() && selectedMedia.length === 0)) && { opacity: 0.4 }]}
                 onPress={handleSend}
-                disabled={isGenerating}
+                disabled={isGenerating || (!inputText.trim() && selectedMedia.length === 0)}
                 activeOpacity={0.7}
               >
                 {isGenerating ? (
                   <ActivityIndicator size="small" color="#000000" />
                 ) : (
-                  <Text style={styles.sendBtnText}>↑</Text>
+                  <ArrowUpIcon size={18} color="#000000" />
                 )}
               </TouchableOpacity>
             </View>
