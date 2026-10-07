@@ -14,6 +14,8 @@ export interface TurnExecutionResult {
   synthesizedPrompt: string;
   response: string;
   thoughts?: string;
+  thinkingDurationMs?: number;
+  thinkingTokenCount?: number;
   groundedFactsCount: number;
 }
 
@@ -66,11 +68,15 @@ export class MobileOrchestrator {
     );
 
     let thoughts = '';
+    let thinkingDurationMs = 0;
+    let thinkingTokenCount = 0;
     while (true) {
       const { value, done } = await stream.next();
       if (done) {
         if (value && typeof value === 'object') {
           thoughts = value.thoughts;
+          thinkingDurationMs = value.thinkingDurationMs;
+          thinkingTokenCount = value.thinkingTokenCount;
           if (value.cleanResponse) responseText = value.cleanResponse;
         }
         break;
@@ -84,6 +90,8 @@ export class MobileOrchestrator {
       synthesizedPrompt,
       response: responseText,
       thoughts,
+      thinkingDurationMs,
+      thinkingTokenCount,
       groundedFactsCount: MemoryEngine.queryMemories(3).length,
     };
   }
@@ -128,7 +136,7 @@ export class MobileOrchestrator {
 
     // 5. Intelligent response synthesis from LocalLlmDriver
     const activeModel = LocalLlmDriver.getLoadedModel() || 'SmolLM2-135M-Instruct-Q4_K_M.gguf';
-    const { cleanResponse, thoughts } = LocalLlmDriver.synthesizeResponse({
+    const { cleanResponse, thoughts, thinkingDurationMs, thinkingTokenCount } = LocalLlmDriver.synthesizeResponse({
       modelFilename: activeModel,
       systemPrompt: synthesizedPrompt,
       userPrompt: input,
@@ -140,6 +148,8 @@ export class MobileOrchestrator {
       synthesizedPrompt,
       response: cleanResponse,
       thoughts,
+      thinkingDurationMs,
+      thinkingTokenCount,
       groundedFactsCount: MemoryEngine.queryMemories(3).length,
     };
   }

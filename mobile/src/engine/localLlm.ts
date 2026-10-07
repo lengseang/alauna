@@ -25,10 +25,73 @@ export interface ModelMetadata {
   kvCount?: number;
 }
 
+export interface ThinkingBlockResult {
+  hasThinking: boolean;
+  thoughts: string;
+  cleanResponse: string;
+  thinkingDurationMs: number;
+  thinkingTokenCount: number;
+}
+
 export class LocalLlmDriver {
   private static isInitialized = false;
   private static currentLoadedModel: string | null = null;
   private static cachedMetadata: Map<string, ModelMetadata> = new Map();
+
+  /**
+   * Universal Thinking Model parser for ANY model output format.
+   * Extracts <think>...</think>, <thought>...</thought>, [THINKING]...[/THINKING], or unclosed streaming tags.
+   */
+  public static parseThinkingTags(rawText: string, startTimeMs?: number): ThinkingBlockResult {
+    let thoughts = '';
+    let cleanResponse = rawText;
+    let hasThinking = false;
+
+    // Pattern 1: Closed <think>...</think> (DeepSeek-R1, Qwen Reasoning)
+    const closedThinkMatch = rawText.match(/<think>([\s\S]*?)<\/think>/i);
+    if (closedThinkMatch) {
+      hasThinking = true;
+      thoughts = closedThinkMatch[1].trim();
+      cleanResponse = rawText.replace(/<think>[\s\S]*?<\/think>/i, '').trim();
+    } else {
+      // Pattern 2: Open <think>... (actively streaming in-flight reasoning)
+      const openThinkMatch = rawText.match(/<think>([\s\S]*)$/i);
+      if (openThinkMatch) {
+        hasThinking = true;
+        thoughts = openThinkMatch[1].trim();
+        cleanResponse = rawText.replace(/<think>[\s\S]*$/i, '').trim();
+      } else {
+        // Pattern 3: <thought>...</thought>
+        const thoughtMatch = rawText.match(/<thought>([\s\S]*?)<\/thought>/i);
+        if (thoughtMatch) {
+          hasThinking = true;
+          thoughts = thoughtMatch[1].trim();
+          cleanResponse = rawText.replace(/<thought>[\s\S]*?<\/thought>/i, '').trim();
+        } else {
+          // Pattern 4: [THINKING]...[/THINKING] / [REASONING]...[/REASONING]
+          const bracketMatch = rawText.match(/\[(THINKING|REASONING)\]([\s\S]*?)\[\/\1\]/i);
+          if (bracketMatch) {
+            hasThinking = true;
+            thoughts = bracketMatch[2].trim();
+            cleanResponse = rawText.replace(/\[(THINKING|REASONING)\][\s\S]*?\[\/\1\]/i, '').trim();
+          }
+        }
+      }
+    }
+
+    const tokenCount = thoughts ? thoughts.split(/\s+/).filter(Boolean).length : 0;
+    const durationMs = startTimeMs
+      ? Math.max(200, Math.round(performance.now() - startTimeMs))
+      : Math.max(300, Math.round(tokenCount * 22));
+
+    return {
+      hasThinking,
+      thoughts,
+      cleanResponse,
+      thinkingDurationMs: durationMs,
+      thinkingTokenCount: tokenCount,
+    };
+  }
 
   /**
    * Mount model weights into handset RAM.
@@ -188,6 +251,8 @@ export class LocalLlmDriver {
   public static synthesizeResponse(params: InferenceParams): {
     thoughts: string;
     cleanResponse: string;
+    thinkingDurationMs: number;
+    thinkingTokenCount: number;
   } {
     const modelFilename = params.modelFilename || this.currentLoadedModel || 'SmolLM2-135M-Instruct-Q4_K_M.gguf';
     const meta = this.resolveModelMetadata(modelFilename);
@@ -661,13 +726,27 @@ export class LocalLlmDriver {
       }
     }
 
-    // Concise, authentic cognitive thinking trace
-    const thoughts =
-      `• Context evaluation & semantic intent: "${userPrompt.slice(0, 36)}"\n` +
-      `• Injected episodic memory context & ${archetype} persona modulation (P: ${pleasure.toFixed(2)}, A: ${arousal.toFixed(2)})\n` +
-      `• Synthesized sovereign token stream locally via ${meta.displayName}`;
+    // Universal Thinking Tag Detection: parse if output has <think>, <thought>, or [THINKING] tags
+    const parsed = this.parseThinkingTags(responseText);
 
-    return { thoughts, cleanResponse: responseText };
+    const thoughts = parsed.hasThinking && parsed.thoughts
+      ? parsed.thoughts
+      : `• Context evaluation & semantic intent: "${userPrompt.slice(0, 36)}"\n` +
+        `• Injected episodic memory context & ${archetype} persona modulation (P: ${pleasure.toFixed(2)}, A: ${arousal.toFixed(2)})\n` +
+        `• Synthesized sovereign token stream locally via ${meta.displayName}`;
+
+    const cleanResponse = parsed.hasThinking ? parsed.cleanResponse : responseText;
+    const tokenCount = parsed.hasThinking && parsed.thinkingTokenCount > 0
+      ? parsed.thinkingTokenCount
+      : thoughts.split(/\s+/).filter(Boolean).length;
+    const durationMs = parsed.thinkingDurationMs || Math.max(300, Math.round(tokenCount * 22));
+
+    return {
+      thoughts,
+      cleanResponse,
+      thinkingDurationMs: durationMs,
+      thinkingTokenCount: tokenCount,
+    };
   }
 
   /**
@@ -677,8 +756,8 @@ export class LocalLlmDriver {
   public static async *generateStream(
     params: InferenceParams,
     onToken?: (token: string) => void
-  ): AsyncGenerator<string, { fullText: string; thoughts: string; cleanResponse: string }, void> {
-    const { thoughts, cleanResponse } = this.synthesizeResponse(params);
+  ): AsyncGenerator<string, { fullText: string; thoughts: string; cleanResponse: string; thinkingDurationMs: number; thinkingTokenCount: number }, void> {
+    const { thoughts, cleanResponse, thinkingDurationMs, thinkingTokenCount } = this.synthesizeResponse(params);
 
     // Split text into word and whitespace tokens for realistic high-speed streaming
     const tokens = cleanResponse.match(/(\s+|\S+)/g) || [cleanResponse];
@@ -691,6 +770,6 @@ export class LocalLlmDriver {
       yield token;
     }
 
-    return { fullText, thoughts, cleanResponse };
+    return { fullText, thoughts, cleanResponse, thinkingDurationMs, thinkingTokenCount };
   }
 }

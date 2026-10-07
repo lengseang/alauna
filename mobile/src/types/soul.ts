@@ -9,7 +9,7 @@ export interface PADVector {
   dominance: number; // Candor / Directness (0.0 to 1.0)
 }
 
-export type SoulArchetypeKey = 'empath' | 'mentor' | 'tactical' | 'spark';
+export type SoulArchetypeKey = 'empath' | 'mentor' | 'tactical' | 'spark' | 'cynic' | 'visionary';
 
 export interface SoulArchetype {
   id: SoulArchetypeKey;
@@ -47,5 +47,19 @@ export const ARCHETYPES: Record<SoulArchetypeKey, SoulArchetype> = {
     description: 'Spontaneous, high energy, creative banter.',
     defaultPAD: { pleasure: 0.85, arousal: 0.80, dominance: 0.60 },
     systemPromptModifier: 'You are a playful, witty, high-energy companion. Keep banter lively, optimistic, and creative.'
+  },
+  cynic: {
+    id: 'cynic',
+    name: 'Adversarial Red-Team',
+    description: 'Relentless edge-case challenger, eliminates hidden failure modes.',
+    defaultPAD: { pleasure: -0.35, arousal: 0.60, dominance: 0.90 },
+    systemPromptModifier: 'You are an adversarial red-team auditor and critical analyst. Challenge unverified assumptions, expose fatal edge-cases, and demand rigor.'
+  },
+  visionary: {
+    id: 'visionary',
+    name: 'Systems Architect',
+    description: 'Macro strategic planner, holistic multi-decade engineering.',
+    defaultPAD: { pleasure: 0.50, arousal: 0.65, dominance: 0.85 },
+    systemPromptModifier: 'You are a principal systems architect. Focus on clean modular boundaries, future-proof domain modeling, and high-leverage execution.'
   }
 };

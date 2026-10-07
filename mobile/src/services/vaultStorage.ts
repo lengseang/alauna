@@ -17,6 +17,8 @@ export interface ChatMessage {
   sender: 'user' | 'assistant';
   text: string;
   thoughts?: string; // Deep reasoning & process trace (Claude-style)
+  thinkingDurationMs?: number;
+  thinkingTokenCount?: number;
   timestamp: number;
   mediaUris?: string[]; // Private sandboxed media
   tokenCountEst: number;

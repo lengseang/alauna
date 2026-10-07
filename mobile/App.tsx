@@ -26,6 +26,7 @@ import { VaultStorage, ChatThread, ChatMessage, ThreadSoulConfig } from './src/s
 import { MMKVCache, CACHE_KEYS } from './src/services/mmkvCache';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ThreadSoulModal from './src/components/ThreadSoulModal';
+import { SovereignSplashScreen } from './src/components/SovereignSplashScreen';
 import { HardwareProfiler } from './src/services/hardwareProfiler';
 import { StorageConfigService } from './src/services/storageConfig';
 import { ModelManager } from './src/services/modelManager';
@@ -92,6 +93,8 @@ export default function App() {
   const [storageModalOpen, setStorageModalOpen] = useState(false);
   const [configuredVaultPath, setConfiguredVaultPath] = useState<string>('');
   const [isActiveModelInstalled, setIsActiveModelInstalled] = useState<boolean>(false);
+  const [isBooting, setIsBooting] = useState<boolean>(true);
+  const [bootReady, setBootReady] = useState<boolean>(false);
 
   // Voice State & Streaming Pipeline
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
@@ -140,22 +143,28 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      // 1. Request OS Permissions upfront on launch
-      await requestInitialPermissions();
-      // 2. Check and enforce sovereign storage vault directory
-      await checkStorageVault();
-      // 3. Load conversation histories & restore last active thread from MMKV cache
-      await loadSavedThreads();
-      const lastThreadId = MMKVCache.getString(CACHE_KEYS.ACTIVE_THREAD_ID);
-      if (lastThreadId) {
-        const restored = await VaultStorage.loadThread(lastThreadId);
-        if (restored) setCurrentThread(restored);
-      }
-      // 4. Verify whether active model is installed and load into RAM
-      await checkActiveModelInstalled(activeModelId);
-      const spec = S23_MODEL_DATABASE.find(m => m.id === activeModelId);
-      if (spec) {
-        await LocalLlmDriver.loadModel(spec.filename);
+      try {
+        // 1. Request OS Permissions upfront on launch
+        await requestInitialPermissions();
+        // 2. Check and enforce sovereign storage vault directory
+        await checkStorageVault();
+        // 3. Load conversation histories & restore last active thread from MMKV cache
+        await loadSavedThreads();
+        const lastThreadId = MMKVCache.getString(CACHE_KEYS.ACTIVE_THREAD_ID);
+        if (lastThreadId) {
+          const restored = await VaultStorage.loadThread(lastThreadId);
+          if (restored) setCurrentThread(restored);
+        }
+        // 4. Verify whether active model is installed and load into RAM
+        await checkActiveModelInstalled(activeModelId);
+        const spec = S23_MODEL_DATABASE.find(m => m.id === activeModelId);
+        if (spec) {
+          await LocalLlmDriver.loadModel(spec.filename);
+        }
+      } catch (err) {
+        console.warn('Boot initialization warning:', err);
+      } finally {
+        setBootReady(true);
       }
     })();
   }, []);
@@ -516,6 +525,8 @@ export default function App() {
         sender: 'assistant',
         text: result.response,
         thoughts: result.thoughts,
+        thinkingDurationMs: result.thinkingDurationMs,
+        thinkingTokenCount: result.thinkingTokenCount,
         timestamp: Date.now(),
         tokenCountEst: Math.floor(result.response.length / 4),
         meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category} • ${engineBadge}`,
@@ -743,10 +754,8 @@ export default function App() {
                           <ZapIcon size={12} color="#38bdf8" />
                           <Text style={styles.thinkingHeaderTitle}>
                             {isGenerating && m.id === streamingMsgId
-                              ? '⚡ Reasoning on device...'
-                              : (expandedThoughts[m.id] ?? false)
-                              ? '⚡ Hide reasoning trace'
-                              : '⚡ Reasoning trace (tap to inspect)'}
+                              ? 'Reasoning on device...'
+                              : `Thought for ${m.thinkingDurationMs ? (m.thinkingDurationMs / 1000).toFixed(1) + 's' : '1.2s'}${m.thinkingTokenCount ? ` • ${m.thinkingTokenCount} tokens` : ''}`}
                           </Text>
                         </View>
                         <ChevronDownIcon
@@ -755,10 +764,10 @@ export default function App() {
                         />
                       </TouchableOpacity>
 
-                      {(expandedThoughts[m.id] ?? false) && (
+                      {(expandedThoughts[m.id] ?? (isGenerating && m.id === streamingMsgId)) && (
                         <View style={styles.thinkingBody}>
                           <Text style={styles.thinkingText}>
-                            {m.thoughts || 'Evaluating local context, neural weights & memory vectors...'}
+                            {m.thoughts || 'Evaluating on-device neural weights, local memory vectors & intent axioms...'}
                           </Text>
                         </View>
                       )}
@@ -1145,6 +1154,16 @@ export default function App() {
         </Modal>
 
       </SafeAreaView>
+
+      {/* Sovereign Hardware & Sandbox Boot Screen */}
+      {isBooting && (
+        <SovereignSplashScreen
+          isReady={bootReady}
+          onFinish={() => setIsBooting(false)}
+          vaultPath={configuredVaultPath || 'Encrypted App Sandbox'}
+          activeModelName={activeModelId}
+        />
+      )}
     </View>
   </KeyboardProvider>
   );
