@@ -151,4 +151,31 @@ describe('HFModelDownloader', () => {
     assert.strictEqual(err.expectedHash, 'exp123');
     assert.ok(err.message.includes('Integrity verification failed'));
   });
+
+  it('validates GGUF magic bytes specification (0x47, 0x47, 0x55, 0x46)', async () => {
+    // Valid GGUF header mock
+    const validGgufMock = {
+      exists: true,
+      size: 2 * 1024 * 1024,
+      open: () => ({
+        readBytes: () => new Uint8Array([0x47, 0x47, 0x55, 0x46]), // 'G','G','U','F'
+        close: () => {},
+      }),
+    };
+    const isValid = await HFModelDownloader.verifyGGUFHeader(validGgufMock as any);
+    assert.strictEqual(isValid, true);
+
+    // Invalid non-GGUF mock (e.g. HTML error page or raw JSON)
+    const invalidMock = {
+      exists: true,
+      size: 2 * 1024 * 1024,
+      open: () => ({
+        readBytes: () => new Uint8Array([0x3c, 0x21, 0x44, 0x4f]), // '<','!','D','O'
+        close: () => {},
+      }),
+    };
+    const isInvalid = await HFModelDownloader.verifyGGUFHeader(invalidMock as any);
+    assert.strictEqual(isInvalid, false);
+  });
 });
+

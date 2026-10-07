@@ -854,9 +854,12 @@ export class HFModelDownloader {
       this.options.authBearerToken
     );
     this.totalBytes = remoteInfo.size;
-    if (remoteInfo.downloadUrl) {
-      this.downloadUrl = remoteInfo.downloadUrl;
-    }
+    // Keep canonical permanent HF URL so redirects and presigned tokens refresh dynamically on resumes
+    this.downloadUrl = HFModelResolver.resolveDirectUrl(
+      this.repoId,
+      this.filename,
+      this.revision
+    );
 
     // Use remote LFS sha256 if not explicitly provided
     const expectedHash = this.options.expectedSha256 || remoteInfo.lfsSha256;
@@ -1004,46 +1007,79 @@ export class HFModelDownloader {
 
     this.abortController = new AbortController();
 
-    // Strategy 1: Use official Expo SDK 57 DownloadTask
+    const taskOptions = {
+      headers,
+      signal: this.abortController.signal,
+      onProgress: (p: any) => {
+        if (this.pauseRequested) return;
+        const currentTotalWritten = p.bytesWritten || 0;
+        this.bytesWritten = currentTotalWritten;
+        if (p.totalBytes > 0) {
+          this.totalBytes = p.totalBytes;
+        }
+        this.calculateSpeedAndETA(currentTotalWritten);
+        this.notifyProgress();
+      },
+    };
+
+    // Strategy 1: Use official Expo SDK 57 DownloadTask with true native offset resumption
     if (typeof DownloadTask === 'function') {
       try {
-        const task = new DownloadTask(
-          this.downloadUrl,
-          this.partialFile,
-          {
-            headers,
-            signal: this.abortController.signal,
-            onProgress: (p) => {
-              if (this.pauseRequested) return;
-              const currentTotalWritten = p.bytesWritten || 0;
-              this.bytesWritten = currentTotalWritten;
-              if (p.totalBytes > 0) {
-                this.totalBytes = p.totalBytes;
-              }
-              this.calculateSpeedAndETA(currentTotalWritten);
-              this.notifyProgress();
+        let task: DownloadTask;
+        if (startByte > 0 && typeof (DownloadTask as any).fromSavable === 'function') {
+          // Native Android OkHttp resumption: sends Range: bytes=${startByte}- and appends
+          task = DownloadTask.fromSavable(
+            {
+              url: this.downloadUrl,
+              fileUri: this.partialFile.uri,
+              isDirectory: false,
+              headers,
+              resumeData: String(startByte),
             },
-          }
-        );
-
-        this.activeDownloadTask = task;
-        await task.downloadAsync();
+            taskOptions
+          );
+          this.activeDownloadTask = task;
+          await task.resumeAsync();
+        } else {
+          task = new DownloadTask(this.downloadUrl, this.partialFile, taskOptions);
+          this.activeDownloadTask = task;
+          await task.downloadAsync();
+        }
         this.activeDownloadTask = null;
         return;
       } catch (err: unknown) {
         this.activeDownloadTask = null;
         if (this.pauseRequested) return;
+
+        // Self-healing: if server rejected Range with HTTP 416 (Range Not Satisfiable),
+        // reset partial file and restart fresh from byte 0
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg.includes('416') && startByte > 0) {
+          if (this.partialFile.exists) {
+            try { this.partialFile.delete(); } catch {}
+          }
+          this.bytesWritten = 0;
+          const freshTask = new DownloadTask(this.downloadUrl, this.partialFile, taskOptions);
+          this.activeDownloadTask = freshTask;
+          await freshTask.downloadAsync();
+          this.activeDownloadTask = null;
+          return;
+        }
         // Fallback to File.downloadFileAsync
       }
     }
 
     // Strategy 2: High-reliability static File.downloadFileAsync
     try {
+      const fallbackHeaders = { ...headers };
+      if (startByte > 0) {
+        fallbackHeaders['Range'] = `bytes=${startByte}-`;
+      }
       await File.downloadFileAsync(
         this.downloadUrl,
         this.partialFile,
         {
-          headers,
+          headers: fallbackHeaders,
           idempotent: true,
           signal: this.abortController?.signal,
           onProgress: (p) => {
