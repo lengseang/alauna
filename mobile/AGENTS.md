@@ -39,3 +39,14 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## CHIWIWI project rules (these override the generic Expo guidance above where they conflict)
+
+- **Navigation is intentionally NOT Expo Router.** The app has ~8 screens; `src/ui/nav.ts` is a tiny stack with Android Back. Do not add routing dependencies without a reason.
+- **Layering:** `src/ui -> src/services -> src/core`. `src/core` is pure TypeScript (no React, no Expo, no `react-native`), imports with explicit `.ts` extensions, and must stay runnable under Node (`node --experimental-strip-types`): no `enum`, no constructor parameter properties.
+- **Anything that touches the phone goes behind an interface injected into `core`** so it can be unit-tested with a fake (see `DownloadPlatform`, `EngineDeps`).
+- **Never fabricate AI output or UI state.** No canned replies, fake progress, placebo toggles or "coming soon" controls that look functional. If a feature is not built, it is not shown (see `docs/ROADMAP.md`).
+- **Every button is `src/ui/Btn.tsx`** (guarded against double-tap, shows busy state, surfaces errors). Plain `Pressable` is only for navigation chrome / list rows that cannot cause side effects twice.
+- **Models:** add to `src/core/catalog.ts`, then run `node scripts/verify-catalog.mjs --write`. Never hand-type sizes/hashes. No capability badge the app cannot deliver.
+- **Before declaring done:** `cd mobile && npm run check` and `npx expo export --platform android`. Native changes need a real build (`docs/BUILDING.md`).
+- The inference engine is `llama.rn`, pinned exactly in `package.json`. It cannot open `content://` URIs; models must be at real file paths (see `docs/ARCHITECTURE.md` section 3).

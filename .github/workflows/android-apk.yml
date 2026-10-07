@@ -1,0 +1,47 @@
+name: Android APK
+
+# Builds an installable arm64 APK on a free GitHub runner (no EAS queue).
+# Same commands that were measured at 3m38s on 4 vCPUs with dependencies cached; first run on a fresh runner is longer (see docs/BUILDING.md).
+# NOTE: the APK is signed with the default debug key: fine for sideloading, not for Google Play.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK + CMake that React Native 0.86 / llama.rn expect
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006" "cmake;3.22.1"
+      - name: Install JS dependencies
+        run: npm ci
+        working-directory: mobile
+      - name: Generate the native project (arm64-v8a only, from app.json)
+        run: npx expo prebuild --platform android --no-install
+        working-directory: mobile
+        env:
+          CI: '1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --no-daemon --console=plain
+        working-directory: mobile/android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chiwiwi-arm64-apk
+          path: mobile/android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
