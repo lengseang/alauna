@@ -18,7 +18,7 @@ import { useSyncExternalStore } from 'react';
 import { Btn } from './Btn';
 import { Badge, Banner, Card, SectionTitle } from './kit';
 import { confirm } from './confirm';
-import { pop, push, type Route } from './nav';
+import { goBack, push, type Route } from './nav';
 import { Screen } from './Screen';
 import { SoulEditor } from './SoulEditor';
 import { StoragePicker } from './StoragePicker';
@@ -52,7 +52,7 @@ export function SettingsHome() {
   const facts = useSyncExternalStore(memoryStore.subscribe, memoryStore.getState).facts;
   const go = (r: Route) => () => push(r);
   return (
-    <Screen title="Settings" onBack={() => pop()}>
+    <Screen title="Settings" onBack={goBack}>
       <Body>
         <SectionTitle>Chat</SectionTitle>
         <Row icon={<SoulIcon size={20} color={colors.text} />} title="Soul & personality" sub="Default tone for new chats" onPress={go('settings/soul')} />
@@ -73,7 +73,7 @@ export function SoulSettings() {
   const s = useSettings();
   const preview = useMemo(() => buildSystemPrompt({ archetype: s.archetype, pad: s.pad }), [s.archetype, s.pad]);
   return (
-    <Screen title="Soul & personality" subtitle="Applies to NEW chats" onBack={() => pop()}>
+    <Screen title="Soul & personality" subtitle="Applies to NEW chats" onBack={goBack}>
       <Body>
         <Banner tone="accent">Change the personality of the chat you are in with the personality button at the top of Chat. This sets the default for chats you start from now on.</Banner>
         <View style={{ height: 8 }} />
@@ -95,7 +95,7 @@ export function StorageSettings() {
   const free = freeSpaceBytes();
   const cfg = storage.config;
   return (
-    <Screen title="Storage" subtitle="Where models and chats live" onBack={() => pop()}>
+    <Screen title="Storage" subtitle="Where models and chats live" onBack={goBack}>
       <Body>
         {cfg ? (
           <Card>
@@ -143,7 +143,7 @@ export function MemorySettings() {
     else showToast(r.reason);
   };
   return (
-    <Screen title="Memory" subtitle="Facts I keep in mind in every chat" onBack={() => pop()}>
+    <Screen title="Memory" subtitle="Facts I keep in mind in every chat" onBack={goBack}>
       <Body>
         <Banner tone="accent">These facts are added to the instructions the AI gets, so keep them short. You can also type /remember followed by a fact in any chat. They never leave this phone.</Banner>
         <View style={styles.addRow}>
@@ -202,7 +202,7 @@ export function AdvancedSettings() {
   const loaded = eng.status === 'ready' || eng.status === 'generating';
 
   return (
-    <Screen title="Advanced" onBack={() => pop()}>
+    <Screen title="Advanced" onBack={goBack}>
       <Body>
         <Banner tone="neutral">These apply the next time a model is loaded. Defaults are chosen for your phone ({device.totalRamBytes ? formatBytes(device.totalRamBytes) : 'unknown'} RAM), so most people never need to change them.</Banner>
 
@@ -276,7 +276,7 @@ export function AboutSettings() {
     ['Engine', eng.info ? `${eng.info.backend} · context ${eng.info.nCtx}` : 'No model loaded'],
   ];
   return (
-    <Screen title="About & privacy" onBack={() => pop()}>
+    <Screen title="About & privacy" onBack={goBack}>
       <Body>
         <Card>
           {facts.map(([k, val]) => (

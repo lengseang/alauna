@@ -53,7 +53,20 @@ export function ChatScreen() {
   }, [eng.status, eng.modelId, spec, specInstalled]);
 
   // ---- actions ----------------------------------------------------------------------------
+  // Two quick taps on Send both read the same `input` (React has not re-rendered yet). The second would be refused as "busy"
+  // and the refusal path puts the text back in the box, so a ref lock (not state) swallows it synchronously.
+  const sendLock = useRef(false);
   const onSend = async () => {
+    if (sendLock.current) return;
+    sendLock.current = true;
+    try {
+      await sendNow();
+    } finally {
+      sendLock.current = false;
+    }
+  };
+
+  const sendNow = async () => {
     const text = input;
     const atts = attachments;
     if (!text.trim() && atts.length === 0) return;

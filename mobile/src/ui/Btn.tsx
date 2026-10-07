@@ -39,7 +39,8 @@ const FG: Record<BtnVariant, string> = {
 };
 
 /**
- * The only button used in the app. Enforces the "no spam button" rule
+ * The button for every action with side effects (plain Pressable is only for toggles/navigation whose repeat is harmless,
+ * see docs/AUDIT.md). Enforces the "no spam button" rule
  * (docs/REQUIREMENTS.md UX-1): a tap while busy or inside the debounce window is dropped,
  * the label/spinner reflects the busy state, and a failing action can never crash the app.
  */

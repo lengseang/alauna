@@ -11,7 +11,7 @@ import { describeLocation, freeSpaceBytes, useStorage } from '../services/storag
 import { Banner } from './kit';
 import { ModelCard } from './ModelCard';
 import { Screen } from './Screen';
-import { pop, push } from './nav';
+import { goBack, push } from './nav';
 import { colors, font, radius } from './theme';
 
 const SORTS = [
@@ -98,7 +98,7 @@ export function ModelsScreen() {
   );
 
   return (
-    <Screen title="Model Hub" subtitle="Download once, run offline" onBack={() => pop()}>
+    <Screen title="Model Hub" subtitle="Download once, run offline" onBack={goBack}>
       <FlatList
         data={list}
         keyExtractor={(m) => m.id}

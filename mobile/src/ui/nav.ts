@@ -29,6 +29,17 @@ export function pop(): boolean {
   return true;
 }
 
+let lastBackAt = 0;
+
+/** On-screen Back button: a quick double-tap must not skip two screens (hardware Back keeps using pop()). */
+export function goBack(): boolean {
+  // No parameters on purpose: Pressable passes its press event as the first argument.
+  const now = Date.now();
+  if (now - lastBackAt < 350) return true;
+  lastBackAt = now;
+  return pop();
+}
+
 export function resetTo(route: Route): void {
   navStore.setState({ stack: [route] });
 }
