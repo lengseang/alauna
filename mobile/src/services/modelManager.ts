@@ -58,7 +58,12 @@ export class ModelManager {
     if (primary.exists) {
       return primary;
     }
-    // Fallback: check legacy sandbox document/models path if it exists
+    // Fallback 1: check default internal vault models directory
+    const defaultVaultModels = new File(new Directory(new Directory(Paths.document, 'vault'), 'models'), filename);
+    if (defaultVaultModels.exists) {
+      return defaultVaultModels;
+    }
+    // Fallback 2: check legacy sandbox document/models path if it exists
     const legacy = new File(new Directory(Paths.document, 'models'), filename);
     if (legacy.exists) {
       return legacy;

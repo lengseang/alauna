@@ -11,12 +11,14 @@
     "expo-linear-gradient": "~57.0.2",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "nativewind": "^4.2.7",
     "react": "19.2.3",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.1",
     "react-native-svg": "15.15.4",
-    "react-native-worklets": "0.10.1"
+    "react-native-worklets": "0.10.1",
+    "tailwindcss": "^3.4.17"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
@@ -27,7 +29,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test": "node --experimental-strip-types --test test/orchestrator.test.ts ../test/mobile.test.js ../test/enterprise.test.js"
+    "test": "node --experimental-strip-types --test test/orchestrator.test.ts test/vaultStorage.test.ts ../test/mobile.test.js ../test/enterprise.test.js"
   },
   "private": true
 }

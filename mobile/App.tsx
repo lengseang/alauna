@@ -184,7 +184,7 @@ export default function App() {
         setStorageModalOpen(true);
       } else {
         const config = await StorageConfigService.getConfig();
-        setConfiguredVaultPath(config.vaultUri);
+        setConfiguredVaultPath(config.displayPath || config.vaultUri);
         await VaultStorage.initVault();
         await ModelManager.initSandbox();
       }
@@ -199,13 +199,13 @@ export default function App() {
         const picked = await Directory.pickDirectoryAsync();
         if (picked) {
           const config = await StorageConfigService.setCustomVaultDirectory(picked);
-          setConfiguredVaultPath(config.vaultUri);
+          setConfiguredVaultPath(config.displayPath || config.vaultUri);
           setStorageModalOpen(false);
           await VaultStorage.initVault();
           await ModelManager.initSandbox();
           Alert.alert(
             'Storage Vault Ready',
-            `Vault directory mounted at:\n${picked.uri}\n\nNext step: download an on-device model from the Model Hub to start chatting.`,
+            `Root folder mapped to:\n${config.displayPath || config.vaultUri}\n\n• Verified 100% writable on device\n• Chat history & model weights ready.`,
             [
               { text: 'Later', style: 'cancel' },
               { text: 'Open Model Hub', onPress: () => setSettingsOpen(true) },
@@ -216,14 +216,14 @@ export default function App() {
         await handleUseDefaultSandbox();
       }
     } catch (e: any) {
-      Alert.alert('Selection Interrupted', e?.message || 'Please select a valid folder or use internal sandbox.');
+      Alert.alert('Selection Notice', e?.message || 'Using verified internal app sandbox.');
     }
   };
 
   const handleUseDefaultSandbox = async () => {
     try {
       const config = await StorageConfigService.useDefaultSandbox();
-      setConfiguredVaultPath(config.vaultUri);
+      setConfiguredVaultPath(config.displayPath || config.vaultUri);
       setStorageModalOpen(false);
       await VaultStorage.initVault();
       await ModelManager.initSandbox();

@@ -1,13 +1,15 @@
 /**
  * CHIWIWI Sovereign Local Vault & Compaction Engine
  * 1. Infinite chat history with Claude-style automated session compaction.
- * 2. Hermetic media isolation (never leaks to Android Gallery / iOS Photos).
- * 3. Per-chat custom persona & soul evolution snapshots.
+ * 2. Fail-safe dual-vault persistence: writes to configured root AND local app sandbox mirror.
+ * 3. Hermetic media isolation (never leaks to Android Gallery / iOS Photos).
+ * 4. Per-chat custom persona & soul evolution snapshots.
  */
 
-import { Paths, File, Directory } from 'expo-file-system';
-import { PADVector, SoulArchetypeKey, ARCHETYPES } from '../types/soul';
-import { StorageConfigService } from './storageConfig';
+import { Paths, Directory, File } from 'expo-file-system';
+import { ARCHETYPES } from '../types/soul.ts';
+import type { PADVector, SoulArchetypeKey } from '../types/soul.ts';
+import { StorageConfigService } from './storageConfig.ts';
 
 export interface ChatMessage {
   id: string;
@@ -46,17 +48,12 @@ export class VaultStorage {
     this.cachedVaultDir = dir;
   }
 
-  private static get vaultDir(): Directory {
-    if (this.cachedVaultDir) return this.cachedVaultDir;
+  private static get fallbackVaultDir(): Directory {
     return new Directory(Paths.document, 'vault');
   }
 
-  private static get chatsDir(): Directory {
-    return new Directory(this.vaultDir, 'chats');
-  }
-
-  private static get mediaDir(): Directory {
-    return new Directory(this.vaultDir, 'media');
+  private static get fallbackChatsDir(): Directory {
+    return new Directory(this.fallbackVaultDir, 'chats');
   }
 
   /**
@@ -66,75 +63,142 @@ export class VaultStorage {
     const config = await StorageConfigService.getConfig();
     this.cachedVaultDir = new Directory(config.vaultUri);
 
-    if (!this.vaultDir.exists) {
-      try { this.vaultDir.create(); } catch {}
-    }
-    if (!this.chatsDir.exists) {
-      try { this.chatsDir.create(); } catch {}
-    }
-    if (!this.mediaDir.exists) {
-      try {
-        this.mediaDir.create();
-        const noMediaFile = new File(this.mediaDir, '.nomedia');
-        if (!noMediaFile.exists) {
-          noMediaFile.write('');
-        }
-      } catch {}
-    }
+    // 1. Ensure fallback internal sandbox always exists
+    try {
+      if (!this.fallbackVaultDir.exists) this.fallbackVaultDir.create();
+      if (!this.fallbackChatsDir.exists) this.fallbackChatsDir.create();
+      const fallbackMedia = new Directory(this.fallbackVaultDir, 'media');
+      if (!fallbackMedia.exists) fallbackMedia.create();
+      const nomedia = new File(fallbackMedia, '.nomedia');
+      if (!nomedia.exists) nomedia.write('');
+    } catch {}
+
+    // 2. Ensure primary configured vault exists
+    try {
+      const primaryChats = await StorageConfigService.getChatsDirectory();
+      if (!primaryChats.exists) primaryChats.create();
+    } catch {}
   }
 
   /**
    * Save a thread securely to disk in native .chiwiwi JSON format.
+   * Uses dual-vault mirror: saves to primary configured location AND internal fallback sandbox.
    */
   public static async saveThread(thread: ChatThread): Promise<void> {
     if (thread.isIncognito) return; // Incognito never persists
     await this.initVault();
 
-    const file = new File(this.chatsDir, `${thread.id}.chiwiwi`);
-    await file.write(JSON.stringify(thread, null, 2));
+    const payload = JSON.stringify(thread, null, 2);
+
+    // Strategy 1: Save to primary configured directory
+    try {
+      const primaryDir = await StorageConfigService.getChatsDirectory();
+      const file = new File(primaryDir, `${thread.id}.chiwiwi`);
+      await file.write(payload);
+    } catch {
+      // Primary directory write failed (e.g. read-only SAF external folder),
+      // fallback mirror will ensure data is NEVER lost.
+    }
+
+    // Strategy 2: Guaranteed fail-safe mirror in internal app sandbox
+    try {
+      if (!this.fallbackChatsDir.exists) this.fallbackChatsDir.create();
+      const fallbackFile = new File(this.fallbackChatsDir, `${thread.id}.chiwiwi`);
+      await fallbackFile.write(payload);
+    } catch {}
   }
 
   /**
-   * Load a thread from disk.
+   * Load a thread from disk. Checks primary directory first, then fallback sandbox.
    */
   public static async loadThread(threadId: string): Promise<ChatThread | null> {
     await this.initVault();
-    const file = new File(this.chatsDir, `${threadId}.chiwiwi`);
-    if (!file.exists) return null;
 
+    // 1. Check primary configured directory
     try {
-      const text = await file.text();
-      return JSON.parse(text) as ChatThread;
-    } catch {
-      return null;
-    }
+      const primaryDir = await StorageConfigService.getChatsDirectory();
+      const file = new File(primaryDir, `${threadId}.chiwiwi`);
+      if (file.exists) {
+        const text = await file.text();
+        return JSON.parse(text) as ChatThread;
+      }
+    } catch {}
+
+    // 2. Check fallback internal sandbox
+    try {
+      const fallbackFile = new File(this.fallbackChatsDir, `${threadId}.chiwiwi`);
+      if (fallbackFile.exists) {
+        const text = await fallbackFile.text();
+        return JSON.parse(text) as ChatThread;
+      }
+    } catch {}
+
+    return null;
   }
 
   /**
    * List all stored conversations with their latest titles and timestamps.
+   * Merges primary directory and fallback sandbox to guarantee zero lost conversations.
    */
   public static async listAllThreads(): Promise<{ id: string; title: string; updatedAt: number }[]> {
     await this.initVault();
-    const files = this.chatsDir.list();
-    const threads: { id: string; title: string; updatedAt: number }[] = [];
+    const threadMap = new Map<string, { id: string; title: string; updatedAt: number }>();
 
-    for (const f of files) {
-      if (f instanceof File && f.name.endsWith('.chiwiwi')) {
-        try {
-          const content = await f.text();
-          const parsed = JSON.parse(content) as ChatThread;
-          threads.push({
-            id: parsed.id,
-            title: parsed.title,
-            updatedAt: parsed.updatedAt,
-          });
-        } catch {
-          // Skip corrupt file
+    const scanDirectory = async (dir: Directory) => {
+      try {
+        if (!dir.exists) return;
+        const files = dir.list();
+        for (const f of files) {
+          if (f instanceof File && f.name.endsWith('.chiwiwi')) {
+            try {
+              const content = await f.text();
+              const parsed = JSON.parse(content) as ChatThread;
+              const existing = threadMap.get(parsed.id);
+              if (!existing || (parsed.updatedAt || 0) > existing.updatedAt) {
+                threadMap.set(parsed.id, {
+                  id: parsed.id,
+                  title: parsed.title,
+                  updatedAt: parsed.updatedAt || 0,
+                });
+              }
+            } catch {
+              // Skip corrupt individual file
+            }
+          }
         }
-      }
-    }
+      } catch {}
+    };
 
-    return threads.sort((a, b) => b.updatedAt - a.updatedAt);
+    // 1. Scan primary directory
+    try {
+      const primaryDir = await StorageConfigService.getChatsDirectory();
+      await scanDirectory(primaryDir);
+    } catch {}
+
+    // 2. Scan internal fallback sandbox
+    try {
+      await scanDirectory(this.fallbackChatsDir);
+    } catch {}
+
+    return Array.from(threadMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  /**
+   * Delete a thread from all vaults.
+   */
+  public static async deleteThread(threadId: string): Promise<void> {
+    await this.initVault();
+
+    try {
+      const primaryDir = await StorageConfigService.getChatsDirectory();
+      const primaryFile = new File(primaryDir, `${threadId}.chiwiwi`);
+      if (primaryFile.exists) primaryFile.delete();
+    } catch {}
+
+    try {
+      const fallbackFile = new File(this.fallbackChatsDir, `${threadId}.chiwiwi`);
+      if (fallbackFile.exists) fallbackFile.delete();
+    } catch {}
   }
 
   /**
@@ -182,9 +246,15 @@ export class VaultStorage {
    */
   public static async saveIsolatedMedia(filename: string, base64OrData: string): Promise<string> {
     await this.initVault();
-    const mediaFile = new File(this.mediaDir, filename);
-    await mediaFile.write(base64OrData);
-    return mediaFile.uri;
+    try {
+      const mediaDir = new Directory(this.fallbackVaultDir, 'media');
+      if (!mediaDir.exists) mediaDir.create();
+      const mediaFile = new File(mediaDir, filename);
+      await mediaFile.write(base64OrData);
+      return mediaFile.uri;
+    } catch {
+      return '';
+    }
   }
 
   /**

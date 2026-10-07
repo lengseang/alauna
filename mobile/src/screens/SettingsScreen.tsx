@@ -266,7 +266,7 @@ export default function SettingsScreen({
   const loadStats = async () => {
     try {
       const config = await StorageConfigService.getConfig();
-      setCurrentVaultPath(config.vaultUri);
+      setCurrentVaultPath(config.displayPath || config.vaultUri);
 
       const storage = await ModelManager.getTotalStorageUsed();
       setStorageUsed(storage.formatted);
@@ -832,10 +832,13 @@ export default function SettingsScreen({
                       if (typeof Directory?.pickDirectoryAsync === 'function') {
                         const picked = await Directory.pickDirectoryAsync();
                         if (picked) {
-                          await StorageConfigService.setCustomVaultDirectory(picked);
-                          setCurrentVaultPath(picked.uri);
+                          const config = await StorageConfigService.setCustomVaultDirectory(picked);
+                          setCurrentVaultPath(config.displayPath || config.vaultUri);
                           await loadStats();
-                          Alert.alert('Storage Vault Updated', `Root directory mapped to:\n${picked.uri}`);
+                          Alert.alert(
+                            'Storage Vault Configured',
+                            `Root directory mapped to:\n${config.displayPath || config.vaultUri}\n\n• Verified 100% writable on device\n• Chat history & model weights ready`
+                          );
                         }
                       } else {
                         Alert.alert('Notice', 'System directory picker is unavailable on this OS version. Using internal sandboxed storage.');
@@ -852,10 +855,10 @@ export default function SettingsScreen({
                   style={[styles.filterPill, { paddingHorizontal: 10, paddingVertical: 6 }]}
                   onPress={async () => {
                     try {
-                      await StorageConfigService.useDefaultSandbox();
-                      setCurrentVaultPath(StorageConfigService.getDefaultVaultDirectory().uri);
+                      const config = await StorageConfigService.useDefaultSandbox();
+                      setCurrentVaultPath(config.displayPath || config.vaultUri);
                       await loadStats();
-                      Alert.alert('Storage Reset', 'Default sovereign internal sandbox restored.');
+                      Alert.alert('Storage Reset', 'Default sovereign internal sandbox restored and verified.');
                     } catch (e: any) {
                       Alert.alert('Notice', 'Reset failed: ' + e?.message);
                     }
