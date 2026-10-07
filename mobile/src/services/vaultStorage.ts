@@ -10,6 +10,7 @@ import { Paths, Directory, File } from 'expo-file-system';
 import { ARCHETYPES } from '../types/soul.ts';
 import type { PADVector, SoulArchetypeKey } from '../types/soul.ts';
 import { StorageConfigService } from './storageConfig.ts';
+import { MMKVCache, CACHE_KEYS } from './mmkvCache.ts';
 
 export interface ChatMessage {
   id: string;
@@ -86,6 +87,21 @@ export class VaultStorage {
    */
   public static async saveThread(thread: ChatThread): Promise<void> {
     if (thread.isIncognito) return; // Incognito never persists
+
+    // 1. Fast sub-millisecond MMKV cache write
+    try {
+      MMKVCache.setObject(`${CACHE_KEYS.THREAD_PREFIX}${thread.id}`, thread);
+      const cachedIndex = MMKVCache.getObject<{ id: string; title: string; updatedAt: number }[]>(CACHE_KEYS.THREADS_INDEX) || [];
+      const entry = { id: thread.id, title: thread.title, updatedAt: thread.updatedAt || Date.now() };
+      const existingIdx = cachedIndex.findIndex(t => t.id === thread.id);
+      if (existingIdx >= 0) {
+        cachedIndex[existingIdx] = entry;
+      } else {
+        cachedIndex.unshift(entry);
+      }
+      MMKVCache.setObject(CACHE_KEYS.THREADS_INDEX, cachedIndex);
+    } catch {}
+
     await this.initVault();
 
     const payload = JSON.stringify(thread, null, 2);
@@ -109,27 +125,41 @@ export class VaultStorage {
   }
 
   /**
-   * Load a thread from disk. Checks primary directory first, then fallback sandbox.
+   * Load a thread from disk or memory cache. Checks MMKV first, then primary directory, then fallback sandbox.
    */
   public static async loadThread(threadId: string): Promise<ChatThread | null> {
+    // 1. Fast sub-millisecond MMKV cache lookup
+    try {
+      const cached = MMKVCache.getObject<ChatThread>(`${CACHE_KEYS.THREAD_PREFIX}${threadId}`);
+      if (cached) return cached;
+    } catch {}
+
     await this.initVault();
 
-    // 1. Check primary configured directory
+    // 2. Check primary configured directory
     try {
       const primaryDir = await StorageConfigService.getChatsDirectory();
       const file = new File(primaryDir, `${threadId}.chiwiwi`);
       if (file.exists) {
         const text = await file.text();
-        return JSON.parse(text) as ChatThread;
+        const parsed = JSON.parse(text) as ChatThread;
+        try {
+          MMKVCache.setObject(`${CACHE_KEYS.THREAD_PREFIX}${threadId}`, parsed);
+        } catch {}
+        return parsed;
       }
     } catch {}
 
-    // 2. Check fallback internal sandbox
+    // 3. Check fallback internal sandbox
     try {
       const fallbackFile = new File(this.fallbackChatsDir, `${threadId}.chiwiwi`);
       if (fallbackFile.exists) {
         const text = await fallbackFile.text();
-        return JSON.parse(text) as ChatThread;
+        const parsed = JSON.parse(text) as ChatThread;
+        try {
+          MMKVCache.setObject(`${CACHE_KEYS.THREAD_PREFIX}${threadId}`, parsed);
+        } catch {}
+        return parsed;
       }
     } catch {}
 
@@ -138,11 +168,21 @@ export class VaultStorage {
 
   /**
    * List all stored conversations with their latest titles and timestamps.
-   * Merges primary directory and fallback sandbox to guarantee zero lost conversations.
+   * Merges MMKV index, primary directory, and fallback sandbox.
    */
   public static async listAllThreads(): Promise<{ id: string; title: string; updatedAt: number }[]> {
     await this.initVault();
     const threadMap = new Map<string, { id: string; title: string; updatedAt: number }>();
+
+    // 1. Seed from MMKV cache if available
+    try {
+      const cachedIndex = MMKVCache.getObject<{ id: string; title: string; updatedAt: number }[]>(CACHE_KEYS.THREADS_INDEX);
+      if (Array.isArray(cachedIndex)) {
+        for (const t of cachedIndex) {
+          threadMap.set(t.id, t);
+        }
+      }
+    } catch {}
 
     const scanDirectory = async (dir: Directory) => {
       try {
@@ -169,24 +209,35 @@ export class VaultStorage {
       } catch {}
     };
 
-    // 1. Scan primary directory
+    // 2. Scan primary directory
     try {
       const primaryDir = await StorageConfigService.getChatsDirectory();
       await scanDirectory(primaryDir);
     } catch {}
 
-    // 2. Scan internal fallback sandbox
+    // 3. Scan internal fallback sandbox
     try {
       await scanDirectory(this.fallbackChatsDir);
     } catch {}
 
-    return Array.from(threadMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+    const result = Array.from(threadMap.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+    try {
+      MMKVCache.setObject(CACHE_KEYS.THREADS_INDEX, result);
+    } catch {}
+    return result;
   }
 
   /**
-   * Delete a thread from all vaults.
+   * Delete a thread from MMKV cache and all vaults.
    */
   public static async deleteThread(threadId: string): Promise<void> {
+    try {
+      MMKVCache.delete(`${CACHE_KEYS.THREAD_PREFIX}${threadId}`);
+      const cachedIndex = MMKVCache.getObject<{ id: string; title: string; updatedAt: number }[]>(CACHE_KEYS.THREADS_INDEX) || [];
+      const updatedIndex = cachedIndex.filter(t => t.id !== threadId);
+      MMKVCache.setObject(CACHE_KEYS.THREADS_INDEX, updatedIndex);
+    } catch {}
+
     await this.initVault();
 
     try {

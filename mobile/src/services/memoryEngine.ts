@@ -4,6 +4,8 @@
  * to preserve relationship memory without KV-cache RAM explosion.
  */
 
+import { MMKVCache, CACHE_KEYS } from './mmkvCache.ts';
+
 let Paths: any, File: any, Directory: any;
 try {
   const expoFs = require('expo-file-system');
@@ -56,6 +58,17 @@ export class MemoryEngine {
 
   public static async loadFromDisk(): Promise<void> {
     if (this.isLoaded) return;
+
+    // Fast-path MMKV synchronous cache
+    try {
+      const cached = MMKVCache.getObject<EpisodicMemory[]>(CACHE_KEYS.EPISODIC_MEMORIES);
+      if (Array.isArray(cached) && cached.length > 0) {
+        this.memories = cached;
+        this.isLoaded = true;
+        return;
+      }
+    } catch {}
+
     try {
       const file = this.getMemoryFile();
       if (file && file.exists) {
@@ -63,6 +76,9 @@ export class MemoryEngine {
         const data = JSON.parse(text) as EpisodicMemory[];
         if (Array.isArray(data)) {
           this.memories = data;
+          try {
+            MMKVCache.setObject(CACHE_KEYS.EPISODIC_MEMORIES, this.memories);
+          } catch {}
         }
       }
     } catch {}
@@ -70,6 +86,11 @@ export class MemoryEngine {
   }
 
   private static async persistToDisk(): Promise<void> {
+    // Synchronously write to MMKV
+    try {
+      MMKVCache.setObject(CACHE_KEYS.EPISODIC_MEMORIES, this.memories);
+    } catch {}
+
     try {
       if (!Paths?.document) return;
       const dir = new Directory(Paths.document, 'vault');
@@ -128,6 +149,9 @@ export class MemoryEngine {
    */
   public static clearAll(): void {
     this.memories = [];
+    try {
+      MMKVCache.delete(CACHE_KEYS.EPISODIC_MEMORIES);
+    } catch {}
     this.persistToDisk();
   }
 

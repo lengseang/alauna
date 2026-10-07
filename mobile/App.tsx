@@ -12,16 +12,18 @@ import {
   Animated,
   Dimensions,
   Platform,
-  KeyboardAvoidingView,
   ActivityIndicator,
   Alert,
   PermissionsAndroid,
   Image,
 } from 'react-native';
+import { FlashList, type FlashListRef } from '@shopify/flash-list';
+import { KeyboardAvoidingView, KeyboardProvider } from 'react-native-keyboard-controller';
 import { ARCHETYPES, SoulArchetypeKey, PADVector } from './src/types/soul';
 import { MobileOrchestrator } from './src/engine/orchestrator';
 import { MemoryEngine } from './src/services/memoryEngine';
 import { VaultStorage, ChatThread, ChatMessage, ThreadSoulConfig } from './src/services/vaultStorage';
+import { MMKVCache, CACHE_KEYS } from './src/services/mmkvCache';
 import SettingsScreen from './src/screens/SettingsScreen';
 import ThreadSoulModal from './src/components/ThreadSoulModal';
 import { HardwareProfiler } from './src/services/hardwareProfiler';
@@ -57,11 +59,17 @@ export default function App() {
   const [currentThread, setCurrentThread] = useState<ChatThread>(() => VaultStorage.createNewThread());
   const [allThreads, setAllThreads] = useState<{ id: string; title: string; updatedAt: number }[]>([]);
   const [inputText, setInputText] = useState('');
-  const [activeModelId, setActiveModelId] = useState('llama-3.2-1b');
+  const [activeModelId, setActiveModelId] = useState<string>(() => {
+    return MMKVCache.getString(CACHE_KEYS.ACTIVE_MODEL_ID) || 'llama-3.2-1b';
+  });
 
   // Global settings baseline
-  const [globalArchetype, setGlobalArchetype] = useState<SoulArchetypeKey>('empath');
-  const [globalPAD, setGlobalPAD] = useState<PADVector>(ARCHETYPES.empath.defaultPAD);
+  const [globalArchetype, setGlobalArchetype] = useState<SoulArchetypeKey>(() => {
+    return (MMKVCache.getString(CACHE_KEYS.GLOBAL_ARCHETYPE) as SoulArchetypeKey) || 'empath';
+  });
+  const [globalPAD, setGlobalPAD] = useState<PADVector>(() => {
+    return MMKVCache.getObject<PADVector>(CACHE_KEYS.GLOBAL_PAD) || ARCHETYPES.empath.defaultPAD;
+  });
 
   // Overlays
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -86,7 +94,7 @@ export default function App() {
 
   // Voice Pulse Animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const scrollViewRef = useRef<ScrollView>(null);
+  const flashListRef = useRef<FlashListRef<ChatMessage>>(null);
 
   // Streaming & Loading Indicator Dot Animations
   const dotAnim1 = useRef(new Animated.Value(0.3)).current;
@@ -125,8 +133,13 @@ export default function App() {
       await requestInitialPermissions();
       // 2. Check and enforce sovereign storage vault directory
       await checkStorageVault();
-      // 3. Load conversation histories
+      // 3. Load conversation histories & restore last active thread from MMKV cache
       await loadSavedThreads();
+      const lastThreadId = MMKVCache.getString(CACHE_KEYS.ACTIVE_THREAD_ID);
+      if (lastThreadId) {
+        const restored = await VaultStorage.loadThread(lastThreadId);
+        if (restored) setCurrentThread(restored);
+      }
       // 4. Verify whether active model is installed and load into RAM
       await checkActiveModelInstalled(activeModelId);
       const spec = S23_MODEL_DATABASE.find(m => m.id === activeModelId);
@@ -170,6 +183,9 @@ export default function App() {
 
   const handleSelectModel = async (id: string) => {
     setActiveModelId(id);
+    try {
+      MMKVCache.setString(CACHE_KEYS.ACTIVE_MODEL_ID, id);
+    } catch {}
     const spec = S23_MODEL_DATABASE.find(m => m.id === id);
     if (spec) {
       await LocalLlmDriver.loadModel(spec.filename);
@@ -452,7 +468,7 @@ export default function App() {
     }));
 
     setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
+      flashListRef.current?.scrollToEnd({ animated: true });
     }, 50);
 
     try {
@@ -477,7 +493,7 @@ export default function App() {
               m.id === botMsgId ? { ...m, text: accumulatedText } : m
             ),
           }));
-          scrollViewRef.current?.scrollToEnd({ animated: false });
+          flashListRef.current?.scrollToEnd({ animated: false });
         }
       );
 
@@ -517,7 +533,7 @@ export default function App() {
       }
       await loadSavedThreads();
       setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
+        flashListRef.current?.scrollToEnd({ animated: true });
       }, 80);
     } catch (err: any) {
       Alert.alert('Inference Notice', `Local generation interrupted: ${err?.message || 'Check model weights'}`);
@@ -536,6 +552,12 @@ export default function App() {
     const loaded = await VaultStorage.loadThread(threadId);
     if (loaded) {
       setCurrentThread(loaded);
+      try {
+        MMKVCache.setString(CACHE_KEYS.ACTIVE_THREAD_ID, threadId);
+      } catch {}
+      setTimeout(() => {
+        flashListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
     setDrawerOpen(false);
   };
@@ -543,6 +565,9 @@ export default function App() {
   const handleNewConversation = () => {
     const fresh = VaultStorage.createNewThread('New Conversation', globalArchetype);
     setCurrentThread(fresh);
+    try {
+      MMKVCache.setString(CACHE_KEYS.ACTIVE_THREAD_ID, fresh.id);
+    } catch {}
     setDrawerOpen(false);
   };
 
@@ -558,24 +583,27 @@ export default function App() {
   // If settings view is open, render dedicated screen
   if (settingsOpen) {
     return (
-      <SettingsScreen
-        onBack={() => setSettingsOpen(false)}
-        activeModelId={activeModelId}
-        onSelectModel={handleSelectModel}
-        activeArchetype={globalArchetype}
-        onSelectArchetype={(key) => {
-          setGlobalArchetype(key);
-          setGlobalPAD(ARCHETYPES[key].defaultPAD);
-        }}
-        pad={globalPAD}
-        onUpdatePAD={setGlobalPAD}
-      />
+      <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+        <SettingsScreen
+          onBack={() => setSettingsOpen(false)}
+          activeModelId={activeModelId}
+          onSelectModel={handleSelectModel}
+          activeArchetype={globalArchetype}
+          onSelectArchetype={(key) => {
+            setGlobalArchetype(key);
+            setGlobalPAD(ARCHETYPES[key].defaultPAD);
+          }}
+          pad={globalPAD}
+          onUpdatePAD={setGlobalPAD}
+        />
+      </KeyboardProvider>
     );
   }
 
   return (
-    <View style={styles.outerContainer}>
-      <SafeAreaView style={styles.safeContainer}>
+    <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+      <View style={styles.outerContainer}>
+        <SafeAreaView style={styles.safeContainer}>
         <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
         {/* Top Navigation Bar */}
@@ -650,13 +678,91 @@ export default function App() {
           style={styles.keyboardContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.chatScroll}
-            contentContainerStyle={styles.chatContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {currentThread.messages.length === 0 ? (
+          <FlashList<ChatMessage>
+            ref={flashListRef}
+            data={currentThread.messages}
+            renderItem={({ item: m }) => (
+              <View
+                key={m.id}
+                style={[
+                  styles.messageRow,
+                  m.sender === 'user' ? styles.userRow : styles.assistantRow,
+                ]}
+              >
+                {m.sender === 'assistant' && (
+                  <View style={styles.assistantHeader}>
+                    <View style={styles.botDot} />
+                    <Text style={styles.botTag}>CHIWIWI</Text>
+                    <Text style={styles.soulTag}>• {ARCHETYPES[currentThread.soulConfig.archetype].name}</Text>
+                    {m.meta && <Text style={styles.metaText}>• {m.meta}</Text>}
+                  </View>
+                )}
+                <View
+                  style={[
+                    styles.messageBubble,
+                    m.sender === 'user' ? styles.userBubble : styles.assistantBubble,
+                  ]}
+                >
+                  {/* Claude-Style Thinking / Process Accordion */}
+                  {m.sender === 'assistant' && (m.thoughts || (isGenerating && m.id === streamingMsgId)) && (
+                    <View style={styles.thinkingContainer}>
+                      <TouchableOpacity
+                        style={styles.thinkingHeader}
+                        onPress={() => {
+                          setExpandedThoughts(prev => ({ ...prev, [m.id]: !prev[m.id] }));
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <ZapIcon size={12} color={isGenerating && m.id === streamingMsgId ? '#38bdf8' : '#a1a1aa'} />
+                          <Text style={[styles.thinkingHeaderTitle, isGenerating && m.id === streamingMsgId && { color: '#38bdf8' }]}>
+                            {isGenerating && m.id === streamingMsgId
+                              ? 'Reasoning on device...'
+                              : expandedThoughts[m.id]
+                              ? 'Hide thinking process'
+                              : 'Thought for a few seconds'}
+                          </Text>
+                        </View>
+                        <ChevronDownIcon
+                          size={12}
+                          color="#71717a"
+                        />
+                      </TouchableOpacity>
+
+                      {(expandedThoughts[m.id] ?? (isGenerating && m.id === streamingMsgId)) && (
+                        <View style={styles.thinkingBody}>
+                          <Text style={styles.thinkingText}>
+                            {m.thoughts || 'Evaluating local context, neural weights & memory vectors...'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Attached Media Previews */}
+                  {m.mediaUris && m.mediaUris.length > 0 && (
+                    <View style={styles.attachedMediaGrid}>
+                      {m.mediaUris.map((uri, idx) => (
+                        <Image key={idx} source={{ uri }} style={styles.bubbleMediaThumb} />
+                      ))}
+                    </View>
+                  )}
+                  {m.text ? (
+                    <Text style={styles.messageText}>{m.text}</Text>
+                  ) : isGenerating && m.id === streamingMsgId ? (
+                    <View style={styles.thinkingWaveRow}>
+                      <View style={styles.thinkingDotCluster}>
+                        <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim1, transform: [{ scale: dotAnim1 }] }]} />
+                        <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim2, transform: [{ scale: dotAnim2 }] }]} />
+                        <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim3, transform: [{ scale: dotAnim3 }] }]} />
+                      </View>
+                      <Text style={styles.thinkingWaveText}>Synthesizing tokens on-device...</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            )}
+            ListEmptyComponent={
               <View style={styles.emptyWelcomeContainer}>
                 <View style={styles.emptyHeroGlyph}>
                   <View style={styles.emptyHeroAura} />
@@ -690,90 +796,12 @@ export default function App() {
                   ))}
                 </View>
               </View>
-            ) : (
-              currentThread.messages.map((m) => (
-                <View
-                  key={m.id}
-                  style={[
-                    styles.messageRow,
-                    m.sender === 'user' ? styles.userRow : styles.assistantRow,
-                  ]}
-                >
-                  {m.sender === 'assistant' && (
-                    <View style={styles.assistantHeader}>
-                      <View style={styles.botDot} />
-                      <Text style={styles.botTag}>CHIWIWI</Text>
-                      <Text style={styles.soulTag}>• {ARCHETYPES[currentThread.soulConfig.archetype].name}</Text>
-                      {m.meta && <Text style={styles.metaText}>• {m.meta}</Text>}
-                    </View>
-                  )}
-                  <View
-                    style={[
-                      styles.messageBubble,
-                      m.sender === 'user' ? styles.userBubble : styles.assistantBubble,
-                    ]}
-                  >
-                    {/* Claude-Style Thinking / Process Accordion */}
-                    {m.sender === 'assistant' && (m.thoughts || (isGenerating && m.id === streamingMsgId)) && (
-                      <View style={styles.thinkingContainer}>
-                        <TouchableOpacity
-                          style={styles.thinkingHeader}
-                          onPress={() => {
-                            setExpandedThoughts(prev => ({ ...prev, [m.id]: !prev[m.id] }));
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <ZapIcon size={12} color={isGenerating && m.id === streamingMsgId ? '#38bdf8' : '#a1a1aa'} />
-                            <Text style={[styles.thinkingHeaderTitle, isGenerating && m.id === streamingMsgId && { color: '#38bdf8' }]}>
-                              {isGenerating && m.id === streamingMsgId
-                                ? 'Reasoning on device...'
-                                : expandedThoughts[m.id]
-                                ? 'Hide thinking process'
-                                : 'Thought for a few seconds'}
-                            </Text>
-                          </View>
-                          <ChevronDownIcon
-                            size={12}
-                            color="#71717a"
-                          />
-                        </TouchableOpacity>
-
-                        {(expandedThoughts[m.id] ?? (isGenerating && m.id === streamingMsgId)) && (
-                          <View style={styles.thinkingBody}>
-                            <Text style={styles.thinkingText}>
-                              {m.thoughts || 'Evaluating local context, neural weights & memory vectors...'}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    )}
-
-                    {/* Attached Media Previews */}
-                    {m.mediaUris && m.mediaUris.length > 0 && (
-                      <View style={styles.attachedMediaGrid}>
-                        {m.mediaUris.map((uri, idx) => (
-                          <Image key={idx} source={{ uri }} style={styles.bubbleMediaThumb} />
-                        ))}
-                      </View>
-                    )}
-                    {m.text ? (
-                      <Text style={styles.messageText}>{m.text}</Text>
-                    ) : isGenerating && m.id === streamingMsgId ? (
-                      <View style={styles.thinkingWaveRow}>
-                        <View style={styles.thinkingDotCluster}>
-                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim1, transform: [{ scale: dotAnim1 }] }]} />
-                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim2, transform: [{ scale: dotAnim2 }] }]} />
-                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim3, transform: [{ scale: dotAnim3 }] }]} />
-                        </View>
-                        <Text style={styles.thinkingWaveText}>Synthesizing tokens on-device...</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-              ))
-            )}
-          </ScrollView>
+            }
+            keyExtractor={(m) => m.id}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.chatContent}
+            extraData={[isGenerating, streamingMsgId, expandedThoughts]}
+          />
 
           {/* Floating Bottom Input Deck */}
           <View style={styles.inputDeck}>
@@ -1089,6 +1117,7 @@ export default function App() {
 
       </SafeAreaView>
     </View>
+  </KeyboardProvider>
   );
 }
 
