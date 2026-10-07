@@ -5,6 +5,7 @@
  */
 
 import { File, Directory } from 'expo-file-system';
+import { AppState, type AppStateStatus } from 'react-native';
 import { S23_MODEL_DATABASE, LocalModelSpec } from '../types/settings';
 import { StorageConfigService } from './storageConfig';
 import {
@@ -37,6 +38,75 @@ class SovereignDownloadManager {
 
   constructor() {
     this.restoreFromCache();
+    this.setupAppStateListener();
+  }
+
+  private setupAppStateListener() {
+    try {
+      AppState.addEventListener('change', (nextState: AppStateStatus) => {
+        if (nextState === 'active') {
+          this.syncFromDisk().catch(() => {});
+        }
+      });
+    } catch {}
+  }
+
+  /**
+   * Synchronize active download states with actual on-disk files.
+   * Prevents stale, weird, or 0% progress when returning from background or switching apps.
+   */
+  public async syncFromDisk(): Promise<void> {
+    const modelsDir = HFModelDownloader.modelsDirectory;
+    let changed = false;
+
+    for (const [id, state] of Object.entries(this.states)) {
+      if (state.status === 'completed') continue;
+
+      // 1. Check if model has completed on disk
+      const finalFile = new File(modelsDir, state.filename);
+      if (finalFile.exists && finalFile.size > 1024 * 1024) {
+        const isGGUF = await HFModelDownloader.verifyGGUFHeader(finalFile);
+        if (isGGUF) {
+          this.states[id] = {
+            ...state,
+            status: 'completed',
+            progress: 100,
+            speedMbPerSec: 0,
+            downloadedMb: state.totalMb,
+            updatedAt: Date.now(),
+          };
+          changed = true;
+          continue;
+        }
+      }
+
+      // 2. Check partial file bytes on disk
+      const partialFile = new File(modelsDir, `${state.filename}.chiwiwi_part`);
+      if (partialFile.exists) {
+        const bytesOnDisk = partialFile.size;
+        const downloadedMb = Math.round((bytesOnDisk / (1024 * 1024)) * 10) / 10;
+        const progress = state.totalMb > 0
+          ? Math.min(100, Math.round((downloadedMb / state.totalMb) * 100))
+          : state.progress;
+
+        const downloader = this.activeDownloaders.get(id);
+        const isActivelyDownloading = downloader && downloader.getStatus() === 'downloading';
+
+        this.states[id] = {
+          ...state,
+          status: isActivelyDownloading ? 'downloading' : 'paused',
+          downloadedMb,
+          progress,
+          speedMbPerSec: isActivelyDownloading ? state.speedMbPerSec : 0,
+          updatedAt: Date.now(),
+        };
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.notify();
+    }
   }
 
   private restoreFromCache() {
@@ -55,6 +125,7 @@ class SovereignDownloadManager {
         }
       }
     } catch {}
+    this.syncFromDisk().catch(() => {});
   }
 
   private persistStates() {
@@ -322,6 +393,62 @@ class SovereignDownloadManager {
     }
     delete this.states[modelId];
     this.notify();
+  }
+
+  /**
+   * Pause all active downloads.
+   */
+  public async pauseAll(): Promise<void> {
+    for (const [id, downloader] of this.activeDownloaders.entries()) {
+      try {
+        await downloader.pause();
+      } catch {}
+      if (this.states[id]) {
+        this.states[id].status = 'paused';
+        this.states[id].speedMbPerSec = 0;
+      }
+    }
+    try { deactivateKeepAwake('chiwiwi_model_download'); } catch {}
+    this.notify();
+  }
+
+  /**
+   * Resume all paused downloads.
+   */
+  public async resumeAll(): Promise<void> {
+    for (const [id, state] of Object.entries(this.states)) {
+      if (state.status === 'paused') {
+        const spec = S23_MODEL_DATABASE.find(m => m.id === id);
+        if (spec) {
+          this.startDownload(spec).catch(() => {});
+        }
+      }
+    }
+  }
+
+  /**
+   * Remove completed download items from queue state.
+   */
+  public clearCompleted(): void {
+    let changed = false;
+    for (const [id, state] of Object.entries(this.states)) {
+      if (state.status === 'completed') {
+        delete this.states[id];
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.notify();
+    }
+  }
+
+  /**
+   * Count how many downloads are actively running or connecting.
+   */
+  public getActiveCount(): number {
+    return Object.values(this.states).filter(
+      s => s.status === 'downloading' || s.status === 'resolving' || s.status === 'verifying'
+    ).length;
   }
 }
 

@@ -66,7 +66,7 @@ export interface SettingsScreenProps {
   onUpdateToneIntensity?: (intensity: number) => void;
 }
 
-export type SubScreen = 'main' | 'soul' | 'models' | 'speculative' | 'audio' | 'storage' | 'security' | 'advanced';
+export type SubScreen = 'main' | 'soul' | 'models' | 'speculative' | 'audio' | 'storage' | 'security' | 'advanced' | 'downloads';
 export type SortOption = 'ram_asc' | 'ram_desc' | 'size_asc' | 'size_desc' | 'name_asc';
 export type Capability = 'Text' | 'Image' | 'Voice' | 'Code' | 'Video';
 
@@ -500,6 +500,35 @@ export default function SettingsScreen({
   };
 
   // =========================================================
+  // DOWNLOADS QUEUE MEMOS
+  // =========================================================
+  const activeDownloadsList = useMemo(() => {
+    return Object.entries(downloads)
+      .filter(([_, s]) => s.status === 'downloading' || s.status === 'resolving' || s.status === 'verifying' || s.status === 'paused')
+      .map(([id, s]) => {
+        const spec = S23_MODEL_DATABASE.find(m => m.id === id);
+        return { id, spec, state: s };
+      })
+      .filter((item): item is { id: string; spec: LocalModelSpec; state: ModelDownloadState } => item.spec !== undefined);
+  }, [downloads]);
+
+  const completedDownloadsList = useMemo(() => {
+    return Object.entries(downloads)
+      .filter(([_, s]) => s.status === 'completed')
+      .map(([id, s]) => {
+        const spec = S23_MODEL_DATABASE.find(m => m.id === id);
+        return { id, spec, state: s };
+      })
+      .filter((item): item is { id: string; spec: LocalModelSpec; state: ModelDownloadState } => item.spec !== undefined);
+  }, [downloads]);
+
+  const activeDownloadCount = useMemo(() => {
+    return Object.values(downloads).filter(
+      s => s.status === 'downloading' || s.status === 'resolving' || s.status === 'verifying'
+    ).length;
+  }, [downloads]);
+
+  // =========================================================
   // SEARCH, BOOLEAN FILTER & SORT ENGINE
   // =========================================================
   const filteredAndSortedModels = useMemo(() => {
@@ -551,6 +580,217 @@ export default function SettingsScreen({
 
   // Current active speculative pair
   const activePreset = SPECULATIVE_PRESETS[activePresetIndex] || SPECULATIVE_PRESETS[0];
+
+  // =========================================================
+  // SUB-SCREEN: DOWNLOADS HUB (REAL-TIME QUEUE & BACKGROUND RESUMPTION)
+  // =========================================================
+  if (currentScreen === 'downloads') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={styles.appBar}>
+          <TouchableOpacity onPress={() => setCurrentScreen('main')} style={styles.backBtn}>
+            <BackArrowIcon size={20} color="#ffffff" />
+            <Text style={styles.appBarTitle}>
+              Downloads Hub ({activeDownloadsList.length + completedDownloadsList.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.subContent}>
+          {/* Global Queue Action Controls */}
+          <View style={styles.queueActionsRow}>
+            <TouchableOpacity
+              style={[
+                styles.queueActionBtn,
+                activeDownloadCount === 0 && styles.queueActionBtnDisabled,
+              ]}
+              disabled={activeDownloadCount === 0}
+              onPress={() => DownloadManager.pauseAll()}
+            >
+              <PauseIcon size={14} color="#f59e0b" />
+              <Text style={styles.queueActionBtnText}>Pause All</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.queueActionBtn}
+              onPress={() => DownloadManager.resumeAll()}
+            >
+              <PlayIcon size={14} color="#22c55e" />
+              <Text style={styles.queueActionBtnText}>Resume All</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.queueActionBtn,
+                completedDownloadsList.length === 0 && styles.queueActionBtnDisabled,
+              ]}
+              disabled={completedDownloadsList.length === 0}
+              onPress={() => DownloadManager.clearCompleted()}
+            >
+              <TrashIcon size={14} color="#71717a" />
+              <Text style={[styles.queueActionBtnText, { color: '#a1a1aa' }]}>Clear Finished</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* SECTION: ACTIVE DOWNLOAD QUEUE */}
+          <View style={styles.modelsFeedHeader}>
+            <Text style={styles.sectionHeader}>ACTIVE DOWNLOAD QUEUE</Text>
+            <Text style={styles.modelsCountText}>{activeDownloadsList.length} IN FLIGHT</Text>
+          </View>
+
+          {activeDownloadsList.length === 0 ? (
+            <View style={styles.emptyQueueCard}>
+              <DownloadIcon size={32} color="#3f3f46" />
+              <Text style={styles.emptyQueueTitle}>No Active Downloads</Text>
+              <Text style={styles.emptyQueueSub}>
+                Downloads from Hugging Face run with resumable chunking, background keep-awake, and on-disk byte sync.
+              </Text>
+              <TouchableOpacity
+                style={styles.browseModelsBtn}
+                onPress={() => setCurrentScreen('models')}
+              >
+                <Text style={styles.browseModelsBtnText}>Browse Model Vault →</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            activeDownloadsList.map(({ id, spec, state }) => {
+              const isPaused = state.status === 'paused';
+
+              return (
+                <View key={id} style={styles.downloadQueueCard}>
+                  {/* Header Row */}
+                  <View style={styles.queueHeaderRow}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.queueModelName}>{spec.name}</Text>
+                      <Text style={styles.queueModelSub} numberOfLines={1}>
+                        {spec.repo} • {spec.filename}
+                      </Text>
+                    </View>
+                    <View style={[styles.statusBadge, isPaused && styles.statusBadgePaused]}>
+                      <Text style={[styles.statusBadgeText, isPaused && { color: '#f59e0b' }]}>
+                        {state.status.toUpperCase()}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* SVG Line Progress Bar */}
+                  <SvgProgressBar
+                    progress={state.progress}
+                    color={isPaused ? '#f59e0b' : '#38bdf8'}
+                    trackColor="#1c1917"
+                    height={6}
+                  />
+
+                  {/* Progress Stats Row */}
+                  <View style={[styles.downloadTelemetryRow, { marginTop: 8 }]}>
+                    <Text style={styles.downloadRatioText}>
+                      {state.downloadedMb} MB / {state.totalMb} MB ({state.progress}%)
+                    </Text>
+                    <Text style={[styles.downloadSpeedText, isPaused && { color: '#f59e0b' }]}>
+                      {isPaused ? 'Paused on disk' : `${state.speedMbPerSec.toFixed(1)} MB/s`}
+                    </Text>
+                  </View>
+
+                  {/* Controls Row */}
+                  <View style={[styles.downloadControlsRow, { marginTop: 10 }]}>
+                    {isPaused ? (
+                      <TouchableOpacity
+                        style={[styles.pauseResumeBtn, styles.resumeBtnActive]}
+                        onPress={() => handleResumeDownload(id, spec.sizeFormatted)}
+                      >
+                        <PlayIcon size={12} color="#ffffff" />
+                        <Text style={styles.pauseResumeText}>Resume</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.pauseResumeBtn}
+                        onPress={() => handlePauseDownload(id)}
+                      >
+                        <PauseIcon size={12} color="#ffffff" />
+                        <Text style={styles.pauseResumeText}>Pause</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      style={styles.cancelDlBtn}
+                      onPress={() => handleCancelDownload(id)}
+                    >
+                      <CrossIcon size={12} color="#ef4444" />
+                      <Text style={styles.cancelDlText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })
+          )}
+
+          {/* SECTION: COMPLETED DOWNLOADS */}
+          <View style={[styles.modelsFeedHeader, { marginTop: 24 }]}>
+            <Text style={styles.sectionHeader}>INSTALLED VAULT MODELS</Text>
+            <Text style={styles.modelsCountText}>{completedDownloadsList.length} READY</Text>
+          </View>
+
+          {completedDownloadsList.length === 0 ? (
+            <View style={styles.emptyCompletedCard}>
+              <Text style={styles.emptyCompletedText}>No downloaded models installed yet.</Text>
+            </View>
+          ) : (
+            completedDownloadsList.map(({ id, spec }) => {
+              const isActive = id === activeModelId;
+              return (
+                <View
+                  key={id}
+                  style={[styles.completedQueueCard, isActive && styles.completedQueueCardActive]}
+                >
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.queueModelName}>{spec.name}</Text>
+                      {isActive && (
+                        <View style={[styles.statusBadge, { borderColor: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                          <Text style={[styles.statusBadgeText, { color: '#22c55e' }]}>ACTIVE</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.queueModelSub}>
+                      {spec.sizeFormatted} • Verified GGUF Container
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      style={[styles.mountBtn, isActive && styles.mountBtnActive, { paddingHorizontal: 12, paddingVertical: 7, flex: 0 }]}
+                      onPress={() => handleMountModel(id)}
+                    >
+                      <Text style={[styles.mountBtnText, isActive && { color: '#000000' }]}>
+                        {isActive ? 'Mounted' : 'Mount RAM'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.reDownloadBtn, { width: 32, height: 32 }]}
+                      onPress={() => handleDeleteModel(id)}
+                    >
+                      <TrashIcon size={13} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })
+          )}
+
+          {/* Quick link back to Catalog */}
+          <TouchableOpacity
+            style={[styles.slotBtn, { marginHorizontal: 16, marginTop: 20 }]}
+            onPress={() => setCurrentScreen('models')}
+          >
+            <CpuIcon size={14} color="#38bdf8" />
+            <Text style={[styles.slotBtnText, { color: '#38bdf8' }]}>Open Model Vault Catalog</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   // =========================================================
   // SUB-SCREEN: SOUL & PERSONALITY (CUSTOMIZATION METERS & PREVIEWS)
@@ -1491,6 +1731,20 @@ export default function SettingsScreen({
 
         {/* 5. Main Feed: Speculative Turbo Card + Model Cards */}
         <ScrollView contentContainerStyle={styles.subContent}>
+          {/* Quick Hub Banner: Downloads Hub */}
+          <TouchableOpacity
+            style={styles.downloadsHubBanner}
+            onPress={() => setCurrentScreen('downloads')}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <DownloadIcon size={16} color="#38bdf8" />
+              <Text style={styles.downloadsHubBannerTitle}>
+                Downloads Hub {activeDownloadCount > 0 ? `(${activeDownloadCount} in flight)` : ''}
+              </Text>
+            </View>
+            <Text style={styles.downloadsHubBannerArrow}>View Queue →</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.turboBannerBtn}
             onPress={() => setCurrentScreen('speculative')}
@@ -1810,6 +2064,27 @@ export default function SettingsScreen({
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Model Vault ({S23_MODEL_DATABASE.length} Models)</Text>
               <Text style={styles.rowSub}>Local offline neural weights, Grade S/B/C, Boolean search</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.rowItem} onPress={() => setCurrentScreen('downloads')}>
+            <View style={styles.iconWrapper}>
+              <DownloadIcon size={20} color={activeDownloadCount > 0 ? '#38bdf8' : '#ffffff'} />
+            </View>
+            <View style={styles.rowText}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.rowTitle}>Downloads Hub</Text>
+                {activeDownloadCount > 0 && (
+                  <View style={styles.activeDlBadge}>
+                    <Text style={styles.activeDlBadgeText}>{activeDownloadCount} IN FLIGHT</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.rowSub}>
+                {activeDownloadCount > 0
+                  ? `${activeDownloadCount} active download(s) • Live speed & background sync`
+                  : 'Manage download queue, resume in background, verified models'}
+              </Text>
             </View>
           </TouchableOpacity>
 
@@ -2646,6 +2921,175 @@ const styles = StyleSheet.create({
   },
   slotBtnText: {
     color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  // Downloads Hub Styles
+  queueActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  queueActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#18181b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  queueActionBtnDisabled: {
+    opacity: 0.4,
+  },
+  queueActionBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  emptyQueueCard: {
+    backgroundColor: '#09090b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyQueueTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  emptyQueueSub: {
+    color: '#71717a',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  browseModelsBtn: {
+    marginTop: 8,
+    backgroundColor: '#27272a',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  browseModelsBtnText: {
+    color: '#38bdf8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  downloadQueueCard: {
+    backgroundColor: '#09090b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    borderRadius: 16,
+    padding: 16,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  queueHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  queueModelName: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  queueModelSub: {
+    color: '#71717a',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+  },
+  statusBadgePaused: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: '#f59e0b',
+  },
+  statusBadgeText: {
+    color: '#38bdf8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  completedQueueCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#09090b',
+    borderWidth: 1,
+    borderColor: '#27272a',
+    borderRadius: 14,
+    padding: 14,
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  completedQueueCardActive: {
+    borderColor: '#22c55e',
+    backgroundColor: 'rgba(34, 197, 94, 0.05)',
+  },
+  emptyCompletedCard: {
+    backgroundColor: '#09090b',
+    borderWidth: 1,
+    borderColor: '#18181b',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    alignItems: 'center',
+  },
+  emptyCompletedText: {
+    color: '#52525b',
+    fontSize: 13,
+  },
+  activeDlBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: '#38bdf8',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  activeDlBadgeText: {
+    color: '#38bdf8',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  downloadsHubBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  downloadsHubBannerTitle: {
+    color: '#38bdf8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  downloadsHubBannerArrow: {
+    color: '#38bdf8',
     fontSize: 12,
     fontWeight: '600',
   },
