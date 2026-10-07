@@ -57,6 +57,10 @@ const { width } = Dimensions.get('window');
 
 export default function App() {
   const [currentThread, setCurrentThread] = useState<ChatThread>(() => VaultStorage.createNewThread());
+  const currentThreadRef = useRef<ChatThread>(currentThread);
+  useEffect(() => {
+    currentThreadRef.current = currentThread;
+  }, [currentThread]);
   const [allThreads, setAllThreads] = useState<{ id: string; title: string; updatedAt: number }[]>([]);
   const [inputText, setInputText] = useState('');
   const [activeModelId, setActiveModelId] = useState<string>(() => {
@@ -99,10 +103,11 @@ export default function App() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const flashListRef = useRef<FlashListRef<ChatMessage>>(null);
 
-  // Streaming & Loading Indicator Dot Animations
-  const dotAnim1 = useRef(new Animated.Value(0.3)).current;
-  const dotAnim2 = useRef(new Animated.Value(0.3)).current;
-  const dotAnim3 = useRef(new Animated.Value(0.3)).current;
+  // Streaming & Loading Indicator Liquid Glass Shimmer Wave
+  const dotAnim1 = useRef(new Animated.Value(0.2)).current;
+  const dotAnim2 = useRef(new Animated.Value(0.2)).current;
+  const dotAnim3 = useRef(new Animated.Value(0.2)).current;
+  const dotAnim4 = useRef(new Animated.Value(0.2)).current;
 
   useEffect(() => {
     if (isGenerating) {
@@ -110,22 +115,25 @@ export default function App() {
         return Animated.loop(
           Animated.sequence([
             Animated.delay(delay),
-            Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
-            Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
-            Animated.delay(Math.max(0, 800 - delay)),
+            Animated.timing(anim, { toValue: 1, duration: 420, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 0.2, duration: 420, useNativeDriver: true }),
+            Animated.delay(Math.max(0, 840 - delay)),
           ])
         );
       };
       const a1 = animateDot(dotAnim1, 0);
-      const a2 = animateDot(dotAnim2, 200);
-      const a3 = animateDot(dotAnim3, 400);
+      const a2 = animateDot(dotAnim2, 160);
+      const a3 = animateDot(dotAnim3, 320);
+      const a4 = animateDot(dotAnim4, 480);
       a1.start();
       a2.start();
       a3.start();
+      a4.start();
       return () => {
         a1.stop();
         a2.stop();
         a3.stop();
+        a4.stop();
       };
     }
   }, [isGenerating]);
@@ -502,38 +510,37 @@ export default function App() {
 
       const engineBadge = isDownloaded ? 'GGUF On-Device' : 'Fast-Path (Download weights in Settings)';
 
-      let updatedSnapshot: ChatThread | null = null;
-      setCurrentThread(prev => {
-        let updated: ChatThread = {
-          ...prev,
-          title: threadTitle,
-          messages: prev.messages.map(m =>
-            m.id === botMsgId
-              ? {
-                  ...m,
-                  text: result.response,
-                  thoughts: result.thoughts,
-                  tokenCountEst: Math.floor(result.response.length / 4),
-                  meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category} • ${engineBadge}`,
-                }
-              : m
-          ),
-          soulConfig: {
-            ...prev.soulConfig,
-            pad: result.updatedPAD,
-          },
-          updatedAt: Date.now(),
-        };
+      const baseMessages = currentThreadRef.current.messages.filter(m => m.id !== botMsgId && m.id !== userMsg.id);
+      const finalAssistantMsg: ChatMessage = {
+        id: botMsgId,
+        sender: 'assistant',
+        text: result.response,
+        thoughts: result.thoughts,
+        timestamp: Date.now(),
+        tokenCountEst: Math.floor(result.response.length / 4),
+        meta: `${activeModelId} • ${result.route.latencyMs.toFixed(2)}ms ${result.route.category} • ${engineBadge}`,
+      };
 
-        // Automatic Session Compaction if conversation exceeds token threshold
-        updated = VaultStorage.compactSession(updated, 2048);
-        updatedSnapshot = updated;
-        return updated;
-      });
+      let finalThread: ChatThread = {
+        ...currentThreadRef.current,
+        title: threadTitle,
+        messages: [...baseMessages, userMsg, finalAssistantMsg],
+        soulConfig: {
+          ...currentThreadRef.current.soulConfig,
+          pad: result.updatedPAD,
+        },
+        updatedAt: Date.now(),
+      };
 
-      if (updatedSnapshot) {
-        await VaultStorage.saveThread(updatedSnapshot);
-      }
+      // Automatic Session Compaction if conversation exceeds token threshold
+      finalThread = VaultStorage.compactSession(finalThread, 2048);
+      setCurrentThread(finalThread);
+      currentThreadRef.current = finalThread;
+
+      await VaultStorage.saveThread(finalThread);
+      try {
+        MMKVCache.setString(CACHE_KEYS.ACTIVE_THREAD_ID, finalThread.id);
+      } catch {}
       await loadSavedThreads();
       setTimeout(() => {
         flashListRef.current?.scrollToEnd({ animated: true });
@@ -704,10 +711,16 @@ export default function App() {
               >
                 {m.sender === 'assistant' && (
                   <View style={styles.assistantHeader}>
-                    <View style={styles.botDot} />
-                    <Text style={styles.botTag}>CHIWIWI</Text>
-                    <Text style={styles.soulTag}>• {ARCHETYPES[currentThread.soulConfig.archetype].name}</Text>
-                    {m.meta && <Text style={styles.metaText}>• {m.meta}</Text>}
+                    <View style={styles.assistantBadgeChiwiwi}>
+                      <View style={styles.botDot} />
+                      <Text style={styles.botTag}>CHIWIWI</Text>
+                    </View>
+                    <View style={styles.assistantBadgeSoul}>
+                      <Text style={styles.soulTag}>{ARCHETYPES[currentThread.soulConfig.archetype].name}</Text>
+                    </View>
+                    <View style={styles.assistantBadgeMeta}>
+                      <Text style={styles.metaText}>{isActiveModelInstalled ? 'Snapdragon NPU' : 'Sovereign Core'}</Text>
+                    </View>
                   </View>
                 )}
                 <View
@@ -716,24 +729,24 @@ export default function App() {
                     m.sender === 'user' ? styles.userBubble : styles.assistantBubble,
                   ]}
                 >
-                  {/* Claude-Style Thinking / Process Accordion */}
+                  {/* Claude-Style Thinking / Process Accordion (Collapsed by Default) */}
                   {m.sender === 'assistant' && (m.thoughts || (isGenerating && m.id === streamingMsgId)) && (
                     <View style={styles.thinkingContainer}>
                       <TouchableOpacity
                         style={styles.thinkingHeader}
                         onPress={() => {
-                          setExpandedThoughts(prev => ({ ...prev, [m.id]: !prev[m.id] }));
+                          setExpandedThoughts(prev => ({ ...prev, [m.id]: !(prev[m.id] ?? false) }));
                         }}
                         activeOpacity={0.7}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <ZapIcon size={12} color={isGenerating && m.id === streamingMsgId ? '#38bdf8' : '#a1a1aa'} />
-                          <Text style={[styles.thinkingHeaderTitle, isGenerating && m.id === streamingMsgId && { color: '#38bdf8' }]}>
+                          <ZapIcon size={12} color="#38bdf8" />
+                          <Text style={styles.thinkingHeaderTitle}>
                             {isGenerating && m.id === streamingMsgId
-                              ? 'Reasoning on device...'
-                              : expandedThoughts[m.id]
-                              ? 'Hide thinking process'
-                              : 'Thought for a few seconds'}
+                              ? '⚡ Reasoning on device...'
+                              : (expandedThoughts[m.id] ?? false)
+                              ? '⚡ Hide reasoning trace'
+                              : '⚡ Reasoning trace (tap to inspect)'}
                           </Text>
                         </View>
                         <ChevronDownIcon
@@ -742,7 +755,7 @@ export default function App() {
                         />
                       </TouchableOpacity>
 
-                      {(expandedThoughts[m.id] ?? (isGenerating && m.id === streamingMsgId)) && (
+                      {(expandedThoughts[m.id] ?? false) && (
                         <View style={styles.thinkingBody}>
                           <Text style={styles.thinkingText}>
                             {m.thoughts || 'Evaluating local context, neural weights & memory vectors...'}
@@ -764,12 +777,15 @@ export default function App() {
                     <Text style={styles.messageText}>{m.text}</Text>
                   ) : isGenerating && m.id === streamingMsgId ? (
                     <View style={styles.thinkingWaveRow}>
-                      <View style={styles.thinkingDotCluster}>
-                        <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim1, transform: [{ scale: dotAnim1 }] }]} />
-                        <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim2, transform: [{ scale: dotAnim2 }] }]} />
-                        <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim3, transform: [{ scale: dotAnim3 }] }]} />
+                      <View style={styles.thinkingWavePill}>
+                        <View style={styles.thinkingDotCluster}>
+                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim1, transform: [{ scale: dotAnim1 }] }]} />
+                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim2, transform: [{ scale: dotAnim2 }] }]} />
+                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim3, transform: [{ scale: dotAnim3 }] }]} />
+                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim4, transform: [{ scale: dotAnim4 }] }]} />
+                        </View>
+                        <Text style={styles.thinkingWaveText}>Synthesizing tokens on-device...</Text>
                       </View>
-                      <Text style={styles.thinkingWaveText}>Synthesizing tokens on-device...</Text>
                     </View>
                   ) : null}
                 </View>
@@ -1263,10 +1279,19 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   thinkingWaveRow: {
+    paddingVertical: 4,
+    alignItems: 'flex-start',
+  },
+  thinkingWavePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 4,
+    gap: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.22)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   thinkingDotCluster: {
     flexDirection: 'row',
@@ -1274,9 +1299,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   streamPulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 6,
+    height: 12,
+    borderRadius: 3,
     backgroundColor: '#38bdf8',
   },
   thinkingWaveText: {
@@ -1290,12 +1315,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heroPromptChip: {
-    backgroundColor: '#111114',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 16,
   },
   heroPromptLabel: { color: '#ffffff', fontSize: 13, fontWeight: '600', marginBottom: 2 },
   heroPromptDesc: { color: '#71717a', fontSize: 11 },
@@ -1311,61 +1336,97 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     flexWrap: 'wrap',
   },
-  botDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#ffffff' },
-  botTag: { color: '#ffffff', fontSize: 12, fontWeight: '700' },
-  soulTag: { color: '#38bdf8', fontSize: 11, fontWeight: '600' },
-  metaText: { color: '#71717a', fontSize: 11 },
-
-  messageBubble: { padding: 14, borderRadius: 18, maxWidth: '85%' },
-  userBubble: {
-    backgroundColor: '#18181d',
+  assistantBadgeChiwiwi: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderBottomRightRadius: 4,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
   },
-  assistantBubble: {
-    backgroundColor: '#111114',
+  botDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#38bdf8' },
+  botTag: { color: '#ffffff', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  assistantBadgeSoul: {
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+  },
+  soulTag: { color: '#38bdf8', fontSize: 11, fontWeight: '600' },
+  assistantBadgeMeta: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+  },
+  metaText: { color: '#71717a', fontSize: 10, fontWeight: '500' },
+
+  messageBubble: { padding: 14, borderRadius: 20, maxWidth: '85%' },
+  userBubble: {
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.32)',
+    borderBottomRightRadius: 4,
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  assistantBubble: {
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
     borderBottomLeftRadius: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
   },
   // Claude-Style Thinking Accordion Styles
   thinkingContainer: {
     marginBottom: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.05)',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
+    borderColor: 'rgba(56, 189, 248, 0.18)',
     overflow: 'hidden',
   },
   thinkingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
   },
   thinkingHeaderTitle: {
-    color: '#a1a1aa',
+    color: '#38bdf8',
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
   thinkingBody: {
-    paddingHorizontal: 10,
-    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.04)',
-    paddingTop: 6,
+    borderTopColor: 'rgba(56, 189, 248, 0.12)',
+    paddingTop: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   thinkingText: {
-    color: '#71717a',
+    color: '#94a3b8',
     fontSize: 11,
     lineHeight: 16,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 
-  messageText: { color: '#e4e4e7', fontSize: 14, lineHeight: 21 },
+  messageText: { color: '#f4f4f5', fontSize: 14, lineHeight: 22 },
 
   inputDeck: {
     padding: 12,
@@ -1375,13 +1436,17 @@ const styles = StyleSheet.create({
   inputShell: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#111114',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 26,
+    backgroundColor: 'rgba(18, 18, 22, 0.88)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 28,
     paddingHorizontal: 14,
     paddingVertical: 6,
     gap: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
   },
   promptField: {
     flex: 1,
@@ -1393,7 +1458,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#18181d',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1401,7 +1468,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#38bdf8',
     alignItems: 'center',
     justifyContent: 'center',
   },

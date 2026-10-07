@@ -60,6 +60,10 @@ export async function testDirectoryWritable(dir: Directory): Promise<boolean> {
 export class StorageConfigService {
   private static cachedConfig: StorageConfig | null = null;
 
+  public static getCachedConfig(): StorageConfig | null {
+    return this.cachedConfig;
+  }
+
   private static get configFile(): File {
     return new File(Paths.document, CONFIG_FILENAME);
   }

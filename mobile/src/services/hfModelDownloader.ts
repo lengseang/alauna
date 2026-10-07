@@ -916,8 +916,22 @@ export class HFModelDownloader {
       headers['Authorization'] = `Bearer ${this.options.authBearerToken}`;
     }
 
-    if (startByte > 0) {
-      headers['Range'] = `bytes=${startByte}-`;
+    // If an in-memory task is already active and paused, resume it natively
+    if (this.activeDownloadTask && (this.activeDownloadTask as any).state === 'paused') {
+      try {
+        await this.activeDownloadTask.resumeAsync();
+        this.activeDownloadTask = null;
+        return;
+      } catch {
+        this.activeDownloadTask = null;
+      }
+    }
+
+    // Clean partial file if incomplete to prevent corrupted offset writes
+    if (this.partialFile.exists && (this.totalBytes <= 0 || this.partialFile.size < this.totalBytes)) {
+      try {
+        this.partialFile.delete();
+      } catch {}
     }
 
     this.abortController = new AbortController();
@@ -933,10 +947,10 @@ export class HFModelDownloader {
             signal: this.abortController.signal,
             onProgress: (p) => {
               if (this.pauseRequested) return;
-              const currentTotalWritten = startByte + (p.bytesWritten || 0);
+              const currentTotalWritten = p.bytesWritten || 0;
               this.bytesWritten = currentTotalWritten;
-              if (p.totalBytes > 0 && this.totalBytes <= 0) {
-                this.totalBytes = startByte + p.totalBytes;
+              if (p.totalBytes > 0) {
+                this.totalBytes = p.totalBytes;
               }
               this.calculateSpeedAndETA(currentTotalWritten);
               this.notifyProgress();
@@ -966,10 +980,10 @@ export class HFModelDownloader {
           signal: this.abortController?.signal,
           onProgress: (p) => {
             if (this.pauseRequested) return;
-            const currentTotalWritten = startByte + (p.bytesWritten || 0);
+            const currentTotalWritten = p.bytesWritten || 0;
             this.bytesWritten = currentTotalWritten;
-            if (p.totalBytes > 0 && this.totalBytes <= 0) {
-              this.totalBytes = startByte + p.totalBytes;
+            if (p.totalBytes > 0) {
+              this.totalBytes = p.totalBytes;
             }
             this.calculateSpeedAndETA(currentTotalWritten);
             this.notifyProgress();

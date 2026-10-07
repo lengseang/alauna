@@ -58,6 +58,19 @@ export class ModelManager {
     if (primary.exists) {
       return primary;
     }
+    const cachedConfig = StorageConfigService.getCachedConfig();
+    if (cachedConfig?.modelsUri) {
+      try {
+        const inCustom = new File(new Directory(cachedConfig.modelsUri), filename);
+        if (inCustom.exists) return inCustom;
+      } catch {}
+    }
+    if (cachedConfig?.vaultUri) {
+      try {
+        const inVault = new File(new Directory(cachedConfig.vaultUri), filename);
+        if (inVault.exists) return inVault;
+      } catch {}
+    }
     // Fallback 1: check default internal vault models directory
     const defaultVaultModels = new File(new Directory(new Directory(Paths.document, 'vault'), 'models'), filename);
     if (defaultVaultModels.exists) {
@@ -67,6 +80,11 @@ export class ModelManager {
     const legacy = new File(new Directory(Paths.document, 'models'), filename);
     if (legacy.exists) {
       return legacy;
+    }
+    // Fallback 3: check directly in document directory
+    const inDoc = new File(Paths.document, filename);
+    if (inDoc.exists) {
+      return inDoc;
     }
     return primary;
   }

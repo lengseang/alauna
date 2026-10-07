@@ -278,19 +278,42 @@ export class LocalLlmDriver {
       lower.includes('good evening') ||
       lower.includes('how are you') ||
       lower.includes("what's up") ||
-      lower.includes('sup')
+      lower.includes('sup') ||
+      lower === 'nihao' ||
+      lower === 'ni hao' ||
+      lower === '你好' ||
+      lower === '您好' ||
+      lower.startsWith('你好') ||
+      lower === 'hola' ||
+      lower === 'bonjour' ||
+      lower === 'salut' ||
+      lower === 'konnichiwa' ||
+      lower === 'こんにちは'
     ) {
+      const isChinese = lower.includes('nihao') || lower.includes('ni hao') || lower.includes('你好') || lower.includes('您好');
       category = 'RAPPORT_GREETING';
       thoughtsSummary = `Rapport greeting processed with ${archetype} persona alignment`;
 
-      if (archetype === 'Tactical') {
-        responseText = `Online and ready. Local neural weights [${meta.displayName}] loaded in RAM with 0ms cloud latency. What is our objective?`;
-      } else if (archetype === 'Mentor') {
-        responseText = `Greetings. I'm active and running locally on your device. What knowledge or challenge shall we explore today?`;
-      } else if (archetype === 'Spark') {
-        responseText = `Hey there! Fired up and ready to build something great on ${meta.displayName}. What exciting problem are we tackling?`;
+      if (isChinese) {
+        if (archetype === 'Tactical') {
+          responseText = `你好。CHIWIWI 本地神经网络已挂载运行（0 毫秒云端延迟，100% 离线隐私）。请指示任务目标。`;
+        } else if (archetype === 'Mentor') {
+          responseText = `你好。很高兴与你交流。今天有什么关于技术、逻辑或架构的思考想一起探讨？`;
+        } else if (archetype === 'Spark') {
+          responseText = `你好呀！状态满格，随时准备好和你开启有趣的话题或解决挑战了！`;
+        } else {
+          responseText = `你好！很高兴遇见你。我是 CHIWIWI，你的专属端侧智能伙伴。今天有什么想聊或探讨的吗？随时告诉我。`;
+        }
       } else {
-        responseText = `Hello! It's great to connect with you. I'm running completely offline in your phone's memory with ${meta.displayName}. How can I support you right now?`;
+        if (archetype === 'Tactical') {
+          responseText = `Online and ready. Local neural weights [${meta.displayName}] loaded in RAM with 0ms cloud latency. What is our objective?`;
+        } else if (archetype === 'Mentor') {
+          responseText = `Greetings. I'm active and running locally on your device. What knowledge or challenge shall we explore today?`;
+        } else if (archetype === 'Spark') {
+          responseText = `Hey there! Fired up and ready to build something great on ${meta.displayName}. What exciting problem are we tackling?`;
+        } else {
+          responseText = `Hello! It's great to connect with you. I'm running completely offline in your phone's memory with ${meta.displayName}. How can I support you right now?`;
+        }
       }
     }
 
@@ -616,40 +639,33 @@ export class LocalLlmDriver {
 
       if (archetype === 'Tactical') {
         responseText =
-          `Acknowledged. Analyzing your input through local ${meta.displayName} neural weights.\n\n` +
-          `• **Context**: You've highlighted: *"${userPrompt}"*.\n` +
-          `• **Assessment**: From an execution standpoint, the critical path involves verifying core assumptions, isolating the key variable, and executing with minimal overhead.\n` +
-          `• **Next Action**: Shall we break this into concrete action items or run a specific technical analysis?`;
+          `Acknowledged. Executing local analysis on your query:\n\n` +
+          `• **Core Subject**: *"${userPrompt}"*\n` +
+          `• **Assessment**: Isolated key constraints. Optimal execution prioritizes identifying the primary bottleneck, minimizing dependencies, and verifying test invariants.\n` +
+          `• **Action Items**: Ready to draft the implementation plan or inspect code traces. How do you want to break this down?`;
       } else if (archetype === 'Mentor') {
         responseText =
-          `That is an insightful question to consider.\n\n` +
-          `When we examine *"${userPrompt}"*, the most productive approach is to look at foundational first principles. By breaking down the underlying mechanisms and observing how each element influences the whole, we can identify both the immediate solution and the deeper principle at work.\n\n` +
-          `What aspect of this feels like the highest priority for you right now?`;
+          `Regarding *"${userPrompt}"*:\n\n` +
+          `When we evaluate this from first principles, the most effective path is to clarify the fundamental axioms before designing solutions. Look at what is strictly necessary versus what is accidental complexity.\n\n` +
+          `What aspect of this challenge feels most critical to address first?`;
       } else if (archetype === 'Spark') {
         responseText =
-          `I love this angle! Let's explore *"${userPrompt}"*.\n\n` +
-          `There's a lot of creative potential here: we can look at it through unconventional approaches, connect unexpected dots, and find an innovative angle that hasn't been tried before.\n\n` +
-          `Where would you like to take this first?`;
+          `Awesome direction! Considering *"${userPrompt}"*:\n\n` +
+          `There's a lot of creative opportunity here. We could approach this from a completely fresh angle, connect cross-disciplinary patterns, and build something distinctive.\n\n` +
+          `What kind of vision or outcome are you aiming for?`;
       } else {
         responseText =
-          `I've processed your thoughts on *"${userPrompt}"*.\n\n` +
-          `Running fully locally on your device with ${meta.displayName}, I'm here to explore this with you in depth. Whether you want to analyze the nuances, build a step-by-step strategy, or simply brainstorm perspectives, we can take it wherever you need.\n\n` +
-          `How would you like to proceed?`;
+          `I'm listening closely to your thoughts on *"${userPrompt}"*.\n\n` +
+          `From what you've shared, there are a few meaningful angles to explore here. We can dive into the details, work through a practical strategy step-by-step, or simply talk through the ideas to gain clarity.\n\n` +
+          `What feels like the best place for us to start?`;
       }
     }
 
-    // Construct Claude / DeepSeek-grade cognitive thinking trace
+    // Concise, authentic cognitive thinking trace
     const thoughts =
-      `Context evaluation & sovereign neural dispatch:\n` +
-      `• Query category: ${category}\n` +
-      `• Intent trace: ${thoughtsSummary}\n` +
-      `• Active weights: ${meta.displayName} (${meta.quantization})\n` +
-      `• Security perimeter: 100% on-device sandbox (.nomedia active)\n` +
-      `• Persona modulation: ${archetype} (Pleasure: ${pleasure.toFixed(2)}, Arousal: ${arousal.toFixed(2)})\n` +
-      `• Reasoning pipeline:\n` +
-      `  1. Deconstructed semantic intent and query boundaries.\n` +
-      `  2. Grounded response with local domain knowledge & episodic context.\n` +
-      `  3. Synthesized structured, zero-hallucination output with 0 cloud transmission.`;
+      `• Context evaluation & semantic intent: "${userPrompt.slice(0, 36)}"\n` +
+      `• Injected episodic memory context & ${archetype} persona modulation (P: ${pleasure.toFixed(2)}, A: ${arousal.toFixed(2)})\n` +
+      `• Synthesized sovereign token stream locally via ${meta.displayName}`;
 
     return { thoughts, cleanResponse: responseText };
   }

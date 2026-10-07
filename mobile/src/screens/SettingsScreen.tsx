@@ -24,6 +24,7 @@ import { LocalLlmDriver } from '../engine/localLlm';
 import { MMKVCache, CACHE_KEYS } from '../services/mmkvCache';
 import { VaultStorage } from '../services/vaultStorage';
 import { SoulCustomizer } from '../components/SoulCustomizer';
+import { DownloadManager } from '../services/downloadManager';
 import { S23_MODEL_DATABASE, LocalModelSpec, ModelGrade } from '../types/settings';
 import {
   SoulIcon,
@@ -275,7 +276,23 @@ export default function SettingsScreen({
 
   useEffect(() => {
     loadStats();
-    // Background downloads persist across screens and continue in the background
+    // Subscribe to global background downloads (survives screen unmounts and backgrounding)
+    const unsubscribe = DownloadManager.subscribe((activeStates) => {
+      setDownloads(prev => {
+        const next = { ...prev };
+        for (const [id, s] of Object.entries(activeStates)) {
+          next[id] = {
+            status: s.status === 'completed' ? 'completed' : s.status === 'paused' ? 'paused' : s.status === 'downloading' ? 'downloading' : 'idle',
+            progress: s.progress,
+            speedMbPerSec: s.speedMbPerSec,
+            downloadedMb: s.downloadedMb,
+            totalMb: s.totalMb,
+          };
+        }
+        return next;
+      });
+    });
+    return () => unsubscribe();
   }, []);
 
   const loadStats = async () => {
@@ -377,93 +394,28 @@ export default function SettingsScreen({
     if (!spec) return;
 
     try {
-      const downloader = ModelManager.createModelDownloader(spec, progress => {
-        const progPercent = Math.min(100, Math.round(progress.progress * 100));
-        const downloadedMb = Math.round((progress.bytesWritten / (1024 * 1024)) * 10) / 10;
-        const totalCalculatedMb = progress.totalBytes > 0
-          ? Math.round((progress.totalBytes / (1024 * 1024)) * 10) / 10
-          : totalMb;
-
-        setDownloads(prev => ({
-          ...prev,
-          [modelId]: {
-            status: progress.status === 'completed' ? 'completed' : progress.status === 'paused' ? 'paused' : 'downloading',
-            progress: progPercent,
-            speedMbPerSec: progress.speedMBs,
-            downloadedMb,
-            totalMb: totalCalculatedMb,
-          },
-        }));
-
-        if (progress.status === 'completed') {
-          delete downloadersRef.current[modelId];
-          setDownloads(prev => ({
-            ...prev,
-            [modelId]: {
-              status: 'completed',
-              progress: 100,
-              speedMbPerSec: 0,
-              downloadedMb: totalCalculatedMb,
-              totalMb: totalCalculatedMb,
-            },
-          }));
-          loadStats();
-          Alert.alert(
-            'Download Complete',
-            `Model [${spec.name}] has been saved to your storage vault.\nWould you like to verify and mount into RAM now?`,
-            [
-              { text: 'Later', style: 'cancel' },
-              { text: 'Verify & Mount', onPress: () => handleMountModel(modelId) },
-            ]
-          );
-        }
-      });
-
-      downloadersRef.current[modelId] = downloader;
-      await downloader.start();
-      delete downloadersRef.current[modelId];
+      await DownloadManager.startDownload(spec);
       await loadStats();
-    } catch (err: any) {
-      // If error occurs, fall back gracefully and report status
-      delete downloadersRef.current[modelId];
-      setDownloads(prev => ({
-        ...prev,
-        [modelId]: {
-          status: 'idle',
-          progress: 0,
-          speedMbPerSec: 0,
-          downloadedMb: 0,
-          totalMb,
-        },
-      }));
       Alert.alert(
-        'Download Notice',
-        `Could not complete network transfer: ${err?.message || 'Check offline connection'}`
+        'Download Complete',
+        `Model [${spec.name}] has been saved to your storage vault.\nWould you like to verify and mount into RAM now?`,
+        [
+          { text: 'Later', style: 'cancel' },
+          { text: 'Verify & Mount', onPress: () => handleMountModel(modelId) },
+        ]
       );
+    } catch (err: any) {
+      if (DownloadManager.getState(modelId)?.status !== 'paused') {
+        Alert.alert(
+          'Download Notice',
+          `Network transfer note: ${err?.message || 'Download paused or interrupted.'}\n\n• Progress is preserved on disk.\n• Tap Resume anytime to continue.`
+        );
+      }
     }
   };
 
   const handlePauseDownload = async (modelId: string) => {
-    const downloader = downloadersRef.current[modelId];
-    if (downloader && typeof downloader.pause === 'function') {
-      try {
-        await downloader.pause();
-      } catch {}
-      delete downloadersRef.current[modelId];
-    }
-
-    setDownloads(prev => {
-      const curr = prev[modelId];
-      if (!curr) return prev;
-      return {
-        ...prev,
-        [modelId]: {
-          ...curr,
-          status: 'paused',
-          speedMbPerSec: 0,
-        },
-      };
-    });
+    await DownloadManager.pauseDownload(modelId);
   };
 
   const handleResumeDownload = (modelId: string, sizeFormatted: string) => {
@@ -471,19 +423,8 @@ export default function SettingsScreen({
   };
 
   const handleCancelDownload = async (modelId: string) => {
-    const downloader = downloadersRef.current[modelId];
-    if (downloader && typeof downloader.cancel === 'function') {
-      try {
-        await downloader.cancel();
-      } catch {}
-      delete downloadersRef.current[modelId];
-    }
-
-    setDownloads(prev => {
-      const next = { ...prev };
-      delete next[modelId];
-      return next;
-    });
+    await DownloadManager.cancelDownload(modelId);
+    await loadStats();
   };
 
   const handleDeleteModel = async (modelId: string) => {
