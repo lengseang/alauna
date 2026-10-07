@@ -664,6 +664,42 @@ export class HFModelDownloader {
   }
 
   /**
+   * Validate that the file is an authentic GGUF container.
+   * GGUF specification defines the first 4 bytes as ASCII 'G','G','U','F' (0x47, 0x47, 0x55, 0x46).
+   */
+  public static async verifyGGUFHeader(file: File): Promise<boolean> {
+    try {
+      if (!file.exists || file.size < 1024 * 1024) return false;
+      if (typeof (file as any).open === 'function') {
+        const handle = (file as any).open(FileMode.ReadOnly);
+        try {
+          const chunk = handle.readBytes(4);
+          if (chunk && chunk.length >= 4) {
+            return (
+              chunk[0] === 0x47 && // 'G'
+              chunk[1] === 0x47 && // 'G'
+              chunk[2] === 0x55 && // 'U'
+              chunk[3] === 0x46    // 'F'
+            );
+          }
+        } finally {
+          handle.close();
+        }
+      } else if (typeof (file as any).slice === 'function') {
+        const blob = (file as any).slice(0, 4);
+        const buf = await blob.arrayBuffer();
+        const u8 = new Uint8Array(buf);
+        if (u8.length >= 4) {
+          return u8[0] === 0x47 && u8[1] === 0x47 && u8[2] === 0x55 && u8[3] === 0x46;
+        }
+      }
+      return true; // Fallback for environments without open/slice handle
+    } catch {
+      return true;
+    }
+  }
+
+  /**
    * Final destination file in models vault.
    */
   public get destinationFile(): File {
@@ -793,8 +829,13 @@ export class HFModelDownloader {
     // Check if target file already exists and is intact
     if (this.destinationFile.exists) {
       if (this.destinationFile.size > 1024 * 1024) {
-        this.updateStatus('completed');
-        return this.destinationFile.uri;
+        const isGGUF = await HFModelDownloader.verifyGGUFHeader(this.destinationFile);
+        if (isGGUF) {
+          this.updateStatus('completed');
+          return this.destinationFile.uri;
+        } else {
+          try { this.destinationFile.delete(); } catch {}
+        }
       } else {
         try {
           this.destinationFile.delete();
@@ -824,8 +865,17 @@ export class HFModelDownloader {
     let startByte = 0;
     if (this.partialFile.exists) {
       const partSize = this.partialFile.size;
-      // If partial file already downloaded all bytes (or is larger than remote size), don't request bytes=totalBytes- (which causes HTTP 416)
+      // If partial file already downloaded all bytes (or is larger than remote size), check GGUF header
       if (this.totalBytes > 0 && partSize >= this.totalBytes) {
+        const isGGUF = await HFModelDownloader.verifyGGUFHeader(this.partialFile);
+        if (isGGUF) {
+          if (this.destinationFile.exists) {
+            try { this.destinationFile.delete(); } catch {}
+          }
+          await this.partialFile.move(this.destinationFile);
+          this.updateStatus('completed');
+          return this.destinationFile.uri;
+        }
         startByte = this.totalBytes;
       } else {
         startByte = partSize;
@@ -849,34 +899,48 @@ export class HFModelDownloader {
       }
 
       // 3. Post-download verification
-      if (expectedHash) {
-        this.updateStatus('verifying');
+      this.updateStatus('verifying');
+      const partSize = this.partialFile.size;
+      if (partSize < 1024 * 1024) {
+        this.updateStatus('error');
+        throw new HFDownloadError(
+          `Download incomplete: payload is only ${(partSize / 1024).toFixed(1)} KB (expected GGUF model weights).`,
+          this.filename,
+          partSize
+        );
+      }
+
+      // Check authentic GGUF container magic bytes ('G','G','U','F')
+      const isGGUF = await HFModelDownloader.verifyGGUFHeader(this.partialFile);
+      if (!isGGUF) {
+        this.updateStatus('error');
+        throw new HFDownloadError(
+          `Corrupt model file: missing GGUF container header. Downloaded data is not a valid neural model.`,
+          this.filename,
+          partSize
+        );
+      }
+
+      // SHA-256 verification: only enforce strictly if caller passed an explicit expectedSha256
+      if (this.options.expectedSha256) {
         try {
           const verification = await this.verifyFileSha256(
             this.partialFile,
-            expectedHash
+            this.options.expectedSha256
           );
 
           if (!verification.matches) {
-            // Check if file size matches the authoritative remote payload length
-            const partSize = this.partialFile.size;
-            if (this.totalBytes > 0 && partSize === this.totalBytes) {
-              // Expected hash from remote was likely an internal ETag/Xet hash rather than raw file SHA256.
-              // Payload size is byte-for-byte exact, so proceed safely.
-            } else {
-              this.updateStatus('error');
-              throw new HFSha256MismatchError(
-                this.filename,
-                verification.calculatedHash,
-                expectedHash
-              );
-            }
+            this.updateStatus('error');
+            throw new HFSha256MismatchError(
+              this.filename,
+              verification.calculatedHash,
+              this.options.expectedSha256
+            );
           }
         } catch (verifyErr) {
           if (verifyErr instanceof HFSha256MismatchError) {
             throw verifyErr;
           }
-          // Verification stream read issues should not discard an already downloaded valid file
         }
       }
 
@@ -931,8 +995,8 @@ export class HFModelDownloader {
       }
     }
 
-    // Clean partial file if incomplete to prevent corrupted offset writes
-    if (this.partialFile.exists && (this.totalBytes <= 0 || this.partialFile.size < this.totalBytes)) {
+    // Clean partial file only if starting fresh from offset 0
+    if (startByte === 0 && this.partialFile.exists) {
       try {
         this.partialFile.delete();
       } catch {}

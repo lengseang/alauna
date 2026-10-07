@@ -105,8 +105,9 @@ class SovereignDownloadManager {
       return '';
     }
 
-    // Resolve target models directory from sovereign storage config
-    const modelsDir = await StorageConfigService.getModelsDirectory();
+    // Target models directory is guaranteed-writable app sandbox
+    const modelsDir = HFModelDownloader.modelsDirectory;
+    await HFModelDownloader.initStorage();
 
     const parseSizeToMb = (sizeStr: string): number => {
       const num = parseFloat(sizeStr);
@@ -115,6 +116,65 @@ class SovereignDownloadManager {
     };
 
     const targetTotalMb = parseSizeToMb(spec.sizeFormatted);
+
+    // If already exists in memory and was paused, resume it natively
+    if (existing) {
+      if (existing.getStatus() === 'downloading') {
+        return '';
+      }
+      if (existing.getStatus() === 'paused') {
+        this.states[modelId] = {
+          ...this.states[modelId],
+          status: 'downloading',
+          updatedAt: Date.now(),
+        };
+        this.notify();
+        try {
+          activateKeepAwakeAsync('chiwiwi_model_download').catch(() => {});
+        } catch {}
+
+        try {
+          const finalUri = await existing.resume();
+          this.activeDownloaders.delete(modelId);
+          if (this.activeDownloaders.size === 0) {
+            try { deactivateKeepAwake('chiwiwi_model_download'); } catch {}
+          }
+          await this.syncToCustomVault(spec.filename, finalUri);
+          this.states[modelId] = {
+            modelId,
+            filename: spec.filename,
+            status: 'completed',
+            progress: 100,
+            speedMbPerSec: 0,
+            downloadedMb: this.states[modelId]?.totalMb || targetTotalMb,
+            totalMb: this.states[modelId]?.totalMb || targetTotalMb,
+            updatedAt: Date.now(),
+          };
+          this.notify();
+          return finalUri;
+        } catch (err: any) {
+          if (existing.getStatus() !== 'paused') {
+            this.activeDownloaders.delete(modelId);
+            if (this.activeDownloaders.size === 0) {
+              try { deactivateKeepAwake('chiwiwi_model_download'); } catch {}
+            }
+            this.states[modelId] = {
+              modelId,
+              filename: spec.filename,
+              status: 'error',
+              progress: this.states[modelId]?.progress || 0,
+              speedMbPerSec: 0,
+              downloadedMb: this.states[modelId]?.downloadedMb || 0,
+              totalMb: targetTotalMb,
+              error: err?.message || 'Download interrupted',
+              updatedAt: Date.now(),
+            };
+            this.notify();
+          }
+          throw err;
+        }
+      }
+    }
 
     this.states[modelId] = {
       modelId,
@@ -172,20 +232,7 @@ class SovereignDownloadManager {
         try { deactivateKeepAwake('chiwiwi_model_download'); } catch {}
       }
 
-      // Sync into user-configured custom vault directory if mapped
-      try {
-        const config = await StorageConfigService.getConfig();
-        if (config.isConfigured && config.modelsUri) {
-          const customModelsDir = new Directory(config.modelsUri);
-          if (customModelsDir.exists && customModelsDir.uri !== modelsDir.uri) {
-            const destInCustom = new File(customModelsDir, spec.filename);
-            const sourceFile = new File(finalUri);
-            if (sourceFile.exists && !destInCustom.exists) {
-              await sourceFile.copy(destInCustom);
-            }
-          }
-        }
-      } catch {}
+      await this.syncToCustomVault(spec.filename, finalUri);
 
       this.states[modelId] = {
         modelId,
@@ -200,11 +247,11 @@ class SovereignDownloadManager {
       this.notify();
       return finalUri;
     } catch (err: any) {
-      this.activeDownloaders.delete(modelId);
-      if (this.activeDownloaders.size === 0) {
-        try { deactivateKeepAwake('chiwiwi_model_download'); } catch {}
-      }
-      if (this.states[modelId]?.status !== 'paused') {
+      if (downloader.getStatus() !== 'paused') {
+        this.activeDownloaders.delete(modelId);
+        if (this.activeDownloaders.size === 0) {
+          try { deactivateKeepAwake('chiwiwi_model_download'); } catch {}
+        }
         this.states[modelId] = {
           modelId,
           filename: spec.filename,
@@ -223,13 +270,33 @@ class SovereignDownloadManager {
   }
 
   /**
-   * Pause active download safely.
+   * Sync completed model into user-configured custom storage vault.
+   */
+  private async syncToCustomVault(filename: string, sourceUri: string): Promise<void> {
+    try {
+      const config = await StorageConfigService.getConfig();
+      if (config.isConfigured && config.modelsUri) {
+        const customModelsDir = new Directory(config.modelsUri);
+        const internalDir = HFModelDownloader.modelsDirectory;
+        if (customModelsDir.exists && customModelsDir.uri !== internalDir.uri) {
+          const destInCustom = new File(customModelsDir, filename);
+          const sourceFile = new File(sourceUri);
+          if (sourceFile.exists && !destInCustom.exists) {
+            await sourceFile.copy(destInCustom);
+          }
+        }
+      }
+    } catch {}
+  }
+
+  /**
+   * Pause active download safely without losing in-memory resume state.
    */
   public async pauseDownload(modelId: string): Promise<void> {
     const downloader = this.activeDownloaders.get(modelId);
     if (downloader) {
       await downloader.pause();
-      this.activeDownloaders.delete(modelId);
+      // Keep downloader in activeDownloaders so resumeAsync() works without recreating task
       if (this.activeDownloaders.size === 0) {
         try { deactivateKeepAwake('chiwiwi_model_download'); } catch {}
       }
@@ -247,7 +314,7 @@ class SovereignDownloadManager {
   public async cancelDownload(modelId: string): Promise<void> {
     const downloader = this.activeDownloaders.get(modelId);
     if (downloader) {
-      await downloader.cancel();
+      await downloader.cancel(true);
       this.activeDownloaders.delete(modelId);
       if (this.activeDownloaders.size === 0) {
         try { deactivateKeepAwake('chiwiwi_model_download'); } catch {}

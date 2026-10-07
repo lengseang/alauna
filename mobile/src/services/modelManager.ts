@@ -134,6 +134,14 @@ export class ModelManager {
         error: `Incomplete download payload (${(size / 1024).toFixed(1)} KB). GGUF models require full weights.`,
       };
     }
+    const isGGUF = await HFModelDownloader.verifyGGUFHeader(file);
+    if (!isGGUF) {
+      return {
+        valid: false,
+        sizeBytes: size,
+        error: 'Corrupt model container: file does not contain standard GGUF header magic bytes.',
+      };
+    }
     return { valid: true, sizeBytes: size };
   }
 
