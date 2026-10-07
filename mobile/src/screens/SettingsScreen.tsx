@@ -11,6 +11,7 @@ import {
   Switch,
   TextInput,
   Alert,
+  Image,
 } from 'react-native';
 import { Paths, Directory } from 'expo-file-system';
 import Svg, { Rect } from 'react-native-svg';
@@ -1581,7 +1582,11 @@ export default function SettingsScreen({
         {/* Top Brand Header (Mihon-Style) */}
         <View style={styles.topGlyphContainer}>
           <View style={styles.brandGlyph}>
-            <Text style={styles.brandGlyphText}>千</Text>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.brandLogoImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.brandTitle}>CHIWIWI SOVEREIGN</Text>
           <Text style={styles.brandSub}>
@@ -1761,7 +1766,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
+    overflow: 'hidden',
   },
+  brandLogoImage: { width: 56, height: 56, borderRadius: 16 },
   brandGlyphText: { color: '#ffffff', fontSize: 30, fontWeight: '800' },
   brandTitle: { color: '#ffffff', fontSize: 14, fontWeight: '700', letterSpacing: 1 },
   brandSub: { color: '#71717a', fontSize: 12, marginTop: 4 },

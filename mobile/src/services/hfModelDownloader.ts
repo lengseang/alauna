@@ -760,7 +760,19 @@ export class HFModelDownloader {
    * Begin or resume model download.
    */
   public async start(): Promise<string> {
-    await HFModelDownloader.initStorage();
+    // Ensure destination directory exists and has .nomedia
+    const destDir = this.destinationFile.parentDirectory;
+    if (!destDir.exists) {
+      try {
+        destDir.create();
+      } catch {}
+    }
+    const noMedia = new File(destDir, '.nomedia');
+    if (!noMedia.exists) {
+      try {
+        noMedia.write('');
+      } catch {}
+    }
 
     // Check if target file already exists and is intact
     if (this.destinationFile.exists) {

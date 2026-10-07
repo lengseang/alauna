@@ -85,19 +85,32 @@ export class StorageConfigService {
       } catch {}
     }
 
-    // Initialize subdirectories
-    const modelsDir = new Directory(vaultDir, 'models');
-    if (!modelsDir.exists) modelsDir.create();
+    // Note: Expo FileSystem DownloadTask and llama.rn require standard file:// POSIX paths.
+    // External SAF directories (content://) cannot be directly written to by native C++ mmap or download tasks.
+    // If the picked directory is a SAF content:// URI, we store models in the reliable private file:// sandbox
+    // while keeping chats, media, and metadata in the user vault.
+    const isSafUri = vaultDir.uri.startsWith('content://');
+    const defaultVault = this.getDefaultVaultDirectory();
+    const modelsDir = isSafUri
+      ? new Directory(defaultVault, 'models')
+      : new Directory(vaultDir, 'models');
+
+    try {
+      if (!modelsDir.exists) modelsDir.create();
+    } catch {}
 
     const chatsDir = new Directory(vaultDir, 'chats');
-    if (!chatsDir.exists) chatsDir.create();
+    try {
+      if (!chatsDir.exists) chatsDir.create();
+    } catch {}
 
     const mediaDir = new Directory(vaultDir, 'media');
-    if (!mediaDir.exists) mediaDir.create();
-
-    // Prevent gallery/photos indexing
-    const nomedia = new File(mediaDir, '.nomedia');
-    if (!nomedia.exists) nomedia.write('');
+    try {
+      if (!mediaDir.exists) mediaDir.create();
+      // Prevent gallery/photos indexing
+      const nomedia = new File(mediaDir, '.nomedia');
+      if (!nomedia.exists) nomedia.write('');
+    } catch {}
 
     const config: StorageConfig = {
       isConfigured: true,
@@ -110,8 +123,10 @@ export class StorageConfigService {
     };
 
     this.cachedConfig = config;
-    const file = this.configFile;
-    file.write(JSON.stringify(config, null, 2));
+    try {
+      const file = this.configFile;
+      file.write(JSON.stringify(config, null, 2));
+    } catch {}
 
     return config;
   }
@@ -126,10 +141,15 @@ export class StorageConfigService {
 
   /**
    * Get active models directory based on user configuration.
+   * Guarantees a valid, writable file:// directory exists.
    */
   public static async getModelsDirectory(): Promise<Directory> {
     const config = await this.getConfig();
-    const dir = new Directory(config.modelsUri);
+    let dir = new Directory(config.modelsUri);
+    // If modelsUri is somehow a content:// URI, fallback to private sandbox models directory
+    if (dir.uri.startsWith('content://')) {
+      dir = new Directory(this.getDefaultVaultDirectory(), 'models');
+    }
     if (!dir.exists) {
       try {
         dir.create();

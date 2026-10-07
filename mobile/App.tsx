@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Alert,
   PermissionsAndroid,
+  Image,
 } from 'react-native';
 import { ARCHETYPES, SoulArchetypeKey, PADVector } from './src/types/soul';
 import { MobileOrchestrator } from './src/engine/orchestrator';
@@ -48,7 +49,6 @@ import {
 } from './src/components/Icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { Image } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -605,7 +605,11 @@ export default function App() {
             {currentThread.messages.length === 0 ? (
               <View style={styles.emptyWelcomeContainer}>
                 <View style={styles.emptyHeroGlyph}>
-                  <Text style={styles.emptyHeroGlyphText}>千</Text>
+                  <Image
+                    source={require('./assets/icon.png')}
+                    style={styles.emptyHeroLogoImage}
+                    resizeMode="contain"
+                  />
                 </View>
                 <Text style={styles.emptyHeroTitle}>CHIWIWI SOVEREIGN</Text>
                 <Text style={styles.emptyHeroSub}>
@@ -1006,18 +1010,18 @@ export default function App() {
               <View style={styles.storageActionsColumn}>
                 <TouchableOpacity
                   style={styles.storagePrimaryBtn}
-                  onPress={handlePickStorageFolder}
+                  onPress={handleUseDefaultSandbox}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.storagePrimaryBtnText}>CHOOSE STORAGE FOLDER</Text>
+                  <Text style={styles.storagePrimaryBtnText}>USE SECURE APP STORAGE (RECOMMENDED)</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.storageSecondaryBtn}
-                  onPress={handleUseDefaultSandbox}
+                  onPress={handlePickStorageFolder}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.storageSecondaryBtnText}>USE APP INTERNAL SANDBOX</Text>
+                  <Text style={styles.storageSecondaryBtnText}>CHOOSE EXTERNAL VAULT FOLDER</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1126,7 +1130,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+    overflow: 'hidden',
   },
+  emptyHeroLogoImage: { width: 50, height: 50, borderRadius: 14 },
   emptyHeroGlyphText: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
   emptyHeroTitle: {
     color: '#ffffff',
