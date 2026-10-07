@@ -86,6 +86,38 @@ export default function App() {
 
   // Voice Pulse Animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Streaming & Loading Indicator Dot Animations
+  const dotAnim1 = useRef(new Animated.Value(0.3)).current;
+  const dotAnim2 = useRef(new Animated.Value(0.3)).current;
+  const dotAnim3 = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    if (isGenerating) {
+      const animateDot = (anim: Animated.Value, delay: number) => {
+        return Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
+            Animated.delay(Math.max(0, 800 - delay)),
+          ])
+        );
+      };
+      const a1 = animateDot(dotAnim1, 0);
+      const a2 = animateDot(dotAnim2, 200);
+      const a3 = animateDot(dotAnim3, 400);
+      a1.start();
+      a2.start();
+      a3.start();
+      return () => {
+        a1.stop();
+        a2.stop();
+        a3.stop();
+      };
+    }
+  }, [isGenerating]);
 
   useEffect(() => {
     (async () => {
@@ -364,11 +396,19 @@ export default function App() {
     if (isGenerating) return;
     if (!inputText.trim() && selectedMedia.length === 0) return;
 
-    // Check if storage vault is initialized
+    // Check if storage vault is initialized; if not, automatically initialize default sandbox to guarantee seamless chat
     const isConfigured = await StorageConfigService.isStorageConfigured();
     if (!isConfigured) {
-      setStorageModalOpen(true);
-      return;
+      try {
+        const config = await StorageConfigService.useDefaultSandbox();
+        setConfiguredVaultPath(config.vaultUri);
+        await VaultStorage.initVault();
+        await ModelManager.initSandbox();
+      } catch {
+        // Fallback to modal if initialization fails
+        setStorageModalOpen(true);
+        return;
+      }
     }
 
     const userText = inputText.trim();
@@ -411,6 +451,10 @@ export default function App() {
       updatedAt: Date.now(),
     }));
 
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+
     try {
       // Execute turn asynchronously through on-device streaming generator
       const threadArch = currentThread.soulConfig.archetype;
@@ -433,11 +477,13 @@ export default function App() {
               m.id === botMsgId ? { ...m, text: accumulatedText } : m
             ),
           }));
+          scrollViewRef.current?.scrollToEnd({ animated: false });
         }
       );
 
       const engineBadge = isDownloaded ? 'GGUF On-Device' : 'Fast-Path (Download weights in Settings)';
 
+      let updatedSnapshot: ChatThread | null = null;
       setCurrentThread(prev => {
         let updated: ChatThread = {
           ...prev,
@@ -460,13 +506,19 @@ export default function App() {
           updatedAt: Date.now(),
         };
 
-        // Claude-Style Automatic Session Compaction if conversation exceeds token threshold
+        // Automatic Session Compaction if conversation exceeds token threshold
         updated = VaultStorage.compactSession(updated, 2048);
-        VaultStorage.saveThread(updated);
+        updatedSnapshot = updated;
         return updated;
       });
 
-      loadSavedThreads();
+      if (updatedSnapshot) {
+        await VaultStorage.saveThread(updatedSnapshot);
+      }
+      await loadSavedThreads();
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 80);
     } catch (err: any) {
       Alert.alert('Inference Notice', `Local generation interrupted: ${err?.message || 'Check model weights'}`);
       // Remove empty bot placeholder if it had zero tokens
@@ -599,6 +651,7 @@ export default function App() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            ref={scrollViewRef}
             style={styles.chatScroll}
             contentContainerStyle={styles.chatContent}
             keyboardShouldPersistTaps="handled"
@@ -606,6 +659,7 @@ export default function App() {
             {currentThread.messages.length === 0 ? (
               <View style={styles.emptyWelcomeContainer}>
                 <View style={styles.emptyHeroGlyph}>
+                  <View style={styles.emptyHeroAura} />
                   <Image
                     source={require('./assets/icon.png')}
                     style={styles.emptyHeroLogoImage}
@@ -706,9 +760,13 @@ export default function App() {
                     {m.text ? (
                       <Text style={styles.messageText}>{m.text}</Text>
                     ) : isGenerating && m.id === streamingMsgId ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                        <ActivityIndicator size="small" color="#38bdf8" />
-                        <Text style={[styles.messageText, { color: '#71717a', fontSize: 13 }]}>Synthesizing tokens...</Text>
+                      <View style={styles.thinkingWaveRow}>
+                        <View style={styles.thinkingDotCluster}>
+                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim1, transform: [{ scale: dotAnim1 }] }]} />
+                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim2, transform: [{ scale: dotAnim2 }] }]} />
+                          <Animated.View style={[styles.streamPulseDot, { opacity: dotAnim3, transform: [{ scale: dotAnim3 }] }]} />
+                        </View>
+                        <Text style={styles.thinkingWaveText}>Synthesizing tokens on-device...</Text>
                       </View>
                     ) : null}
                   </View>
@@ -1122,33 +1180,68 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   emptyHeroGlyph: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: '#18181d',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    width: 96,
+    height: 96,
+    borderRadius: 28,
+    backgroundColor: '#0d0d11',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    overflow: 'hidden',
+    marginBottom: 20,
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 8,
+    position: 'relative',
   },
-  emptyHeroLogoImage: { width: 50, height: 50, borderRadius: 14 },
+  emptyHeroAura: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
+    backgroundColor: 'rgba(56, 189, 248, 0.04)',
+  },
+  emptyHeroLogoImage: { width: 84, height: 84, borderRadius: 24 },
   emptyHeroGlyphText: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
   emptyHeroTitle: {
     color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 1.5,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 2,
     marginBottom: 6,
   },
   emptyHeroSub: {
     color: '#71717a',
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
-    lineHeight: 18,
-    maxWidth: 280,
+    lineHeight: 19,
+    maxWidth: 290,
     marginBottom: 32,
+  },
+  thinkingWaveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  thinkingDotCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  streamPulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#38bdf8',
+  },
+  thinkingWaveText: {
+    color: '#38bdf8',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   chipDeck: {
     width: '100%',
