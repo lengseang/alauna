@@ -543,13 +543,14 @@ export class HFModelResolver {
           // If repo tree lookup fails, continue without blocking download
         }
       }
+      const resolvedDirectUrl = headResponse.url || downloadUrl;
 
       return {
         path: filename,
         filename,
         size,
         sizeFormatted: this.formatBytes(size),
-        downloadUrl,
+        downloadUrl: resolvedDirectUrl,
         oid: lfsSha256,
         lfsSha256,
         quantization: this.parseQuantization(filename),
@@ -609,7 +610,7 @@ export class HFModelDownloader {
   private readonly filename: string;
   private readonly revision: string;
   private readonly targetFilename: string;
-  private readonly downloadUrl: string;
+  private downloadUrl: string;
   private readonly alpha: number;
 
   private status: DownloadStatus = 'idle';
@@ -812,6 +813,9 @@ export class HFModelDownloader {
       this.options.authBearerToken
     );
     this.totalBytes = remoteInfo.size;
+    if (remoteInfo.downloadUrl) {
+      this.downloadUrl = remoteInfo.downloadUrl;
+    }
 
     // Use remote LFS sha256 if not explicitly provided
     const expectedHash = this.options.expectedSha256 || remoteInfo.lfsSha256;

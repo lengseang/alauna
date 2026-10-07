@@ -70,7 +70,7 @@ export type SubScreen = 'main' | 'soul' | 'models' | 'speculative' | 'audio' | '
 export type SortOption = 'ram_asc' | 'ram_desc' | 'size_asc' | 'size_desc' | 'name_asc';
 export type Capability = 'Text' | 'Image' | 'Voice' | 'Code' | 'Video';
 
-export type DownloadStatus = 'idle' | 'downloading' | 'paused' | 'completed';
+export type DownloadStatus = 'idle' | 'resolving' | 'downloading' | 'paused' | 'verifying' | 'completed';
 
 export interface ModelDownloadState {
   status: DownloadStatus;
@@ -281,8 +281,21 @@ export default function SettingsScreen({
       setDownloads(prev => {
         const next = { ...prev };
         for (const [id, s] of Object.entries(activeStates)) {
+          const status: DownloadStatus =
+            s.status === 'completed'
+              ? 'completed'
+              : s.status === 'paused'
+              ? 'paused'
+              : s.status === 'downloading'
+              ? 'downloading'
+              : s.status === 'resolving'
+              ? 'resolving'
+              : s.status === 'verifying'
+              ? 'verifying'
+              : 'idle';
+
           next[id] = {
-            status: s.status === 'completed' ? 'completed' : s.status === 'paused' ? 'paused' : s.status === 'downloading' ? 'downloading' : 'idle',
+            status,
             progress: s.progress,
             speedMbPerSec: s.speedMbPerSec,
             downloadedMb: s.downloadedMb,
@@ -367,7 +380,7 @@ export default function SettingsScreen({
   const handleStartDownload = async (modelId: string, sizeFormatted: string) => {
     // Guard: Prevent concurrent downloads to protect S23 Ultra storage and bandwidth
     const activeDownloadId = Object.keys(downloads).find(
-      id => id !== modelId && downloads[id]?.status === 'downloading'
+      id => id !== modelId && (downloads[id]?.status === 'downloading' || downloads[id]?.status === 'resolving' || downloads[id]?.status === 'verifying')
     );
     if (activeDownloadId) {
       Alert.alert(
@@ -1533,7 +1546,7 @@ export default function SettingsScreen({
                 totalMb: parseSizeToMb(m.sizeFormatted),
               };
 
-              const isDownloading = dlState.status === 'downloading';
+              const isDownloading = dlState.status === 'downloading' || dlState.status === 'resolving' || dlState.status === 'verifying';
               const isPaused = dlState.status === 'paused';
               const isCompleted = dlState.status === 'completed';
 
@@ -1596,7 +1609,13 @@ export default function SettingsScreen({
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <DownloadIcon size={14} color={isDownloading ? '#38bdf8' : '#f59e0b'} />
                           <Text style={[styles.downloadSpeedText, isPaused && { color: '#f59e0b' }]}>
-                            {isDownloading ? `${dlState.speedMbPerSec.toFixed(1)} MB/s` : 'Paused'}
+                            {dlState.status === 'resolving'
+                              ? 'Connecting to CDN...'
+                              : dlState.status === 'verifying'
+                              ? 'Verifying integrity...'
+                              : isDownloading
+                              ? `${dlState.speedMbPerSec.toFixed(1)} MB/s`
+                              : 'Paused'}
                           </Text>
                         </View>
 
