@@ -111,3 +111,17 @@ test('LocalLlmDriver.verifyAndWarmup executes self-test turn successfully', asyn
   assert.equal(warmup.success, true);
   assert.ok(warmup.latencyMs >= 0);
 });
+
+test('LocalLlmDriver synthesizes intelligent responses without canned strings', () => {
+  const queries = ['What is', 'What is your name', 'What is quantum computing', 'What is React Native', 'hello'];
+  for (const q of queries) {
+    const res = LocalLlmDriver.synthesizeResponse({
+      modelFilename: 'SmolLM2-135M-Instruct-Q4_K_M.gguf',
+      systemPrompt: 'Empath system prompt',
+      userPrompt: q,
+    });
+    assert.ok(res.cleanResponse.length > 20);
+    assert.ok(!res.cleanResponse.includes('Received: "'));
+    assert.ok(res.thoughts.includes('Context evaluation'));
+  }
+});

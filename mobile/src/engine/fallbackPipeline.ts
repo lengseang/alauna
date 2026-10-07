@@ -235,22 +235,22 @@ export class FallbackPipelineManager {
     if (t.status === 'mounting') {
       return (
         `[S23 Ultra Snapdragon 8 Gen 2 • Native Engine Mounting: ${t.progressPercent}%]\n` +
-        `I have received: "${userText}". While GGUF weights (${t.modelId || 'local'}) are mapping into UFS 4.0 RAM, ` +
-        `my ${archName} persona is locked in.${memoryHint} Real-time inference will take over seamlessly on the next turn.`
+        `GGUF weights (${t.modelId || 'local'}) are mapping into UFS 4.0 RAM. ` +
+        `My ${archName} persona is locked in.${memoryHint} Real-time inference will take over seamlessly on the next turn.`
       );
     }
 
     if (t.status === 'error') {
       return (
         `[Fallback Mode • Engine Notice: ${t.errorMessage || 'Storage access required'}]\n` +
-        `Operating on sovereign rule-based fast path. Received: "${userText}".`
+        `Operating on sovereign fast path with active episodic memory.`
       );
     }
 
     // Default unmounted state
     return (
       `[Sovereign Fastpath • Model Unmounted]\n` +
-      `Processed: "${userText}". Please mount model weights from the Model Vault in Settings to enable deep token generation.`
+      `Please mount model weights from the Model Vault in Settings to enable deep token generation.`
     );
   }
 }

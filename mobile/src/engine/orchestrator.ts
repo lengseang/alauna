@@ -126,25 +126,20 @@ export class MobileOrchestrator {
     const archetypeModifier = ARCHETYPES[currentArchetype].systemPromptModifier;
     const synthesizedPrompt = `${archetypeModifier}\n[EMOTIONAL STATE: Pleasure=${updatedPAD.pleasure}, Arousal=${updatedPAD.arousal}]\n${memoryContext}\nUser: ${input}`;
 
-    // 5. Response generation based on rigor tier
-    let responseText = '';
-    if (route.category === 'SPEED_RUN') {
-      responseText = 'Fast path cleared. Executing without preamble.';
-    } else if (route.category === 'DEEP_DEBUG') {
-      responseText = 'Root cause trace analyzed against local AST. Verified 0 syntax errors.';
-    } else if (route.category === 'ARCH_DESIGN') {
-      responseText = 'Architecture invariants confirmed: 100% on-device, sub-400ms voice chunking, rolling KV-cache memory active.';
-    } else if (route.category === 'RAPPORT') {
-      responseText = `Good to connect. Running completely offline in your phone's memory.`;
-    } else {
-      responseText = 'Request processed and verified with zero hallucination.';
-    }
+    // 5. Intelligent response synthesis from LocalLlmDriver
+    const activeModel = LocalLlmDriver.getLoadedModel() || 'SmolLM2-135M-Instruct-Q4_K_M.gguf';
+    const { cleanResponse, thoughts } = LocalLlmDriver.synthesizeResponse({
+      modelFilename: activeModel,
+      systemPrompt: synthesizedPrompt,
+      userPrompt: input,
+    });
 
     return {
       route,
       updatedPAD,
       synthesizedPrompt,
-      response: responseText,
+      response: cleanResponse,
+      thoughts,
       groundedFactsCount: MemoryEngine.queryMemories(3).length,
     };
   }
