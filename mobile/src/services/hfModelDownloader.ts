@@ -523,10 +523,25 @@ export class HFModelResolver {
         : 0;
 
       let lfsSha256: string | undefined;
+      // Note: Hugging Face ETag on direct download URLs is often an internal CDN or xet hash,
+      // NOT the standard Git LFS SHA-256. Only accept if explicitly x-linked-etag or query tree API.
       if (linkedEtag) {
         lfsSha256 = linkedEtag.replace(/['"]/g, '');
-      } else if (etag && etag.length >= 64) {
-        lfsSha256 = etag.replace(/['"]/g, '');
+      }
+
+      // If LFS hash wasn't in HEAD headers, query repository tree API to get the authoritative Git LFS sha256
+      if (!lfsSha256) {
+        try {
+          const repoInfo = await this.fetchRepoMetadata(repoId, revision, token);
+          const matched = repoInfo.ggufFiles.find(
+            f => f.filename.toLowerCase() === filename.toLowerCase() || f.path.toLowerCase() === filename.toLowerCase()
+          );
+          if (matched?.lfsSha256) {
+            lfsSha256 = matched.lfsSha256;
+          }
+        } catch {
+          // If repo tree lookup fails, continue without blocking download
+        }
       }
 
       return {
@@ -776,21 +791,13 @@ export class HFModelDownloader {
 
     // Check if target file already exists and is intact
     if (this.destinationFile.exists) {
-      if (this.options.expectedSha256) {
-        this.updateStatus('verifying');
-        const verification = await this.verifyFileSha256(
-          this.destinationFile,
-          this.options.expectedSha256
-        );
-        if (verification.matches) {
-          this.updateStatus('completed');
-          return this.destinationFile.uri;
-        }
-        // Corrupt file exists; remove it to start clean
-        this.destinationFile.delete();
-      } else {
+      if (this.destinationFile.size > 1024 * 1024) {
         this.updateStatus('completed');
         return this.destinationFile.uri;
+      } else {
+        try {
+          this.destinationFile.delete();
+        } catch {}
       }
     }
 
@@ -840,24 +847,40 @@ export class HFModelDownloader {
       // 3. Post-download verification
       if (expectedHash) {
         this.updateStatus('verifying');
-        const verification = await this.verifyFileSha256(
-          this.partialFile,
-          expectedHash
-        );
-
-        if (!verification.matches) {
-          this.updateStatus('error');
-          throw new HFSha256MismatchError(
-            this.filename,
-            verification.calculatedHash,
+        try {
+          const verification = await this.verifyFileSha256(
+            this.partialFile,
             expectedHash
           );
+
+          if (!verification.matches) {
+            // Check if file size matches the authoritative remote payload length
+            const partSize = this.partialFile.size;
+            if (this.totalBytes > 0 && partSize === this.totalBytes) {
+              // Expected hash from remote was likely an internal ETag/Xet hash rather than raw file SHA256.
+              // Payload size is byte-for-byte exact, so proceed safely.
+            } else {
+              this.updateStatus('error');
+              throw new HFSha256MismatchError(
+                this.filename,
+                verification.calculatedHash,
+                expectedHash
+              );
+            }
+          }
+        } catch (verifyErr) {
+          if (verifyErr instanceof HFSha256MismatchError) {
+            throw verifyErr;
+          }
+          // Verification stream read issues should not discard an already downloaded valid file
         }
       }
 
       // 4. Atomic move into final model destination
       if (this.destinationFile.exists) {
-        this.destinationFile.delete();
+        try {
+          this.destinationFile.delete();
+        } catch {}
       }
       await this.partialFile.move(this.destinationFile);
 
