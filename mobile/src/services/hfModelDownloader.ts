@@ -812,7 +812,13 @@ export class HFModelDownloader {
     // 2. Check for existing partial file on disk
     let startByte = 0;
     if (this.partialFile.exists) {
-      startByte = this.partialFile.size;
+      const partSize = this.partialFile.size;
+      // If partial file already downloaded all bytes (or is larger than remote size), don't request bytes=totalBytes- (which causes HTTP 416)
+      if (this.totalBytes > 0 && partSize >= this.totalBytes) {
+        startByte = this.totalBytes;
+      } else {
+        startByte = partSize;
+      }
     }
     this.bytesWritten = startByte;
 
@@ -821,7 +827,10 @@ export class HFModelDownloader {
     this.lastBytesWritten = startByte;
 
     try {
-      await this.executeResumableTransfer(startByte);
+      // If partial file is already fully written, skip network transfer and proceed directly to verification & move
+      if (this.totalBytes <= 0 || startByte < this.totalBytes) {
+        await this.executeResumableTransfer(startByte);
+      }
 
       if (this.pauseRequested) {
         this.updateStatus('paused');
@@ -946,6 +955,38 @@ export class HFModelDownloader {
       );
     } catch (err: unknown) {
       if (this.pauseRequested) return;
+
+      // Self-healing: if server rejected Range with HTTP 416 (Range Not Satisfiable),
+      // the partial file was stale, misaligned, or complete.
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('416') && startByte > 0) {
+        if (this.partialFile.exists) {
+          try {
+            this.partialFile.delete();
+          } catch {}
+        }
+        this.bytesWritten = 0;
+        const freshHeaders = { ...headers };
+        delete freshHeaders['Range'];
+        await File.downloadFileAsync(
+          this.downloadUrl,
+          this.partialFile,
+          {
+            headers: freshHeaders,
+            idempotent: true,
+            signal: this.abortController?.signal,
+            onProgress: (p) => {
+              if (this.pauseRequested) return;
+              this.bytesWritten = p.bytesWritten || 0;
+              if (p.totalBytes > 0) this.totalBytes = p.totalBytes;
+              this.calculateSpeedAndETA(this.bytesWritten);
+              this.notifyProgress();
+            },
+          }
+        );
+        return;
+      }
+
       throw err;
     }
   }

@@ -375,6 +375,16 @@ export default function SettingsScreen({
 
         if (progress.status === 'completed') {
           delete downloadersRef.current[modelId];
+          setDownloads(prev => ({
+            ...prev,
+            [modelId]: {
+              status: 'completed',
+              progress: 100,
+              speedMbPerSec: 0,
+              downloadedMb: totalCalculatedMb,
+              totalMb: totalCalculatedMb,
+            },
+          }));
           loadStats();
           Alert.alert(
             'Download Complete',
@@ -389,7 +399,8 @@ export default function SettingsScreen({
 
       downloadersRef.current[modelId] = downloader;
       await downloader.start();
-      loadStats();
+      delete downloadersRef.current[modelId];
+      await loadStats();
     } catch (err: any) {
       // If error occurs, fall back gracefully and report status
       delete downloadersRef.current[modelId];
