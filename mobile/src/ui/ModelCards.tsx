@@ -101,11 +101,13 @@ export function QueueCard({ spec, queueIndex, queueLength, onOpen }: QueueProps)
   const actions = actionsFor(st.kind, dl.retryable);
   const moving = dl.status === 'downloading';
   return (
-    <Card onPress={() => onOpen(spec.id)} accessibilityLabel={`${spec.name}, ${st.label}`} accessibilityHint="Opens the model details">
-      <Text variant="strong">{spec.name}</Text>
-      <Text variant="small" tone={st.tone === 'bad' ? 'danger' : 'muted'}>
-        {st.label || 'Waiting'}
-      </Text>
+    <Card>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${spec.name}, ${st.label || 'waiting'}`} accessibilityHint="Opens the model details" onPress={() => onOpen(spec.id)} style={s.head}>
+        <Text variant="strong">{spec.name}</Text>
+        <Text variant="small" tone={st.tone === 'bad' ? 'danger' : 'muted'}>
+          {st.label || 'Waiting'}
+        </Text>
+      </Pressable>
       {st.kind !== 'download_error' && st.kind !== 'queued' && dl.totalBytes > 0 ? <ProgressBar fraction={fraction} label={`${spec.name} download`} /> : null}
       {dl.totalBytes > 0 && st.kind !== 'download_error' ? (
         <Text variant="small">
@@ -169,6 +171,7 @@ export function InstalledRow({ spec, active, slotLabel, onOpen }: InstalledProps
 const useStyles = makeStyles(({ colors, space }) => ({
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, paddingVertical: space.md },
   info: { flex: 1, gap: space.xs, minHeight: 56 },
+  head: { gap: space.xs, minHeight: 48 },
   pressed: { backgroundColor: colors.accentSoft },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, paddingTop: space.xs },
   action: { minWidth: 96 },

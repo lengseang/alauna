@@ -1,7 +1,9 @@
 import React from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { MODEL_CATALOG, draftOptions, getModel, type ModelSpec } from '../core/catalog.ts';
+import { defaultContext } from '../core/fit.ts';
 import { formatBytes, formatPercent } from '../core/format.ts';
+import { getDeviceProfile } from '../services/device.ts';
 import { downloads, useDownloadItems } from '../services/downloads.ts';
 import { engine, useEngineStatus } from '../services/engine.ts';
 import { updateSection, updateSettings, useSettings } from '../services/settings.ts';
@@ -20,7 +22,7 @@ import { Tag } from './Tag';
 import { Text } from './Text';
 import { addAddon, startDownload } from './modelActions';
 import { goBack, push } from './nav';
-import { CLASSIC_REASON, SPEC_PRESETS, mtpTargets, presetSupport, speedupLabel, wantedMode } from './vaultLogic';
+import { CLASSIC_REASON, SPEC_PRESETS, fitVerdict, mtpTargets, presetSupport, speedupLabel, wantedMode } from './vaultLogic';
 
 /** Load `spec` again so the speculative setting is read (the engine reads it only while loading). */
 async function reload(spec: ModelSpec): Promise<void> {
@@ -57,6 +59,8 @@ export function SpeculativeScreen() {
   const st = useEngineStatus();
   const items = useDownloadItems();
   const sp = settings.speculative;
+  const ram = getDeviceProfile().totalRamBytes;
+  const nCtx = settings.compute.nCtx ?? defaultContext(ram);
   const target = getModel(settings.activeModelId);
   const live = st.speculative;
   const loadedTarget = !!target && st.modelId === target.id && (st.state === 'ready' || st.state === 'generating');
@@ -159,17 +163,26 @@ export function SpeculativeScreen() {
       {SPEC_PRESETS.map((p, i) => {
         const x = presetSupport(p);
         return (
-          <Card key={p.id} selected={settings.activePresetIndex === i} onPress={() => updateSettings({ activePresetIndex: i })} accessibilityLabel={`${p.name}, ${x.reason ?? 'runnable'}`}>
-            <Text variant="strong">{p.name}</Text>
-            <Text variant="small">{`Checks: ${x.target?.name ?? p.targetId} · ${x.target ? formatBytes(x.target.sizeBytes) : '?'} · ${x.target?.quantization ?? ''}`}</Text>
-            <Text variant="small">{`Drafts: ${x.draft?.name ?? p.draftId} · ${x.draft ? formatBytes(x.draft.sizeBytes) : '?'} · ${x.draft?.quantization ?? ''}`}</Text>
-            <Text variant="small">{p.description}</Text>
+          <Card key={p.id} selected={settings.activePresetIndex === i}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${p.name}, ${x.reason ?? 'runnable'}`}
+              accessibilityHint={settings.activePresetIndex === i ? 'Selected' : 'Selects this pair'}
+              onPress={() => updateSettings({ activePresetIndex: i })}
+              style={s.preset}
+            >
+              <Text variant="strong">{p.name}</Text>
+              <Text variant="small">{`Checks: ${x.target?.name ?? p.targetId} · ${x.target ? formatBytes(x.target.sizeBytes) : '?'} · ${x.target?.quantization ?? ''}`}</Text>
+              <Text variant="small">{`Drafts: ${x.draft?.name ?? p.draftId} · ${x.draft ? formatBytes(x.draft.sizeBytes) : '?'} · ${x.draft?.quantization ?? ''}`}</Text>
+              {x.target && x.draft ? <Text variant="small">{`Together: about ${formatBytes(fitVerdict(x.target, ram, nCtx).ramBytes + x.draft.sizeBytes)} of memory${ram ? ` on a ${formatBytes(ram)} phone` : ''}`}</Text> : null}
+              <Text variant="small">{p.description}</Text>
+            </Pressable>
             <View style={s.tags}>
               <Tag label={x.pairRunnable ? 'Runnable' : 'Not supported by this engine version'} tone={x.pairRunnable ? 'accent' : 'danger'} />
             </View>
             {x.reason ? <Text variant="small">{x.reason}</Text> : null}
             <View style={s.buttons}>
-              {x.mtpAlternative && x.target ? <Button label={`Run ${x.target.name} with its MTP head`} variant="quiet" onPress={() => runMtpPair(x.target as ModelSpec)} /> : null}
+              {x.mtpAlternative && x.target ? <Button label={`Run ${x.target.name} with its MTP head`} variant="quiet" onPress={() => { updateSettings({ activePresetIndex: i }); return runMtpPair(x.target as ModelSpec); }} /> : null}
               {x.target ? <Button label={`Open ${x.target.name}`} variant="text" onPress={() => push('models/detail', { id: x.target?.id })} /> : null}
             </View>
           </Card>
@@ -184,5 +197,6 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
   stats: { flexDirection: 'row', borderTopWidth: line, borderBottomWidth: line, borderColor: colors.border },
   stat: { flex: 1, paddingVertical: space.md, paddingHorizontal: space.xs },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  preset: { gap: space.xs },
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' },
 }));
