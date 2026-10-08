@@ -1,21 +1,44 @@
 /**
- * Model catalog. SHORT on purpose (6 entries): every entry was checked against the live
- * Hugging Face Hub on 2026-10-08 (repo ungated, Apache-2.0, file exists, exact LFS byte size, LFS sha256,
- * HTTP Range request answers 206 and the first 4 bytes are "GGUF"). Re-run
- * `node scripts/verify-catalog.mjs` to re-check against the live Hub (it also fails on drift).
+ * Model library: types, grades, old-id aliases, search/filter/sort, speculative-draft pairing.
+ * The entries themselves live in catalogData.ts (every file there is verified against the live Hub by
+ * `node scripts/verify-catalog.mjs`). Pure TypeScript, no platform imports.
  *
- * Rules for adding a model (see docs/QA_PLAN.md):
- *  - The `id` must describe the file (no id/name mismatches, no duplicate files).
- *  - Only claim a capability the app can actually deliver. The app does text chat only,
- *    so there is no Vision/Voice badge.
- *  - The architecture must exist in the llama.cpp bundled with the pinned llama.rn
- *    (0.12.9 = llama.cpp b10256: `qwen3`, `qwen35`, `gemma4` are present; checked in
- *    node_modules/llama.rn/cpp/llama-arch.cpp).
- *  - Never hand-type sizes/hashes: `node scripts/verify-catalog.mjs --write`.
+ * Rules for an entry:
+ *  - The name, id and file must describe the same model (the old app had "Moondream 2" pointing at SmolLM2 360M).
+ *  - A capability tag must be deliverable by THIS app: 'Image' needs an `mmproj` whose header has a vision encoder,
+ *    'Voice' needs an `mmproj` with an audio encoder (llama.rn `initMultimodal`), 'Reasoning' needs a thinking mode.
+ *    'Video' stays defined for parity with the old app, but no entry carries it: llama.rn takes images and audio, not video.
+ *  - `contentPolicy: 'Uncensored'` only for models that really are abliterated / refusal-free upstream.
+ *  - The architecture must exist in the llama.cpp bundled with llama.rn 0.12.9 (b10256); the verify script checks it.
  */
+import { MODEL_DATA } from './catalogData.ts';
+import { defaultContext, estimateRamBytes, fitFor, rateFit, type FitRating } from './fit.ts';
 
 export type ModelGrade = 'S' | 'B' | 'C';
-export type ModelCapability = 'Text' | 'Code' | 'Reasoning';
+
+/** Old-app tag set (Text/Image/Voice/Code/Video) + Reasoning. */
+export type ModelCapability = 'Text' | 'Image' | 'Voice' | 'Code' | 'Reasoning' | 'Video';
+
+export const ALL_CAPABILITIES: readonly ModelCapability[] = ['Text', 'Image', 'Voice', 'Code', 'Reasoning', 'Video'];
+
+/** What each tag means in this app (for chips, tooltips and empty states). */
+export const CAPABILITY_INFO: Record<ModelCapability, { label: string; meaning: string }> = {
+  Text: { label: 'Text', meaning: 'Chat in text.' },
+  Image: { label: 'Image', meaning: 'Understands photos you attach (needs its image add-on, downloaded with the model).' },
+  Voice: { label: 'Voice', meaning: 'Understands recorded speech directly (audio add-on). Every model can also use the app voice input/output.' },
+  Code: { label: 'Code', meaning: 'Reasonably good at writing and explaining code.' },
+  Reasoning: { label: 'Reasoning', meaning: 'Can think step by step before answering (shown in a collapsible block).' },
+  Video: { label: 'Video', meaning: 'No model can watch video on this phone yet: the engine accepts images and audio only. Kept so the filter exists.' },
+};
+
+/** Accepts the old/alternative tag names used by UI code ("Vision" = "Image", "Audio" = "Voice"). */
+export function normalizeCapability(tag: string): ModelCapability | null {
+  const t = tag.trim().toLowerCase();
+  if (t === 'vision' || t === 'image' || t === 'images' || t === 'photo') return 'Image';
+  if (t === 'audio' || t === 'voice' || t === 'speech') return 'Voice';
+  return ALL_CAPABILITIES.find((c) => c.toLowerCase() === t) ?? null;
+}
+
 export type ThinkingMode =
   /** The app never asks this model to think (no reasoning phase is used). */
   | 'none'
@@ -31,7 +54,42 @@ export type ModelRole =
   | 'Balanced (default)'
   | 'No-thinking (safe fallback)'
   | 'Different family'
-  | 'Max quality (needs 12 GB+)';
+  | 'Max quality (needs 12 GB+)'
+  | 'Tiny'
+  | 'Small & quick'
+  | 'All-rounder'
+  | 'Vision'
+  | 'Voice + vision'
+  | 'Coding'
+  | 'Reasoning'
+  | 'Uncensored'
+  | 'Heavy (16 GB phones)';
+
+/** Chat template family of the GGUF's own template (informational: llama.rn always renders the file's own template). */
+export type ChatTemplate =
+  | 'chatml'
+  | 'qwen3.5'
+  | 'llama3'
+  | 'gemma'
+  | 'gemma4'
+  | 'phi4'
+  | 'deepseek-r1'
+  | 'mistral'
+  | 'lfm2'
+  | 'smollm3'
+  | 'smolvlm'
+  | 'vicuna';
+
+/** One file on the Hub. */
+export interface HubFile {
+  repo: string;
+  /** Path inside the repo (may contain a folder, e.g. `MTP/...`). */
+  filename: string;
+  /** Exact LFS size in bytes. */
+  sizeBytes: number;
+  /** LFS sha256 (downloads are verified against it). */
+  sha256: string;
+}
 
 export interface ModelSpec {
   id: string;
@@ -39,155 +97,216 @@ export interface ModelSpec {
   family: string;
   /** Parameter count in billions (display + RAM heuristics). Total parameters, including embeddings. */
   paramsB: number;
+  /** S/B/C by estimated RAM need on a phone (C <= 2.5 GB, B <= 5 GB, S above) - see `gradeFor`. Never hand-typed. */
   grade: ModelGrade;
   role: ModelRole;
-  /** Higher = preferred by `recommendModel` when it fits the phone. */
+  /** Higher = preferred by `recommendModel` when it fits the phone. 0 = never auto-recommended. */
   priority: number;
   /**
-   * f16 KV-cache bytes per context token, read from the GGUF header (attention layers x KV heads x (key+value length) x 2 B).
-   * Hybrid Qwen3.5 only has attention in every 4th layer, so its cache is 4-12x smaller than a dense model of the same size.
+   * f16 KV-cache bytes per context token, from the GGUF header (attention layers x KV heads x (key+value length) x 2 B).
+   * Hybrid models (Qwen3.5, LFM2, Gemma 4 shared-KV layers) only count the layers that really keep a cache.
    */
   kvBytesPerToken: number;
   repo: string;
   filename: string;
   /** Exact size in bytes of the GGUF file. */
   sizeBytes: number;
-  /** LFS sha256 of the GGUF (used for the deep check). */
+  /** LFS sha256 of the GGUF. */
   sha256: string;
   quantization: string;
   capabilities: ModelCapability[];
   thinking: ThinkingMode;
   contentPolicy: 'Standard' | 'Uncensored';
   description: string;
+  /** License id from the model card (e.g. `apache-2.0`, `gemma`, `llama3.2`, `qwen-research`). */
+  license: string;
+  /** Trained context length from the GGUF header (the app uses a smaller context sized to the phone). */
+  contextLength: number;
+  chatTemplate: ChatTemplate;
+  /** Same key = same tokenizer, so one can draft for the other in speculative decoding. */
+  draftKey: string;
+  /** Vision/audio projector (llama.rn `initMultimodal({ path })`). Installed together with the model by default. */
+  mmproj?: HubFile;
+  /** Dedicated draft head for speculative decoding (Gemma 4 MTP). Optional download. */
+  draft?: HubFile;
+  /** Date the GGUF repo appeared on the Hub (YYYY-MM-DD), used by "newest" sorting. */
+  published: string;
 }
 
-export const MODEL_CATALOG: ModelSpec[] = [
-  {
-    id: 'qwen3.5-0.8b',
-    name: 'Qwen3.5 0.8B',
-    family: 'Qwen',
-    paramsB: 0.8,
-    grade: 'C',
-    role: 'Smoke test',
-    priority: 40,
-    kvBytesPerToken: 12288, // 6 attention layers x 2 KV heads x 256 x 2 x 2 B
-    repo: 'unsloth/Qwen3.5-0.8B-GGUF',
-    filename: 'Qwen3.5-0.8B-Q4_K_M.gguf',
-    sizeBytes: 532_517_120,
-    sha256: 'bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517',
-    quantization: 'Q4_K_M',
-    capabilities: ['Text'],
-    thinking: 'none',
-    contentPolicy: 'Standard',
-    description: 'Tiny test model (0.5 GB). Download this first to confirm the whole pipeline works. Short, simple answers.',
-  },
-  {
-    id: 'qwen3.5-2b',
-    name: 'Qwen3.5 2B',
-    family: 'Qwen',
-    paramsB: 2.0,
-    grade: 'C',
-    role: 'Fast',
-    priority: 80,
-    kvBytesPerToken: 12288, // 6 attention layers x 2 KV heads x 256 x 2 x 2 B
-    repo: 'unsloth/Qwen3.5-2B-GGUF',
-    filename: 'Qwen3.5-2B-Q4_K_M.gguf',
-    sizeBytes: 1_280_835_840,
-    sha256: 'aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223',
-    quantization: 'Q4_K_M',
-    capabilities: ['Text', 'Code', 'Reasoning'],
-    thinking: 'toggle',
-    contentPolicy: 'Standard',
-    description: 'Quick replies on any recent phone. Can think step by step, or answer directly.',
-  },
-  {
-    id: 'qwen3.5-4b',
-    name: 'Qwen3.5 4B',
-    family: 'Qwen',
-    paramsB: 4.0,
-    grade: 'B',
-    role: 'Balanced (default)',
-    priority: 100,
-    kvBytesPerToken: 32768, // 8 attention layers x 4 KV heads x 256 x 2 x 2 B
-    repo: 'unsloth/Qwen3.5-4B-GGUF',
-    filename: 'Qwen3.5-4B-Q4_K_M.gguf',
-    sizeBytes: 2_740_937_888,
-    sha256: '00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4',
-    quantization: 'Q4_K_M',
-    capabilities: ['Text', 'Code', 'Reasoning'],
-    thinking: 'toggle',
-    contentPolicy: 'Standard',
-    description: 'The recommended model: good quality and still quick on a 12 GB phone. Can think step by step, or answer directly.',
-  },
-  {
-    id: 'qwen3-4b-instruct-2507',
-    name: 'Qwen3 4B Instruct',
-    family: 'Qwen',
-    paramsB: 4.02,
-    grade: 'B',
-    role: 'No-thinking (safe fallback)',
-    priority: 70,
-    kvBytesPerToken: 147456, // 36 layers x 8 KV heads x 128 x 2 x 2 B
-    repo: 'unsloth/Qwen3-4B-Instruct-2507-GGUF',
-    filename: 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf',
-    sizeBytes: 2_497_281_120,
-    sha256: '3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597',
-    quantization: 'Q4_K_M',
-    capabilities: ['Text', 'Code'],
-    thinking: 'none',
-    contentPolicy: 'Standard',
-    description: 'Older, very well-tested Qwen design that always answers directly. Pick this if the default model misbehaves.',
-  },
-  {
-    id: 'gemma-4-e2b',
-    name: 'Gemma 4 E2B',
-    family: 'Gemma',
-    paramsB: 4.65,
-    grade: 'B',
-    role: 'Different family',
-    priority: 60,
-    kvBytesPerToken: 40000, // rounded up: 1 KV head, 512-wide global layers + sliding-window layers
-    repo: 'unsloth/gemma-4-E2B-it-GGUF',
-    filename: 'gemma-4-E2B-it-Q4_K_M.gguf',
-    sizeBytes: 3_106_738_272,
-    sha256: '740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8',
-    quantization: 'Q4_K_M',
-    capabilities: ['Text', 'Code'],
-    thinking: 'none',
-    contentPolicy: 'Standard',
-    description: 'Google model with a different writing style. Only about 2 billion parameters are active per word, so it is quick. Text only in this app.',
-  },
-  {
-    id: 'qwen3.5-9b',
-    name: 'Qwen3.5 9B',
-    family: 'Qwen',
-    paramsB: 9.0,
-    grade: 'S',
-    role: 'Max quality (needs 12 GB+)',
-    priority: 30,
-    kvBytesPerToken: 32768, // 8 attention layers x 4 KV heads x 256 x 2 x 2 B
-    repo: 'unsloth/Qwen3.5-9B-GGUF',
-    filename: 'Qwen3.5-9B-Q4_K_M.gguf',
-    sizeBytes: 5_680_522_464,
-    sha256: '03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8',
-    quantization: 'Q4_K_M',
-    capabilities: ['Text', 'Code', 'Reasoning'],
-    thinking: 'toggle',
-    contentPolicy: 'Standard',
-    description: 'Best answers, but big (5.7 GB) and slower. Close other apps first. Fits a 12 GB phone with a small context only.',
-  },
-];
+/** What catalogData.ts stores (grade is computed). */
+export type ModelData = Omit<ModelSpec, 'grade'>;
+
+// -------------------------------------------------------------------- grade
+
+const GB = 1e9;
+/** RAM estimate used for the grade: text use at a 4096-token context, the context a 12 GB phone gets. */
+export function gradeFor(spec: Pick<ModelSpec, 'sizeBytes' | 'paramsB' | 'kvBytesPerToken'>): ModelGrade {
+  const ram = estimateRamBytes(spec, 4096);
+  if (ram <= 2.5 * GB) return 'C';
+  if (ram <= 5 * GB) return 'B';
+  return 'S';
+}
+
+export const MODEL_CATALOG: ModelSpec[] = MODEL_DATA.map((d) => ({ ...d, grade: gradeFor(d) }));
+
+// -------------------------------------------------------------------- ids
+
+/**
+ * Ids from the old app (git 94b571d) and the v1 rebuild (d919a34) that no longer name an entry. Every other old id is
+ * still a catalog id. Saved settings/chats that reference an alias keep working through `getModel`.
+ */
+export const MODEL_ID_ALIASES: Readonly<Record<string, string>> = {
+  /** Old card "SmolLM2 (1.7B)" (no SmolLM3 1.7B exists; the file was SmolLM2 1.7B). */
+  'smollm3-1.7b': 'smollm2-1.7b',
+  /** Old card "DeepSeek R1 Distill (1.5B)" marked Uncensored: now a real abliterated build. */
+  'smollm3-1.7b-uncensored': 'deepseek-r1-1.5b-abliterated',
+  /** Old card "SmolVLM Uncensored": no uncensored SmolVLM exists; the file was the standard SmolVLM. */
+  'smolvlm-uncensored': 'smolvlm2-2.2b',
+  /** v1 id. */
+  'phi-4-mini': 'phi-4-mini-3.8b',
+};
 
 const BY_ID = new Map(MODEL_CATALOG.map((m) => [m.id, m]));
 
+export function resolveModelId(id: string): string {
+  return MODEL_ID_ALIASES[id] ?? id;
+}
+
 export function getModel(id: string | null | undefined): ModelSpec | undefined {
-  return id ? BY_ID.get(id) : undefined;
+  return id ? BY_ID.get(resolveModelId(id)) : undefined;
 }
 
 /** Marketing-free one-line summary used in chat headers. */
 export function shortName(spec: ModelSpec): string {
   return `${spec.name} · ${spec.quantization}`;
 }
+
+export function hasCapability(spec: Pick<ModelSpec, 'capabilities'>, tag: ModelCapability | string): boolean {
+  const c = normalizeCapability(tag);
+  return c !== null && spec.capabilities.includes(c);
+}
+
+/** Bytes on disk for a full install: the model, its image/audio add-on (if `vision`), its draft head (if `draft`). */
+export function installSizeBytes(spec: ModelSpec, opts: { vision?: boolean; draft?: boolean } = {}): number {
+  const vision = opts.vision ?? true;
+  return spec.sizeBytes + (vision && spec.mmproj ? spec.mmproj.sizeBytes : 0) + (opts.draft && spec.draft ? spec.draft.sizeBytes : 0);
+}
+
+/** RAM estimate including the projector when images/audio are used (the projector stays in memory while loaded). */
+export function estimateModelRam(spec: ModelSpec, nCtx: number, opts: { vision?: boolean } = {}): number {
+  return estimateRamBytes(spec, nCtx) + (opts.vision && spec.mmproj ? spec.mmproj.sizeBytes : 0);
+}
+
+// -------------------------------------------------------------------- library query
+
+export type LibrarySort = 'recommended' | 'name' | 'size_asc' | 'size_desc' | 'ram_asc' | 'ram_desc' | 'grade' | 'newest';
+
+export interface LibraryQuery {
+  /** Case-insensitive; every word must appear in name, family, id, repo, role, description or a tag. */
+  search?: string;
+  /** Capability tags ("Vision"/"Audio" accepted as aliases). Empty = no capability filter. */
+  capabilities?: readonly string[];
+  /** 'AND' (all tags) or 'OR' (any tag). Default 'AND'. 'ALL'/'ANY' accepted for the old API. */
+  match?: 'AND' | 'OR' | 'ALL' | 'ANY';
+  /** Empty or undefined = every grade. */
+  grades?: readonly ModelGrade[];
+  policy?: 'all' | 'Standard' | 'Uncensored';
+  /** Keep only models rated great/ok/tight for `ramBytes`. Ignored when RAM is unknown (nothing can be judged). */
+  fitsPhone?: boolean;
+  /** Total RAM the OS reports (expo-device `totalMemory`). */
+  ramBytes?: number | null;
+  /** Context used for RAM estimates (default: sized to the phone). */
+  nCtx?: number;
+  install?: 'all' | 'installed' | 'available';
+  installedIds?: Iterable<string>;
+  sort?: LibrarySort;
+}
+
+const GRADE_ORDER: Record<ModelGrade, number> = { S: 0, B: 1, C: 2 };
+const FIT_ORDER: Record<FitRating, number> = { great: 0, ok: 1, tight: 2, unknown: 3, too_heavy: 4 };
+
+function haystack(m: ModelSpec): string {
+  return `${m.name} ${m.family} ${m.id} ${m.repo} ${m.role} ${m.description} ${m.capabilities.join(' ')} ${m.contentPolicy} ${m.quantization}`.toLowerCase();
+}
+
+/** Search, multi-filter and sort the library. Pure: the caller passes RAM and the installed ids. */
+export function queryLibrary(q: LibraryQuery = {}, catalog: readonly ModelSpec[] = MODEL_CATALOG): ModelSpec[] {
+  const words = (q.search ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const caps = (q.capabilities ?? []).map(normalizeCapability).filter((c): c is ModelCapability => c !== null);
+  const any = q.match === 'OR' || q.match === 'ANY';
+  const grades = q.grades && q.grades.length > 0 ? new Set(q.grades) : null;
+  const installed = new Set(q.installedIds ?? []);
+  const ram = q.ramBytes && q.ramBytes > 0 ? q.ramBytes : null;
+  const nCtx = q.nCtx ?? defaultContext(ram);
+  // Images/audio keep the projector in memory, so judge fit with it when the user filters for them.
+  const vision = caps.includes('Image') || caps.includes('Voice');
+  const fit = (m: ModelSpec): FitRating => {
+    if (!ram) return 'unknown';
+    return vision ? rateFit(estimateModelRam(m, nCtx, { vision: true }), ram) : fitFor(m, ram, nCtx);
+  };
+
+  const out = catalog.filter((m) => {
+    if (words.length > 0) {
+      const h = haystack(m);
+      if (!words.every((w) => h.includes(w))) return false;
+    }
+    if (caps.length > 0) {
+      const ok = any ? caps.some((c) => m.capabilities.includes(c)) : caps.every((c) => m.capabilities.includes(c));
+      if (!ok) return false;
+    }
+    if (grades && !grades.has(m.grade)) return false;
+    if (q.policy && q.policy !== 'all' && m.contentPolicy !== q.policy) return false;
+    if (q.install === 'installed' && !installed.has(m.id)) return false;
+    if (q.install === 'available' && installed.has(m.id)) return false;
+    if (q.fitsPhone && ram) {
+      const r = fit(m);
+      if (r === 'too_heavy') return false;
+    }
+    return true;
+  });
+
+  const ramOf = (m: ModelSpec) => estimateModelRam(m, nCtx, { vision });
+  const sort = q.sort ?? 'recommended';
+  return out.sort((a, b) => {
+    switch (sort) {
+      case 'name':
+        return a.name.localeCompare(b.name);
+      case 'size_asc':
+        return installSizeBytes(a) - installSizeBytes(b);
+      case 'size_desc':
+        return installSizeBytes(b) - installSizeBytes(a);
+      case 'ram_asc':
+        return ramOf(a) - ramOf(b);
+      case 'ram_desc':
+        return ramOf(b) - ramOf(a);
+      case 'grade':
+        return GRADE_ORDER[a.grade] - GRADE_ORDER[b.grade] || b.paramsB - a.paramsB;
+      case 'newest':
+        return b.published.localeCompare(a.published) || a.name.localeCompare(b.name);
+      case 'recommended':
+        return FIT_ORDER[fit(a)] - FIT_ORDER[fit(b)] || b.priority - a.priority || a.sizeBytes - b.sizeBytes;
+    }
+  });
+}
+
+/** Facet counts for filter chips (how many entries carry each tag / grade / policy). */
+export function libraryFacets(catalog: readonly ModelSpec[] = MODEL_CATALOG): {
+  capabilities: Record<ModelCapability, number>;
+  grades: Record<ModelGrade, number>;
+  policy: Record<'Standard' | 'Uncensored', number>;
+} {
+  const capabilities = Object.fromEntries(ALL_CAPABILITIES.map((c) => [c, 0])) as Record<ModelCapability, number>;
+  const grades: Record<ModelGrade, number> = { S: 0, B: 0, C: 0 };
+  const policy = { Standard: 0, Uncensored: 0 };
+  for (const m of catalog) {
+    for (const c of m.capabilities) capabilities[c]++;
+    grades[m.grade]++;
+    policy[m.contentPolicy]++;
+  }
+  return { capabilities, grades, policy };
+}
+
+// -------------------------------------------------------------------- legacy query (v1 API, kept for the current UI)
 
 export interface CatalogQuery {
   search?: string;
@@ -199,33 +318,56 @@ export interface CatalogQuery {
   sort?: 'ram_asc' | 'ram_desc' | 'size_asc' | 'size_desc' | 'name_asc';
 }
 
+/** v1 API: same semantics as before (default ANY, default size ascending by model file), implemented with `queryLibrary`. */
 export function queryCatalog(query: CatalogQuery = {}, catalog: ModelSpec[] = MODEL_CATALOG): ModelSpec[] {
-  const q = (query.search ?? '').trim().toLowerCase();
-  const caps = query.capabilities ?? [];
-  const out = catalog.filter((m) => {
-    if (q && !`${m.name} ${m.repo} ${m.family} ${m.role} ${m.description}`.toLowerCase().includes(q)) return false;
-    if (query.grade && query.grade !== 'ALL' && m.grade !== query.grade) return false;
-    if (query.onlyUncensored && m.contentPolicy !== 'Uncensored') return false;
-    if (caps.length > 0) {
-      const ok =
-        (query.match ?? 'ANY') === 'ALL'
-          ? caps.every((c) => m.capabilities.includes(c))
-          : caps.some((c) => m.capabilities.includes(c));
-      if (!ok) return false;
-    }
-    return true;
-  });
+  const out = queryLibrary(
+    {
+      search: query.search,
+      capabilities: query.capabilities,
+      match: query.match ?? 'ANY',
+      grades: query.grade && query.grade !== 'ALL' ? [query.grade] : undefined,
+      policy: query.onlyUncensored ? 'Uncensored' : 'all',
+      sort: 'name',
+    },
+    catalog,
+  );
   const sort = query.sort ?? 'size_asc';
-  return out.sort((a, b) => {
-    switch (sort) {
-      case 'ram_asc':
-      case 'size_asc':
-        return a.sizeBytes - b.sizeBytes;
-      case 'ram_desc':
-      case 'size_desc':
-        return b.sizeBytes - a.sizeBytes;
-      case 'name_asc':
-        return a.name.localeCompare(b.name);
-    }
-  });
+  if (sort === 'name_asc') return out;
+  const desc = sort === 'size_desc' || sort === 'ram_desc';
+  return out.sort((a, b) => (desc ? b.sizeBytes - a.sizeBytes : a.sizeBytes - b.sizeBytes));
+}
+
+// -------------------------------------------------------------------- speculative decoding
+
+export type DraftOption =
+  /** The target's own MTP draft head (Gemma 4): best acceptance, tiny download. */
+  | { kind: 'mtp'; file: HubFile }
+  /** A smaller library model with the same tokenizer. */
+  | { kind: 'model'; spec: ModelSpec };
+
+/**
+ * Draft candidates for speculative decoding with `target`: its own MTP head first, then library models with the same
+ * tokenizer (`draftKey`) that are at most half its size (loaded text-only). Same content policy first, then smallest.
+ * `installedIds` (optional) keeps only drafts already on the phone.
+ */
+export function draftOptions(target: ModelSpec, catalog: readonly ModelSpec[] = MODEL_CATALOG, installedIds?: Iterable<string>): DraftOption[] {
+  const installed = installedIds ? new Set(installedIds) : null;
+  const models = catalog
+    .filter(
+      (m) =>
+        m.id !== target.id &&
+        m.draftKey === target.draftKey &&
+        m.paramsB <= target.paramsB * 0.5 &&
+        m.sizeBytes < target.sizeBytes &&
+        (!installed || installed.has(m.id)),
+    )
+    // The target decides every token, so a draft's content policy never changes the output; same policy first anyway.
+    .sort((a, b) => Number(a.contentPolicy !== target.contentPolicy) - Number(b.contentPolicy !== target.contentPolicy) || a.sizeBytes - b.sizeBytes)
+    .map((spec): DraftOption => ({ kind: 'model', spec }));
+  return target.draft ? [{ kind: 'mtp', file: target.draft }, ...models] : models;
+}
+
+/** Library models that `draft` can speed up (inverse of `draftOptions`). */
+export function draftTargets(draft: ModelSpec, catalog: readonly ModelSpec[] = MODEL_CATALOG): ModelSpec[] {
+  return catalog.filter((t) => draftOptions(t, [draft, t]).some((o) => o.kind === 'model' && o.spec.id === draft.id));
 }

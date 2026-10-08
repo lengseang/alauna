@@ -10,6 +10,7 @@ const HTML = new TextEncoder().encode('<!DO');
 const specA: ModelSpec = {
   id: 'a', name: 'A', family: 'A', paramsB: 1, grade: 'C', role: 'Fast', priority: 1, kvBytesPerToken: 1000, repo: 'o/a', filename: 'a.gguf', sizeBytes: 1000,
   sha256: '', quantization: 'Q4_K_M', capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', description: '',
+  license: 'apache-2.0', contextLength: 4096, chatTemplate: 'chatml', draftKey: 'a', published: '2025-01-01',
 };
 const specB: ModelSpec = { ...specA, id: 'b', name: 'B', repo: 'o/b', filename: 'b.gguf' };
 const HASH = 'ab'.repeat(32);
@@ -190,17 +191,19 @@ test('refuses to start when the storage folder is not configured (ST-1)', async 
   assert.equal(w.log.tasksCreated, 0);
 });
 
-test('only one download at a time; second is allowed after the first finishes', async () => {
+test('one download at a time by default: a second one is QUEUED (not refused) and starts when the first pauses', async () => {
   const w = makeWorld({ behaviors: [{ kind: 'hang', at: 300 }, { kind: 'complete' }] });
   await w.manager.start(specA);
   await waitFor(w.manager, 'a', (s) => s.status === 'downloading' && s.bytesWritten >= 300);
-  const second = await w.manager.start(specB);
-  assert.equal(second.ok, false);
-  assert.match((second as { message: string }).message, /another model/i);
-  await w.manager.pause('a');
-  await waitFor(w.manager, 'a', (s) => s.status === 'paused');
   assert.deepEqual(await w.manager.start(specB), { ok: true });
-  assert.equal((await waitFor(w.manager, 'b', terminal)).status, 'completed');
+  const queued = w.manager.stateOf('b');
+  assert.deepEqual([queued.status, queued.queuePosition], ['queued', 1]);
+  assert.equal(w.log.tasksCreated, 1, 'b has not started yet');
+  assert.deepEqual(w.manager.store.getState().queue, ['b']);
+  await w.manager.pause('a');
+  assert.equal((await waitFor(w.manager, 'b', terminal)).status, 'completed', 'b started by itself once a stopped');
+  assert.equal(w.manager.stateOf('a').status, 'paused');
+  assert.deepEqual(w.manager.store.getState().queue, []);
 });
 
 test('pause then resume continues from the partial file (MD-3: never restarts or corrupts)', async () => {

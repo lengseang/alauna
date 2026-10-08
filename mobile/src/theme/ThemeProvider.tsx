@@ -2,14 +2,26 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { AccessibilityInfo, Appearance, StatusBar, StyleSheet, useColorScheme } from 'react-native';
 import * as SystemUI from 'expo-system-ui';
 import { useAppFonts } from './fonts';
-import { loadThemePref, saveThemePref, type ThemePref } from './prefs';
+import { defaultPrefs, loadAppearance, saveAppearance, type AppearancePrefs, type MotionPref, type ThemePref } from './prefs';
 import { buildTheme, type Theme } from './theme';
 import type { Scheme } from './palette';
+import type { TextScale } from './tokens';
 
 const ThemeCtx = createContext<Theme | null>(null);
-const PrefCtx = createContext<{ pref: ThemePref; setPref: (p: ThemePref) => void }>({ pref: 'system', setPref: () => {} });
 
-function useReduceMotion(): boolean {
+export interface ThemePrefApi extends AppearancePrefs {
+  setPref: (p: ThemePref) => void;
+  setTextScale: (s: TextScale) => void;
+  setMotion: (m: MotionPref) => void;
+  setHaptics: (on: boolean) => void;
+  /** What the OS currently asks for (shown next to "Follow my phone"). */
+  systemReduceMotion: boolean;
+}
+
+const noop = () => {};
+const PrefCtx = createContext<ThemePrefApi>({ ...defaultPrefs, setPref: noop, setTextScale: noop, setMotion: noop, setHaptics: noop, systemReduceMotion: false });
+
+function useSystemReduceMotion(): boolean {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -26,51 +38,65 @@ function useReduceMotion(): boolean {
 }
 
 /**
- * Owns light/dark (user choice 'system' | 'light' | 'dark', persisted), fonts and reduced-motion.
- * Renders nothing until the saved choice and the fonts are resolved (worst case 3s, then system fonts),
- * so the native splash covers the wait and the first painted frame is already in the right theme.
+ * Owns light/dark (user choice 'system' | 'light' | 'dark'), text size, motion and haptics (persisted), fonts and the
+ * OS reduced-motion flag. Renders nothing until the saved prefs and the fonts are resolved (worst case 3s, then system
+ * fonts), so the native splash covers the wait and the first painted frame is already in the right theme.
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useColorScheme();
-  const [pref, setPrefState] = useState<ThemePref>('system');
-  const [prefLoaded, setPrefLoaded] = useState(false);
+  const [prefs, setPrefs] = useState<AppearancePrefs>(defaultPrefs);
+  const [loaded, setLoaded] = useState(false);
   const { families, done } = useAppFonts();
-  const reduceMotion = useReduceMotion();
+  const systemReduceMotion = useSystemReduceMotion();
 
   useEffect(() => {
-    loadThemePref().then((p) => {
-      setPrefState(p);
-      setPrefLoaded(true);
+    loadAppearance().then((p) => {
+      setPrefs(p);
+      setLoaded(true);
     });
   }, []);
 
   // Make native dialogs (Alert) follow the in-app choice too.
   useEffect(() => {
     try {
-      Appearance.setColorScheme(pref === 'system' ? 'unspecified' : pref);
+      Appearance.setColorScheme(prefs.pref === 'system' ? 'unspecified' : prefs.pref);
     } catch {
       // Older runtimes: only the JS theme follows the choice.
     }
-  }, [pref]);
+  }, [prefs.pref]);
 
-  const scheme: Scheme = pref === 'system' ? (system === 'light' ? 'light' : 'dark') : pref;
-  const theme = useMemo(() => buildTheme(scheme, families, reduceMotion), [scheme, families, reduceMotion]);
+  const scheme: Scheme = prefs.pref === 'system' ? (system === 'light' ? 'light' : 'dark') : prefs.pref;
+  const reduceMotion = systemReduceMotion || prefs.motion === 'reduce';
+  const theme = useMemo(() => buildTheme(scheme, families, reduceMotion, prefs.textScale, prefs.haptics), [scheme, families, reduceMotion, prefs.textScale, prefs.haptics]);
   const bg = theme.colors.bg;
 
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(bg).catch(() => {});
   }, [bg]);
 
-  const setPref = useCallback((p: ThemePref) => {
-    setPrefState(p);
-    saveThemePref(p);
+  const update = useCallback((patch: Partial<AppearancePrefs>) => {
+    setPrefs((prev) => {
+      const next = { ...prev, ...patch };
+      saveAppearance(next);
+      return next;
+    });
   }, []);
-  const prefValue = useMemo(() => ({ pref, setPref }), [pref, setPref]);
+  const api = useMemo<ThemePrefApi>(
+    () => ({
+      ...prefs,
+      systemReduceMotion,
+      setPref: (pref) => update({ pref }),
+      setTextScale: (textScale) => update({ textScale }),
+      setMotion: (motion) => update({ motion }),
+      setHaptics: (haptics) => update({ haptics }),
+    }),
+    [prefs, systemReduceMotion, update],
+  );
 
-  if (!prefLoaded || !done) return null;
+  if (!loaded || !done) return null;
   return (
     <ThemeCtx.Provider value={theme}>
-      <PrefCtx.Provider value={prefValue}>
+      <PrefCtx.Provider value={api}>
         <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
         {children}
       </PrefCtx.Provider>
@@ -84,8 +110,8 @@ export function useTheme(): Theme {
   return t;
 }
 
-/** The user's light/dark choice and its setter (persisted). */
-export function useThemePref() {
+/** Appearance choices and their setters (persisted): `{ pref, setPref, textScale, setTextScale, motion, setMotion, haptics, setHaptics }`. */
+export function useThemePref(): ThemePrefApi {
   return useContext(PrefCtx);
 }
 

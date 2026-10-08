@@ -3,24 +3,36 @@
  *
  * Every call below was checked against the INSTALLED llama.rn 0.12.9 sources (node_modules/llama.rn/src/index.ts,
  * src/types.ts and cpp/jsi/*): parameter names, the progress callback (integer percent 0..100), the token
- * callback ({ token }), the result fields (timings.*, tokens_*, interrupted, context_full) and release().
+ * callback ({ token }), the result fields (timings.*, tokens_*, draft_tokens*, interrupted, context_full) and release().
+ *
+ * v2 facts from the native sources that shape this file:
+ *  - Speculative decoding in 0.12.9 is MTP only (cpp/rn-completion.cpp `shouldUseMTP`): `spec_type: 'draft-mtp'` at
+ *    init, the draft is either the target's own nextn layers or a separate MTP-head GGUF (`model_draft`). The draft must
+ *    have the target's embedding width or llama.cpp ABORTS the process (GGML_ASSERT in common/speculative.cpp), so the
+ *    pair is checked from the GGUF headers (`loadLlamaModelInfo`) BEFORE initLlama and refused with a reason.
+ *  - Vision: `ctx.initMultimodal({ path: mmproj })` after load; images go in as `image_url` message parts.
+ *  - KV sessions: `completion({ prompt, n_predict: 0 })` evaluates a prefix; `saveSession`/`loadSession` persist it.
  *
  * `llama.rn` is required lazily so that opening the app in an environment without the native module
  * (Expo Go, web) shows a clear message instead of crashing at import time. Nothing here fabricates output:
  * if the engine cannot run, load() throws and the UI says why.
  */
 import { Platform } from 'react-native';
-import type { ContextParams, LlamaContext } from 'llama.rn';
+import type { ContextParams, LlamaContext, NativeBackendDeviceInfo, RNLlamaOAICompatibleMessage } from 'llama.rn';
 import {
   EngineLoadError,
   EngineUnavailableError,
+  SpeculativeUnsupportedError,
   type GenerateParams,
   type GenerateResult,
   type InferenceEngine,
   type LoadParams,
   type LoadedModelInfo,
+  type PrefixEval,
+  type SpeculativeLoad,
 } from '../core/engineTypes.ts';
 import type { PromptMessage } from '../core/chatPrompt.ts';
+import { DEFAULT_SAMPLING } from '../core/settingsModel.ts';
 
 type LlamaModule = typeof import('llama.rn');
 
@@ -39,11 +51,13 @@ function loadModule(): LlamaModule {
  */
 const STOP_WORDS = ['<|im_end|>', '<|eot_id|>', '<end_of_turn>', '</s>'];
 
-/** Batch sizes that suit a phone: 512 = llama.cpp's own micro-batch default, keeps compute buffers small. */
-const N_BATCH = 512;
-const N_UBATCH = 512;
+/** Default batch: 512 = llama.cpp's own micro-batch default, keeps compute buffers small on a phone. */
+const DEFAULT_BATCH = 512;
 
 const LOAD_LOG_LINES = 40;
+
+/** Marks where the first user message starts in the template output (the cached prefix ends right before it). */
+const PREFIX_SENTINEL = 'CHIWIWI_PREFIX_SENTINEL_7f3a9c';
 
 /** Collect llama.cpp's warnings/errors while a model loads: the thrown error is only "Failed to load model". */
 async function captureLoadLog(mod: LlamaModule): Promise<{ lines: string[]; stop: () => Promise<void> }> {
@@ -69,6 +83,69 @@ async function captureLoadLog(mod: LlamaModule): Promise<{ lines: string[]; stop
   }
 }
 
+/** GGUF header values (llama.rn returns every key as a string). */
+async function ggufInfo(mod: LlamaModule, path: string): Promise<Record<string, unknown>> {
+  const info = (await mod.loadLlamaModelInfo(path)) as Record<string, unknown> | undefined;
+  if (!info || typeof info !== 'object') throw new Error('could not read the GGUF header');
+  return info;
+}
+
+const headerNum = (info: Record<string, unknown>, key: string): number => {
+  const arch = String(info['general.architecture'] ?? '');
+  const v = Number(info[`${arch}.${key}`]);
+  return Number.isFinite(v) ? v : 0;
+};
+
+/**
+ * Refuse a speculative configuration llama.cpp cannot run, from the GGUF headers alone (no load, no crash).
+ * Exported for the contract test.
+ */
+export async function checkSpeculative(mod: LlamaModule, targetPath: string, sp: SpeculativeLoad): Promise<void> {
+  let target: Record<string, unknown>;
+  try {
+    target = await ggufInfo(mod, targetPath);
+  } catch (e) {
+    throw new SpeculativeUnsupportedError(`The model header could not be read (${e instanceof Error ? e.message : String(e)}).`);
+  }
+  if (sp.mode === 'mtp') {
+    if (headerNum(target, 'nextn_predict_layers') <= 0) {
+      throw new SpeculativeUnsupportedError('This model file has no built-in MTP draft layers, so it cannot draft for itself.');
+    }
+    return;
+  }
+  let draft: Record<string, unknown>;
+  try {
+    draft = await ggufInfo(mod, sp.draftPath);
+  } catch (e) {
+    throw new SpeculativeUnsupportedError(`The draft model header could not be read (${e instanceof Error ? e.message : String(e)}).`);
+  }
+  // llama.cpp asserts n_embd_out(draft) == n_embd_out(target) and ABORTS otherwise (common/speculative.cpp).
+  const outWidth = (info: Record<string, unknown>) => headerNum(info, 'embedding_length_out') || headerNum(info, 'embedding_length');
+  const tW = outWidth(target);
+  const dW = outWidth(draft);
+  if (headerNum(draft, 'nextn_predict_layers') <= 0 || tW <= 0 || tW !== dW) {
+    throw new SpeculativeUnsupportedError(
+      `This engine version (llama.rn 0.12.9) only drafts with MTP draft heads built for the target model; the chosen draft is a standalone model` +
+        (tW !== dW ? ` (hidden size ${dW} vs ${tW})` : '') +
+        '.',
+    );
+  }
+}
+
+/** Our messages -> llama.rn's OpenAI-style messages (images become image_url parts before the text). */
+function toLlamaMessages(messages: PromptMessage[]): RNLlamaOAICompatibleMessage[] {
+  return messages.map((m) =>
+    m.images?.length
+      ? { role: m.role, content: [...m.images.map((url) => ({ type: 'image_url', image_url: { url } })), { type: 'text', text: m.content }] }
+      : { role: m.role, content: m.content },
+  );
+}
+
+/** The real CPU/GPU device list (llama.cpp backends compiled into this build). */
+export async function getBackendDevices(): Promise<NativeBackendDeviceInfo[]> {
+  return loadModule().getBackendDevicesInfo();
+}
+
 export class LlamaEngine implements InferenceEngine {
   private ctx: LlamaContext | null = null;
 
@@ -76,13 +153,25 @@ export class LlamaEngine implements InferenceEngine {
     const mod = loadModule();
     await this.release();
 
+    if (params.speculative) await checkSpeculative(mod, params.path, params.speculative);
+
     // Stability first: CPU everywhere on Android unless the user opts into the experimental GPU path.
     const backend: Pick<ContextParams, 'n_gpu_layers' | 'devices'> =
       Platform.OS === 'android'
         ? params.useGpu
-          ? { n_gpu_layers: 99 }
+          ? { n_gpu_layers: params.nGpuLayers ?? 99 }
           : { devices: ['CPU'] }
         : {};
+    const sp = params.speculative;
+    const speculative: Partial<ContextParams> = sp
+      ? {
+          spec_type: 'draft-mtp',
+          spec_draft_n_max: sp.nMax,
+          spec_draft_p_min: sp.pMin,
+          ...(sp.mode === 'draft' ? { model_draft: sp.draftPath } : {}),
+        }
+      : {};
+    const batch = params.nBatch ?? DEFAULT_BATCH;
 
     const log = await captureLoadLog(mod);
     let ctx: LlamaContext;
@@ -91,11 +180,16 @@ export class LlamaEngine implements InferenceEngine {
         {
           model: params.path,
           n_ctx: params.nCtx,
-          n_batch: N_BATCH,
-          n_ubatch: N_UBATCH,
-          use_mlock: false,
+          n_batch: batch,
+          n_ubatch: batch,
+          use_mlock: params.useMlock ?? false,
+          ...(params.useMmap !== undefined ? { use_mmap: params.useMmap } : {}),
+          ...(params.flashAttn ? { flash_attn_type: params.flashAttn } : {}),
+          ...(params.cacheTypeK ? { cache_type_k: params.cacheTypeK } : {}),
+          ...(params.cacheTypeV ? { cache_type_v: params.cacheTypeV } : {}),
           ...(params.threads ? { n_threads: params.threads } : {}),
           ...backend,
+          ...speculative,
         },
         // llama.rn reports an integer percentage 0..100 (and calls it with 0 first and 100 last).
         (percent: number) => params.onProgress?.(percent / 100),
@@ -110,6 +204,19 @@ export class LlamaEngine implements InferenceEngine {
       await log.stop();
     }
     this.ctx = ctx;
+
+    let multimodal: LoadedModelInfo['multimodal'] = null;
+    let multimodalError: string | undefined;
+    if (params.mmprojPath) {
+      try {
+        const ok = await ctx.initMultimodal({ path: params.mmprojPath, use_gpu: params.useGpu });
+        if (ok) multimodal = await ctx.getMultimodalSupport();
+        else multimodalError = 'the projector file did not initialise';
+      } catch (e) {
+        multimodalError = e instanceof Error ? e.message : String(e);
+      }
+    }
+
     const arch = (ctx.model?.metadata as Record<string, unknown> | undefined)?.['general.architecture'];
     return {
       description: ctx.model?.desc ?? 'GGUF model',
@@ -118,6 +225,12 @@ export class LlamaEngine implements InferenceEngine {
       nCtx: params.nCtx,
       modelBytes: ctx.model?.size ?? 0,
       architecture: typeof arch === 'string' ? arch : undefined,
+      devices: ctx.devices ?? [],
+      reasonNoGPU: ctx.reasonNoGPU || undefined,
+      androidLib: ctx.androidLib || undefined,
+      ...(sp ? { speculative: sp.mode } : {}),
+      multimodal,
+      ...(multimodalError ? { multimodalError } : {}),
     };
   }
 
@@ -125,12 +238,13 @@ export class LlamaEngine implements InferenceEngine {
     const ctx = this.ctx;
     if (!ctx) throw new EngineUnavailableError('no model is loaded');
     const t0 = Date.now();
+    const messages = toLlamaMessages(params.messages);
 
     // Ask the template whether it pre-opened a <think> block (newer Qwen / DeepSeek templates do),
     // so the UI can split reasoning from the answer correctly from the very first token.
     let thinkingForcedOpen = false;
     try {
-      const formatted = await ctx.getFormattedChat(params.messages, undefined, {
+      const formatted = await ctx.getFormattedChat(messages, undefined, {
         jinja: true,
         enable_thinking: params.enableThinking,
         reasoning_format: 'none',
@@ -141,17 +255,18 @@ export class LlamaEngine implements InferenceEngine {
     }
     params.onStart?.({ thinkingForcedOpen });
 
+    const sampling = params.sampling ?? DEFAULT_SAMPLING;
     let accumulated = '';
     let ttftMs = 0;
     const result = await ctx.completion(
       {
-        messages: params.messages,
+        messages,
         n_predict: params.maxTokens,
         temperature: params.temperature,
-        top_k: 40,
-        top_p: 0.9,
-        min_p: 0.05,
-        penalty_repeat: 1.1,
+        top_k: sampling.topK,
+        top_p: sampling.topP,
+        min_p: sampling.minP,
+        penalty_repeat: sampling.repeatPenalty,
         stop: [...STOP_WORDS],
         jinja: true,
         enable_thinking: params.enableThinking,
@@ -177,20 +292,68 @@ export class LlamaEngine implements InferenceEngine {
       contextFull: !!result.context_full,
       thinkingForcedOpen,
       ttftMs,
+      cachedTokens: result.tokens_cached ?? timings?.cache_n ?? undefined,
+      draftTokens: result.draft_tokens ?? 0,
+      draftAccepted: result.draft_tokens_accepted ?? 0,
     };
   }
 
-  /** Exact prompt length (in the model's own tokens) after its chat template is applied. */
+  /** Exact prompt length (in the model's own tokens) after its chat template is applied (images included). */
   async countPromptTokens(messages: PromptMessage[], enableThinking: boolean): Promise<number> {
     const ctx = this.ctx;
     if (!ctx) throw new EngineUnavailableError('no model is loaded');
-    const formatted = await ctx.getFormattedChat(messages, undefined, {
+    const formatted = await ctx.getFormattedChat(toLlamaMessages(messages), undefined, {
       jinja: true,
       enable_thinking: enableThinking,
       reasoning_format: 'none',
     });
-    const { tokens } = await ctx.tokenize(formatted.prompt);
+    const media = formatted.media_paths?.length ? { media_paths: formatted.media_paths } : undefined;
+    const { tokens } = await ctx.tokenize(formatted.prompt, media);
     return tokens.length;
+  }
+
+  /**
+   * Evaluate only the system-prompt prefix into the KV cache. The prefix is the template output up to where the first
+   * user message's text starts, so it is a byte-exact prefix of every later chat prompt with this system prompt.
+   */
+  async evalPrefix(system: string, enableThinking: boolean): Promise<PrefixEval> {
+    const ctx = this.ctx;
+    if (!ctx) throw new EngineUnavailableError('no model is loaded');
+    const formatted = await ctx.getFormattedChat(
+      [
+        { role: 'system', content: system },
+        { role: 'user', content: PREFIX_SENTINEL },
+      ],
+      undefined,
+      { jinja: true, enable_thinking: enableThinking, reasoning_format: 'none' },
+    );
+    const at = formatted.prompt.indexOf(PREFIX_SENTINEL);
+    if (at <= 0) throw new Error('the chat template did not place the system prompt first');
+    const r = await ctx.completion({ prompt: formatted.prompt.slice(0, at), n_predict: 0 });
+    return { tokens: r.tokens_evaluated ?? 0 };
+  }
+
+  async saveSession(path: string): Promise<number> {
+    const ctx = this.ctx;
+    if (!ctx) throw new EngineUnavailableError('no model is loaded');
+    return ctx.saveSession(path.replace(/^file:\/\//, ''));
+  }
+
+  async loadSession(path: string): Promise<number> {
+    const ctx = this.ctx;
+    if (!ctx) throw new EngineUnavailableError('no model is loaded');
+    try {
+      const r = await ctx.loadSession(path);
+      return r?.tokens_loaded ?? 0;
+    } catch (e) {
+      // A failed restore can leave a half-written cache: start clean so the next reply re-reads its prompt.
+      try {
+        await ctx.clearCache(true);
+      } catch {
+        // nothing more to do
+      }
+      throw e;
+    }
   }
 
   async stop(): Promise<void> {

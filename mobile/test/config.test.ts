@@ -21,10 +21,13 @@ test('config: only permissions that a shipped feature uses are declared', () => 
     'android.permission.MANAGE_EXTERNAL_STORAGE', // external vault folder (Android 11+)
     'android.permission.READ_EXTERNAL_STORAGE', // external vault folder (Android 8-10)
     'android.permission.WRITE_EXTERNAL_STORAGE',
+    'android.permission.RECORD_AUDIO', // voice mode (services/voice/stt.ts), requested only when voice mode starts
+    'android.permission.CAMERA', // attach sheet "Camera" (services/attachments.ts), requested only when tapped
   ]);
   for (const p of perms) assert.ok(allowed.has(p), `unexpected permission ${p}`);
-  // Features that do not exist must not ask for their permissions (honesty + privacy).
-  for (const banned of ['RECORD_AUDIO', 'CAMERA', 'POST_NOTIFICATIONS', 'READ_MEDIA_IMAGES', 'READ_MEDIA_VIDEO', 'READ_MEDIA_AUDIO', 'FOREGROUND_SERVICE', 'WAKE_LOCK']) {
+  // Features that do not exist must not ask for their permissions (honesty + privacy). Photos use the system photo
+  // picker, which needs no READ_MEDIA_* permission.
+  for (const banned of ['POST_NOTIFICATIONS', 'READ_MEDIA_IMAGES', 'READ_MEDIA_VIDEO', 'READ_MEDIA_AUDIO', 'FOREGROUND_SERVICE', 'WAKE_LOCK']) {
     assert.ok(!perms.some((p) => p.endsWith(banned)), `${banned} should not be requested`);
   }
 });

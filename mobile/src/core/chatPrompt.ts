@@ -12,11 +12,18 @@ export type Role = 'system' | 'user' | 'assistant';
 export interface PromptMessage {
   role: Role;
   content: string;
+  /** Real file paths of images for this turn (vision models with an mmproj only). */
+  images?: string[];
 }
 export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
+  images?: string[];
 }
+
+/** Prompt-size allowance per image until the engine reports the real count (most projectors use 64-1024 tokens). */
+export const IMAGE_TOKEN_ESTIMATE = 768;
+const imageCost = (images?: string[]) => (images?.length ?? 0) * IMAGE_TOKEN_ESTIMATE;
 
 /**
  * Conservative token estimate. Undercounting overflows the model's context (a hard "Context is full"
@@ -45,12 +52,14 @@ export function normalizeHistory(history: HistoryMessage[]): HistoryMessage[] {
   const out: HistoryMessage[] = [];
   for (const m of history) {
     const content = m.content.trim();
-    if (!content) continue;
+    const images = m.images?.length ? [...m.images] : undefined;
+    if (!content && !images) continue;
     const last = out[out.length - 1];
     if (last && last.role === m.role) {
-      last.content = `${last.content}\n\n${content}`;
+      last.content = [last.content, content].filter(Boolean).join('\n\n');
+      if (images) last.images = [...(last.images ?? []), ...images];
     } else {
-      out.push({ role: m.role, content });
+      out.push(images ? { role: m.role, content, images } : { role: m.role, content });
     }
   }
   // A conversation must start with a user turn.
@@ -62,6 +71,8 @@ export interface BuildPromptInput {
   system: string;
   history: HistoryMessage[];
   userMessage: string;
+  /** Images attached to the new user message. */
+  userImages?: string[];
   nCtx: number;
   /** Tokens kept free for the model's reply. */
   replyBudget: number;
@@ -96,11 +107,12 @@ export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
     truncatedUserMessage = true;
   }
 
-  let used = systemTokens + tokens(userMessage) + 8;
+  const userImages = input.userImages?.length ? [...input.userImages] : undefined;
+  let used = systemTokens + tokens(userMessage) + imageCost(userImages) + 8;
   const history = normalizeHistory(input.history);
   const kept: HistoryMessage[] = [];
   for (let i = history.length - 1; i >= 0; i--) {
-    const cost = tokens(history[i].content) + 8;
+    const cost = tokens(history[i].content) + imageCost(history[i].images) + 8;
     if (used + cost > budget) break;
     used += cost;
     kept.unshift(history[i]);
@@ -112,12 +124,13 @@ export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   // If the history ends with a user turn, merge the new message into it (alternation).
   const messages: PromptMessage[] = [];
   if (system) messages.push({ role: 'system', content: system });
-  for (const m of kept) messages.push({ role: m.role, content: m.content });
+  for (const m of kept) messages.push(m.images ? { role: m.role, content: m.content, images: [...m.images] } : { role: m.role, content: m.content });
   const last = messages[messages.length - 1];
   if (last && last.role === 'user') {
-    last.content = `${last.content}\n\n${userMessage}`;
+    last.content = [last.content, userMessage].filter(Boolean).join('\n\n');
+    if (userImages) last.images = [...(last.images ?? []), ...userImages];
   } else {
-    messages.push({ role: 'user', content: userMessage });
+    messages.push(userImages ? { role: 'user', content: userMessage, images: userImages } : { role: 'user', content: userMessage });
   }
 
   return { messages, droppedMessages, estimatedPromptTokens: used, truncatedUserMessage };

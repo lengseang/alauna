@@ -28,7 +28,9 @@
         "android.permission.INTERNET",
         "android.permission.MANAGE_EXTERNAL_STORAGE",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
       ]
     },
     "plugins": [
@@ -60,7 +62,21 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CHIWIWI lets you attach photos to a chat. They stay on this phone.",
+          "cameraPermission": "CHIWIWI lets you take a photo to attach to a chat. It stays on this phone.",
+          "microphonePermission": "CHIWIWI turns your voice into text on this phone. Audio never leaves the device."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "CHIWIWI uses Face ID to unlock your private chats."
+        }
+      ]
     ],
     "extra": {
       "eas": {

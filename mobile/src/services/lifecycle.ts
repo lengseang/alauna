@@ -2,22 +2,39 @@
  * Startup order and "what must be refreshed when storage changes".
  *
  * Order matters (docs/REQUIREMENTS.md ST-1/ST-2): settings -> storage -> crash check ->
- * only then data that lives inside the vault (downloads, chats, memory).
+ * only then data that lives inside the vault (auto-purge of old chats, downloads, chats, memory).
+ * `bootStage` publishes the REAL current step for the splash HUD (no timers).
  */
+import { useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
 import { MemoryGuard } from '../core/memoryGuard.ts';
+import { createStore } from '../core/store.ts';
 import { engine } from './engine.ts';
 import { chatStore, initChat } from './chat.ts';
 import { refreshDownloads } from './downloads.ts';
 import { loadMemory } from './memory.ts';
+import { autoPurgeOldChats } from './privacy.ts';
 import { initSettings, updateSettings } from './settings.ts';
 import { initStorage, isStorageReady } from './storage.ts';
 
 /** Load everything that lives inside the vault. Call whenever storage becomes (or changes to) ready. */
 export async function onStorageReady(): Promise<void> {
   if (!isStorageReady()) return;
+  bootStore.setState({ stage: 'library' });
   refreshDownloads();
+  try {
+    const purged = await autoPurgeOldChats();
+    bootStore.setState({ purgedChats: purged });
+  } catch {
+    // a purge problem must never block the app
+  }
   await Promise.all([loadMemory(), initChat()]);
+}
+
+export type BootStage = 'settings' | 'storage' | 'library' | 'done';
+export const bootStore = createStore<{ stage: BootStage | null; purgedChats: number }>({ stage: null, purgedChats: 0 });
+export function useBoot(): { stage: BootStage | null; purgedChats: number } {
+  return useSyncExternalStore(bootStore.subscribe, bootStore.getState);
 }
 
 /** The vault moved: whatever was in RAM came from the old location, so release it. */
@@ -55,10 +72,13 @@ export function bootstrap(): Promise<void> {
   if (!started) {
     installMemoryGuard();
     started = (async () => {
+      bootStore.setState({ stage: 'settings' });
       await initSettings();
+      bootStore.setState({ stage: 'storage' });
       await initStorage();
       await engine.noteStartup();
       await onStorageReady();
+      bootStore.setState({ stage: 'done' });
     })();
   }
   return started;

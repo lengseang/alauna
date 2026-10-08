@@ -1,8 +1,14 @@
 /**
- * Persona ("Soul") -> system prompt. The PAD vector (Pleasure/Arousal/Dominance)
- * is turned into plain style instructions, so changing it really changes the
- * model's tone. (The old version only displayed the numbers.)
+ * Persona ("Soul") -> system prompt + sampling parameters.
+ *
+ * The PAD vector (Pleasure / Arousal / Dominance, the old app's model, restored from git 94b571d types/soul.ts with all
+ * six archetypes) changes the model's behaviour in two documented, deterministic ways:
+ *   1. prompt descriptors (`describePad`): tone from Pleasure, energy from Arousal, directness from Dominance;
+ *   2. sampling (`padToSampling`): Arousal widens/narrows sampling, Dominance raises the repetition penalty.
+ * Pleasure is deliberately prompt-only: warmth is a wording choice, not a randomness choice.
  */
+import { selectMemoryLines } from './memory.ts';
+import type { SamplingSettings } from './settingsModel.ts';
 
 export interface PADVector {
   /** Warmth, -1..1 */
@@ -13,7 +19,7 @@ export interface PADVector {
   dominance: number;
 }
 
-export type SoulArchetypeKey = 'empath' | 'mentor' | 'tactical' | 'spark';
+export type SoulArchetypeKey = 'empath' | 'mentor' | 'tactical' | 'spark' | 'cynic' | 'visionary';
 
 export interface SoulArchetype {
   id: SoulArchetypeKey;
@@ -51,6 +57,20 @@ export const ARCHETYPES: Record<SoulArchetypeKey, SoulArchetype> = {
     description: 'Witty, energetic, creative.',
     defaultPAD: { pleasure: 0.85, arousal: 0.8, dominance: 0.6 },
     prompt: 'You are a playful, witty, high-energy companion. Keep the banter lively, optimistic and creative.',
+  },
+  cynic: {
+    id: 'cynic',
+    name: 'Adversarial Red-Team',
+    description: 'Challenges assumptions and hunts for failure modes.',
+    defaultPAD: { pleasure: -0.35, arousal: 0.6, dominance: 0.9 },
+    prompt: 'You are an adversarial red-team auditor and critical analyst. Challenge unverified assumptions, expose edge cases, and demand rigor.',
+  },
+  visionary: {
+    id: 'visionary',
+    name: 'Systems Architect',
+    description: 'Big-picture planner with clean boundaries.',
+    defaultPAD: { pleasure: 0.5, arousal: 0.65, dominance: 0.85 },
+    prompt: 'You are a principal systems architect. Focus on clean modular boundaries, long-term design and high-leverage next steps.',
   },
 };
 
@@ -94,18 +114,44 @@ export function describePad(pad: PADVector): string[] {
   return lines;
 }
 
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const round = (v: number, digits: number) => Number(v.toFixed(digits));
+
+/**
+ * PAD -> sampling, deterministic. `base` is the user's sampling defaults (Settings > Advanced); the soul only nudges it.
+ * With k = toneIntensity (0.1..1), a = arousal - 0.5, d = dominance - 0.5:
+ *   temperature   = clamp(base + 0.4*a*k, 0.1, 1.5)      energetic souls sample more freely
+ *   top_p         = clamp(base + 0.1*a*k, 0.5, 1)
+ *   top_k         = round(clamp(base * (1 + 0.5*a*k), 5, 200))   (base 0 = disabled stays 0)
+ *   repeat penalty= clamp(base + 0.1*d*k, 1, 1.5)        direct souls repeat themselves less
+ *   min_p         = base (unchanged)
+ * Neutral PAD (arousal = dominance = 0.5) returns the base values unchanged.
+ */
+export function padToSampling(pad: PADVector, toneIntensity: number, base: SamplingSettings): SamplingSettings {
+  const p = clampPad(pad);
+  const k = clamp(Number.isFinite(toneIntensity) ? toneIntensity : 0.8, 0, 1);
+  const a = p.arousal - 0.5;
+  const d = p.dominance - 0.5;
+  return {
+    temperature: round(clamp(base.temperature + 0.4 * a * k, 0.1, 1.5), 3),
+    topP: round(clamp(base.topP + 0.1 * a * k, 0.5, 1), 3),
+    topK: base.topK <= 0 ? 0 : Math.round(clamp(base.topK * (1 + 0.5 * a * k), 5, 200)),
+    minP: base.minP,
+    repeatPenalty: round(clamp(base.repeatPenalty + 0.1 * d * k, 1, 1.5), 3),
+  };
+}
+
 export interface SystemPromptInput {
   archetype: SoulArchetypeKey;
   pad: PADVector;
   /** 0.1 (subtle) .. 1 (strong). */
   toneIntensity?: number;
   backstory?: string;
-  /** User-managed facts about the user (Settings -> Memory). */
+  /** User-managed facts about the user (Settings -> Memory), already filtered (paused facts removed). */
   memories?: string[];
 }
 
-const MAX_BACKSTORY_CHARS = 600;
-const MAX_MEMORY_CHARS = 700;
+export const MAX_BACKSTORY_CHARS = 600;
 
 export function buildSystemPrompt(input: SystemPromptInput): string {
   const arch = ARCHETYPES[input.archetype] ?? ARCHETYPES.empath;
@@ -121,17 +167,8 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
   const backstory = input.backstory?.trim();
   if (backstory) parts.push(`Extra instructions from the user: ${backstory.slice(0, MAX_BACKSTORY_CHARS)}`);
 
-  const memories = (input.memories ?? []).map((m) => m.trim()).filter(Boolean);
-  if (memories.length > 0) {
-    let used = 0;
-    const lines: string[] = [];
-    for (const m of memories) {
-      if (used + m.length > MAX_MEMORY_CHARS) break;
-      used += m.length;
-      lines.push(`- ${m}`);
-    }
-    if (lines.length > 0) parts.push(`Things the user told you to remember:\n${lines.join('\n')}`);
-  }
+  const lines = selectMemoryLines(input.memories ?? []);
+  if (lines.length > 0) parts.push(`Things the user told you to remember:\n${lines.map((m) => `- ${m}`).join('\n')}`);
   parts.push('Be accurate. If you are unsure, say so instead of guessing. Keep answers concise unless asked for detail.');
   return parts.join('\n');
 }

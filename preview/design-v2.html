@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHIWIWI Temple</title>
+<meta name="description" content="CHIWIWI design system v2 concept: Chat, Model Vault, Settings and Soul in Nyx (night) and Helios (day), square everywhere.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* ---------- tokens: copied from mobile/src/theme/palette.ts ---------- */
+:root {
+  --page: #101117; --page-text: #D9DBE6; --page-muted: #8E92A8; --page-line: #262836;
+  --inter: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --cinzel: "Cinzel", "Trajan Pro", Georgia, serif;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --page: #E8E3D6; --page-text: #29231A; --page-muted: #5E5440; --page-line: #CFC4A8; }
+}
+:root[data-theme="light"] { --page: #E8E3D6; --page-text: #29231A; --page-muted: #5E5440; --page-line: #CFC4A8; }
+:root[data-theme="dark"] { --page: #101117; --page-text: #D9DBE6; --page-muted: #8E92A8; --page-line: #262836; }
+
+.nyx {
+  --bg: #080A17; --surface: #0F1329; --surfaceAlt: #171C38; --border: #262C4F; --borderStrong: #5D679B;
+  --text: #EDEFF8; --muted: #9AA2C6; --accent: #E6C76A; --accentSoft: rgba(230,199,106,.12); --onAccent: #080A17;
+  --danger: #FF8E8E; --dangerSoft: rgba(255,142,142,.12); --glow: #EDEFF8; --scrim: rgba(4,5,12,.66);
+}
+.helios {
+  --bg: #FAF6EC; --surface: #F3ECDB; --surfaceAlt: #EAE0C9; --border: #D6C8A7; --borderStrong: #8C7B52;
+  --text: #29231A; --muted: #655941; --accent: #8A5A00; --accentSoft: rgba(138,90,0,.08); --onAccent: #FFFFFF;
+  --danger: #B3261E; --dangerSoft: rgba(179,38,30,.09); --glow: #F2C14E; --scrim: rgba(41,35,26,.48);
+}
+
+/* ---------- page ---------- */
+* { box-sizing: border-box; margin: 0; padding: 0; border-radius: 0 !important; }
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--page); color: var(--page-text); font: 400 15px/1.55 var(--inter); padding: 48px 16px 96px; -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1240px; margin: 0 auto; }
+.mast { text-align: center; margin-bottom: 56px; }
+.mast .word { font: 600 40px/1.1 var(--cinzel); letter-spacing: 10px; color: var(--page-text); }
+.mast .sub { margin-top: 12px; color: var(--page-muted); max-width: 680px; margin-inline: auto; }
+.mast .rules { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 20px; }
+.mast .rules span { border: 1px solid var(--page-line); padding: 4px 10px; font-size: 13px; color: var(--page-muted); }
+.chapter { margin: 72px 0 24px; display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; align-items: baseline; }
+.chapter .num { font: 600 15px var(--cinzel); color: #C9A84F; letter-spacing: 2px; }
+.chapter h2 { font: 600 22px var(--cinzel); letter-spacing: 3px; text-transform: uppercase; }
+.chapter p { grid-column: 2; color: var(--page-muted); max-width: 760px; }
+.pair { display: flex; flex-wrap: wrap; gap: 32px; justify-content: center; align-items: flex-start; }
+.cap { font: 600 13px var(--cinzel); letter-spacing: 3px; color: var(--page-muted); text-align: center; margin-bottom: 10px; text-transform: uppercase; }
+.note { max-width: 300px; color: var(--page-muted); font-size: 14px; display: grid; gap: 10px; align-self: center; }
+.note b { color: var(--page-text); font-weight: 600; }
+.legal { margin-top: 80px; text-align: center; color: var(--page-muted); font-size: 13px; }
+
+/* ---------- phone ---------- */
+.phone { width: 384px; max-width: calc(100vw - 32px); height: 820px; background: var(--bg); color: var(--text); font: 400 16px/24px var(--inter);
+  border: 1px solid var(--borderStrong); outline: 6px solid #05060B; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.helios.phone { outline-color: #2B2519; }
+.status { height: 32px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font: 600 13px var(--inter); color: var(--text); flex: none; position: relative; z-index: 2; }
+.status .bars { display: flex; gap: 6px; align-items: center; }
+.status .bars i { display: block; width: 16px; height: 9px; border: 1px solid var(--text); }
+.status .bars i::after { content: ""; display: block; width: 9px; height: 5px; margin: 1px; background: var(--text); }
+.status .bars b { display: block; width: 3px; height: 9px; background: var(--text); box-shadow: -5px 3px 0 -1px var(--text); }
+.gesture { height: 20px; flex: none; display: grid; place-items: center; }
+.gesture::after { content: ""; width: 108px; height: 3px; background: var(--muted); opacity: .6; }
+.screen { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.scroll { flex: 1; min-height: 0; overflow: hidden; padding: 0 16px; display: flex; flex-direction: column; }
+.scroll > * { flex-shrink: 0; }
+
+/* ---------- primitives (mirror src/ui) ---------- */
+.i { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: square; stroke-linejoin: miter; flex: none; display: block; }
+.i.fill { fill: currentColor; }
+.i.s16 { width: 16px; height: 16px; }
+.ib { width: 48px; height: 48px; display: grid; place-items: center; color: var(--text); background: none; border: 0; flex: none; position: relative; cursor: pointer; }
+.ib:hover { background: var(--accentSoft); }
+.ib.filled { background: var(--accent); color: var(--onAccent); }
+.ib.muted { color: var(--muted); }
+.badge { position: absolute; top: 8px; right: 6px; min-width: 16px; height: 16px; padding: 0 3px; background: var(--accent); color: var(--onAccent); font: 600 11px/16px var(--inter); text-align: center; }
+.hdr { min-height: 56px; display: flex; align-items: center; gap: 4px; padding: 0 4px; flex: none; }
+.hdr h1 { font: 600 20px/28px var(--cinzel); letter-spacing: 1px; flex: 1; }
+.hdr h1.lone { padding-left: 12px; }
+.t-strong { font-weight: 600; }
+.t-small { font-size: 14px; line-height: 20px; color: var(--muted); }
+.t-label { font-size: 14px; line-height: 20px; font-weight: 600; }
+.accent { color: var(--accent); }
+.num { font-variant-numeric: tabular-nums; }
+.btn { min-height: 48px; padding: 8px 16px; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 16px/24px var(--inter); border: 1px solid transparent; cursor: pointer; width: 100%; }
+.btn.primary { background: var(--accent); color: var(--onAccent); border-color: var(--accent); }
+.btn.quiet { background: transparent; color: var(--text); border-color: var(--borderStrong); }
+.btn.text { background: transparent; color: var(--accent); width: auto; padding: 8px 12px; }
+.row2 { display: flex; gap: 8px; }
+.row2 > * { flex: 1; }
+.divider { height: 1px; background: var(--border); }
+.card { background: var(--surface); border: 1px solid var(--border); padding: 16px; display: grid; gap: 12px; }
+.frame { border: 1px solid var(--border); padding: 3px; }
+.frame > .card { border-color: var(--borderStrong); }
+.tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 0 8px; border: 1px solid var(--border); color: var(--muted); font-size: 14px; line-height: 20px; white-space: nowrap; }
+.tag.acc { border-color: var(--accent); color: var(--accent); }
+.tag.dan { border-color: var(--danger); color: var(--danger); }
+.chip { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 12px; border: 1px solid var(--borderStrong); color: var(--text); font: 600 14px/20px var(--inter); white-space: nowrap; cursor: pointer; }
+.chip.on { border-color: var(--accent); background: var(--accentSoft); }
+.chip.on .i { color: var(--accent); }
+.chip small { font: 400 14px var(--inter); color: var(--muted); font-variant-numeric: tabular-nums; }
+.seg { display: flex; border: 1px solid var(--borderStrong); }
+.seg > span { flex: 1; min-height: 44px; display: grid; place-items: center; font-size: 14px; color: var(--muted); position: relative; padding: 0 8px; white-space: nowrap; }
+.seg > span + span { border-left: 1px solid var(--border); }
+.seg > span.on { background: var(--surfaceAlt); color: var(--text); font-weight: 600; }
+.seg > span.on::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--accent); }
+.search { min-height: 48px; display: flex; align-items: center; gap: 8px; padding-left: 12px; border: 1px solid var(--borderStrong); background: var(--surface); color: var(--muted); }
+.progress { height: 4px; background: var(--surfaceAlt); }
+.progress > i { display: block; height: 4px; background: var(--accent); }
+.lrow { min-height: 56px; display: flex; align-items: center; gap: 12px; padding: 8px; }
+.lrow .tx { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.lrow .val { font-size: 14px; color: var(--muted); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lrow .chev { color: var(--muted); }
+.switch { width: 44px; height: 24px; border: 1px solid var(--borderStrong); position: relative; flex: none; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: var(--muted); transition: transform .15s cubic-bezier(.22,1,.36,1); }
+.switch.on { background: var(--accent); border-color: var(--accent); }
+.switch.on::after { background: var(--onAccent); transform: translateX(20px); }
+.sect { padding-top: 24px; padding-bottom: 4px; display: grid; gap: 8px; }
+.sect .h { display: flex; align-items: center; gap: 12px; min-height: 28px; }
+.sect .h .rn { font: 600 14px/20px var(--cinzel); letter-spacing: 1.5px; color: var(--accent); min-width: 32px; }
+.sect .h .ti { font: 600 14px/20px var(--cinzel); letter-spacing: 1.5px; text-transform: uppercase; flex: 1; }
+svg.mz { display: block; width: 100%; height: 12px; overflow: hidden; }
+svg.mz path { fill: none; stroke: var(--accent); stroke-opacity: .55; stroke-width: 1; stroke-linecap: square; stroke-linejoin: miter; }
+.stat { display: grid; gap: 2px; padding: 8px 0; flex: 1; }
+.stat b { font: 600 20px/28px var(--inter); font-variant-numeric: tabular-nums; }
+.stats { display: flex; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.stats .stat + .stat { border-left: 1px solid var(--border); padding-left: 12px; }
+.slider { display: grid; }
+.slider .top { display: flex; justify-content: space-between; }
+.slider .track { height: 48px; position: relative; margin: 0 7px; }
+.slider .track::before { content: ""; position: absolute; left: 0; right: 0; top: 23px; height: 2px; background: var(--borderStrong); }
+.slider .fill { position: absolute; top: 23px; height: 2px; background: var(--accent); }
+.slider .origin { position: absolute; top: 18px; width: 1px; height: 12px; background: var(--muted); }
+.slider .thumb { position: absolute; top: 17px; width: 14px; height: 14px; margin-left: -7px; background: var(--accent); transform: rotate(45deg); }
+.slider .poles { display: flex; justify-content: space-between; margin-top: -8px; }
+.slider + .slider { margin-top: 8px; }
+.notice { border-left: 2px solid var(--accent); background: var(--accentSoft); padding: 12px 16px; font-size: 14px; line-height: 20px; }
+
+/* ---------- chat ---------- */
+.topbar { min-height: 56px; display: flex; align-items: center; padding: 0 4px; flex: none; border-bottom: 1px solid transparent; }
+.model { flex: 1; display: grid; justify-items: center; gap: 0; cursor: pointer; padding: 4px 0; }
+.model .nm { display: flex; align-items: center; gap: 4px; font-weight: 600; }
+.model .st { display: flex; align-items: center; gap: 6px; font-size: 14px; line-height: 20px; color: var(--accent); }
+.thread { flex: 1; min-height: 0; overflow: hidden; padding: 8px 16px 0; display: flex; flex-direction: column; gap: 20px; justify-content: flex-end; }
+.msg.user { align-self: flex-end; max-width: 86%; background: var(--surfaceAlt); padding: 12px 16px; border-left: 2px solid var(--accent); }
+.msg.ai { display: grid; gap: 10px; }
+.msg.ai ul { padding-left: 4px; list-style: none; display: grid; gap: 6px; }
+.msg.ai li { display: grid; grid-template-columns: 14px 1fr; }
+.msg.ai li::before { content: ""; width: 5px; height: 5px; background: var(--accent); transform: rotate(45deg); margin-top: 10px; }
+.thought { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 14px; line-height: 20px; min-height: 32px; }
+.statline { font-size: 14px; line-height: 20px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.acts { display: flex; gap: 4px; margin-left: -12px; }
+.acts span { color: var(--accent); font: 600 14px/20px var(--inter); padding: 8px 12px; }
+.code { background: var(--surface); border: 1px solid var(--border); padding: 10px 12px; font: 14px/20px ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--text); }
+.cursor { display: inline-block; width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); margin-left: 6px; vertical-align: 1px; animation: pulse 1.3s ease-in-out infinite; }
+.composer { margin: 8px 12px 4px; display: flex; align-items: flex-end; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--borderStrong); flex: none; }
+.composer .in { flex: 1; min-height: 48px; display: flex; align-items: center; color: var(--muted); padding-left: 4px; }
+.hint { text-align: center; font-size: 14px; line-height: 20px; color: var(--muted); padding: 4px 16px 8px; flex: none; }
+
+/* ---------- alive layer ---------- */
+.sky { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.sky .drift { position: absolute; inset: -20px 0 0 0; animation: drift 60s ease-in-out infinite alternate; }
+.sky .g { position: absolute; inset: 0; animation: twinkle 5.2s ease-in-out infinite alternate; }
+.sky .g:nth-child(2) { animation-duration: 6.8s; animation-delay: -1.4s; }
+.sky .g:nth-child(3) { animation-duration: 8.4s; animation-delay: -3s; }
+.sky .g:nth-child(4) { animation-duration: 10s; animation-delay: -4.6s; }
+.sky .s { position: absolute; background: var(--glow); }
+.sky .sp { position: absolute; width: 9px; height: 9px; margin: -4px 0 0 -4px; }
+.sky .sp::before, .sky .sp::after { content: ""; position: absolute; background: var(--accent); }
+.sky .sp::before { left: 4px; top: 0; width: 1px; height: 9px; }
+.sky .sp::after { left: 0; top: 4px; width: 9px; height: 1px; }
+.sky .meteor { position: absolute; top: 14%; left: 58%; width: 72px; height: 1px; background: linear-gradient(90deg, var(--glow), transparent); transform: rotate(-28deg); opacity: 0; animation: meteor 14s cubic-bezier(.4,0,1,1) infinite; }
+.sun { position: absolute; left: 50%; top: -230px; width: 520px; height: 520px; margin-left: -260px; pointer-events: none; z-index: 0; }
+.sun .glow { position: absolute; inset: 0; background: radial-gradient(circle, rgba(242,193,78,.6) 0, rgba(242,193,78,.2) 45%, rgba(242,193,78,0) 70%); animation: breathe 4.5s ease-in-out infinite alternate; border-radius: 50% !important; }
+.sun svg { position: absolute; inset: 0; animation: turn 120s linear infinite; }
+.screen > *:not(.sky):not(.sun) { position: relative; z-index: 1; }
+@keyframes twinkle { from { opacity: 1 } to { opacity: .3 } }
+@keyframes drift { from { transform: translateY(0) } to { transform: translateY(-18px) } }
+@keyframes meteor { 0%, 92% { opacity: 0; transform: rotate(-28deg) translateX(0) } 93% { opacity: .8 } 99% { opacity: 0; transform: rotate(-28deg) translateX(-150px) } 100% { opacity: 0 } }
+@keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .3 } }
+@keyframes breathe { from { opacity: .85; transform: scale(1) } to { opacity: 1; transform: scale(1.05) } }
+@keyframes turn { to { transform: rotate(360deg) } }
+@keyframes halo { from { opacity: .15; transform: scale(.92) } to { opacity: .6; transform: scale(1.08) } }
+.eclipse { display: inline-block; flex: none; position: relative; line-height: 0; }
+.eclipse .halo { position: absolute; inset: 0; animation: halo .9s ease-in-out infinite alternate; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* component sheet */
+.sheet { display: grid; gap: 16px; padding: 20px; width: 384px; max-width: calc(100vw - 32px); background: var(--bg); color: var(--text); border: 1px solid var(--borderStrong); }
+.sheet .lab { font: 600 12px var(--cinzel); letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+.ecl-row { display: flex; gap: 18px; align-items: flex-end; }
+.ecl-row figure { display: grid; justify-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.iconset { display: grid; grid-template-columns: repeat(9, 1fr); gap: 10px 0; color: var(--text); }
+.iconset > span { display: grid; place-items: center; }
+@media (max-width: 860px) { .note { max-width: 384px; } .chapter p { grid-column: 1 / -1; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Same paths as mobile/src/ui/Icon.tsx -->
+    <symbol id="menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+    <symbol id="new" viewBox="0 0 24 24"><path d="M11 4H4v16h16v-7M17.5 3.5l3 3L11 16H8v-3z"/></symbol>
+    <symbol id="send" viewBox="0 0 24 24"><path d="M12 20V5M5.5 11.5 12 5l6.5 6.5"/></symbol>
+    <symbol id="stop" viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/></symbol>
+    <symbol id="back" viewBox="0 0 24 24"><path d="M20 12H4.5M11 5.5 4.5 12l6.5 6.5"/></symbol>
+    <symbol id="chevron" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+    <symbol id="plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+    <symbol id="check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-10"/></symbol>
+    <symbol id="close" viewBox="0 0 24 24"><path d="M5.5 5.5l13 13M18.5 5.5l-13 13"/></symbol>
+    <symbol id="more" viewBox="0 0 24 24"><path d="M4.5 10.5h3v3h-3zM10.5 10.5h3v3h-3zM16.5 10.5h3v3h-3z"/></symbol>
+    <symbol id="chat" viewBox="0 0 24 24"><path d="M4 5h16v11H11l-5 4v-4H4z"/></symbol>
+    <symbol id="search" viewBox="0 0 24 24"><path d="M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13zM15.5 15.5 20.5 20.5"/></symbol>
+    <symbol id="filter" viewBox="0 0 24 24"><path d="M4 5h16l-6 7.5V18l-4 2v-7.5z"/></symbol>
+    <symbol id="sort" viewBox="0 0 24 24"><path d="M7 4v15.5M3.5 16 7 19.5 10.5 16M13 6h8M13 11h6M13 16h3.5"/></symbol>
+    <symbol id="download" viewBox="0 0 24 24"><path d="M12 3.5v12M7 10.5l5 5 5-5M4 20h16"/></symbol>
+    <symbol id="models" viewBox="0 0 24 24"><path d="M3 9 12 4l9 5zM5.5 9.5v8.5M10 9.5v8.5M14 9.5v8.5M18.5 9.5v8.5M3 20.5h18"/></symbol>
+    <symbol id="pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+    <symbol id="play" viewBox="0 0 24 24"><path d="M7 4.5v15L19 12z"/></symbol>
+    <symbol id="mic" viewBox="0 0 24 24"><path d="M9 3h6v10H9zM5.5 10.5v1a6.5 6.5 0 0 0 13 0v-1M12 18v3M8.5 21h7"/></symbol>
+    <symbol id="camera" viewBox="0 0 24 24"><path d="M3 7h4.5l2-3h5l2 3H21v13H3zM12 9.5a3.75 3.75 0 1 0 0 7.5a3.75 3.75 0 1 0 0-7.5z"/></symbol>
+    <symbol id="image" viewBox="0 0 24 24"><path d="M3 4h18v16H3zM3 16l5-5 4 4 3-3 6 6M15 7.5h2.5V10H15z"/></symbol>
+    <symbol id="file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6zM14 3v5h5M9 13h6M9 17h6"/></symbol>
+    <symbol id="attach" viewBox="0 0 24 24"><path d="M16.5 7v8.5a4.5 4.5 0 0 1-9 0V6a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V8"/></symbol>
+    <symbol id="settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9M13 5h4v4h-4zM7 15h4v4H7z"/></symbol>
+    <symbol id="persona" viewBox="0 0 24 24"><path d="M5 4h14v8l-7 8-7-8zM8 9.5h3M13 9.5h3M10 14h4"/></symbol>
+    <symbol id="memory" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 16.5l9 5 9-5"/></symbol>
+    <symbol id="shield" viewBox="0 0 24 24"><path d="M12 3l8 3v7l-8 8-8-8V6z"/></symbol>
+    <symbol id="lock" viewBox="0 0 24 24"><path d="M5 11h14v10H5zM8 11V4h8v7M12 15v2.5"/></symbol>
+    <symbol id="storage" viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h16v6H4zM7 7h2M7 17h2"/></symbol>
+    <symbol id="chip" viewBox="0 0 24 24"><path d="M7 7h10v10H7zM10 10h4v4h-4zM9.5 3v4M14.5 3v4M9.5 17v4M14.5 17v4M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4"/></symbol>
+    <symbol id="speaker" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4zM16 9.5l1.5 2.5-1.5 2.5M19 7l3 5-3 5"/></symbol>
+    <symbol id="bolt" viewBox="0 0 24 24"><path d="M13.5 3 5 13.5h6.5L10.5 21 19 10.5h-6.5z"/></symbol>
+    <symbol id="trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></symbol>
+    <symbol id="pin" viewBox="0 0 24 24"><path d="M8.5 3h7M10 3v6l-3.5 4h11L14 9V3M12 13v8"/></symbol>
+    <symbol id="edit" viewBox="0 0 24 24"><path d="M15 4l5 5L9 20H4v-5zM12.5 6.5l5 5"/></symbol>
+    <symbol id="incognito" viewBox="0 0 24 24"><path d="M2.5 12C5 7.5 8.5 5.5 12 5.5s7 2 9.5 6.5c-2.5 4.5-6 6.5-9.5 6.5S5 16.5 2.5 12zM12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5zM4 4l16 16"/></symbol>
+    <symbol id="sun" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+    <symbol id="moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+  </defs>
+</svg>
+
+<div class="wrap">
+  <header class="mast">
+    <div class="word">CHIWIWI</div>
+    <p class="sub">Design system v2, codename <b>Temple</b>. Two skies, one metal: <b>Nyx</b> is night indigo with gold leaf, <b>Helios</b> is sunlit marble with bronze. Every corner is square; every rule is a 1dp hairline; Greek voice appears only in titles, roman numerals and the meander.</p>
+    <div class="rules"><span>Radius 0</span><span>1dp hairlines</span><span>48dp targets</span><span>Inter 14-20 + Cinzel titles</span><span>One accent per sky</span><span>Native-driver motion</span></div>
+  </header>
+
+  <!-- I. ARRIVAL -->
+  <section>
+    <div class="chapter"><span class="num">I</span><h2>Arrival</h2>
+      <p>The empty chat is the only place the sky shows: in Nyx, square stars twinkle in four slow groups, the whole field drifts, gold sparkles mark the brightest, and a meteor crosses every fourteen seconds. In Helios, a breathing sun with turning rays. The Eclipse waxes from new moon to full as the model really loads.</p></div>
+    <div class="pair">
+      <div><div class="cap">Nyx</div><div class="phone nyx" data-screen="arrival"></div></div>
+      <div><div class="cap">Helios</div><div class="phone helios" data-screen="arrival"></div></div>
+      <div class="note">
+        <div><b>Proof of life:</b> the ring fills with real load progress; the disc goes new moon, crescent, quarter, gibbous, full. Ready = full disc. Writing = halo pulse.</div>
+        <div><b>Calm by default:</b> 6 native-driver loops for the whole sky, all stopped under reduced motion.</div>
+        <div><b>Empty input</b> shows the mic (voice mode); typing turns it into Send.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- II. CHAT -->
+  <section>
+    <div class="chapter"><span class="num">II</span><h2>Chat</h2>
+      <p>Home, always mounted. Claude/ChatGPT grammar: plain answer text on the page, a square block for you, a flat composer. The top bar carries the proof of life: the Eclipse waxes while the model loads and its halo pulses while it writes.</p></div>
+    <div class="pair">
+      <div><div class="cap">Nyx</div><div class="phone nyx" data-screen="chat"></div></div>
+      <div><div class="cap">Helios</div><div class="phone helios" data-screen="chat"></div></div>
+      <div class="note">
+        <div><b>Four icons, no more:</b> menu, new chat, attach, and one action key that is mic when empty, send when typed, stop while streaming.</div>
+        <div><b>Square user block</b> with a 2dp gold/bronze edge, so "you" reads by shape, not only by tint.</div>
+        <div><b>Stats line</b> after every reply, from llama.cpp timings: speed, tokens, first token, draft acceptance when Turbo is on.</div>
+        <div><b>Streaming cursor</b> is a lozenge (a square on its point), pulsing.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- III. MODEL VAULT -->
+  <section>
+    <div class="chapter"><span class="num">III</span><h2>Model Vault</h2>
+      <p>The full library returns (34+ entries) with every tag and filter. Density stays calm because there is exactly one framed item (the recommendation), rows share one rhythm, and tags are quiet hairline labels until you touch them.</p></div>
+    <div class="pair">
+      <div><div class="cap">Nyx</div><div class="phone nyx" data-screen="vault"></div></div>
+      <div><div class="cap">Helios</div><div class="phone helios" data-screen="vault"></div></div>
+      <div class="note">
+        <div><b>Search + filter chips</b> pinned under the title. Chips toggle (check glyph + accent edge); counts update live.</div>
+        <div><b>Match All / Any</b> is a two-cell Segmented with an accent lintel on the chosen cell.</div>
+        <div><b>Grades</b> S / B / C, capability tags (Text, Vision, Voice, Code, Reasoning), policy (Standard / Uncensored) and "Fits this phone" all kept.</div>
+        <div><b>Downloads</b> show in place: progress, speed, time left, pause.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- IV. SETTINGS -->
+  <section>
+    <div class="chapter"><span class="num">IV</span><h2>Settings</h2>
+      <p>The hub keeps all nine areas. Roman numerals replace a wall of icons; each section opens with a Cinzel title over a thin meander. Every row shows its current value, so the hub doubles as a status page.</p></div>
+    <div class="pair">
+      <div><div class="cap">Nyx</div><div class="phone nyx" data-screen="settings"></div></div>
+      <div><div class="cap">Helios</div><div class="phone helios" data-screen="settings"></div></div>
+      <div class="note">
+        <div><b>ListRow variants:</b> value + chevron (navigate), switch (whole row toggles), check (radio).</div>
+        <div><b>Stack navigation:</b> rows push sub-screens that slide in from the right; the hub shifts left and dims beneath; edge swipe or Android Back returns.</div>
+        <div><b>Appearance</b> lives here: Phone / Nyx / Helios, text size, haptics, reduced motion.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- V. SOUL -->
+  <section>
+    <div class="chapter"><span class="num">V</span><h2>Soul</h2>
+      <p>Archetype plus the PAD temperament (pleasure, arousal, dominance) as bipolar sliders with named poles. The sampling numbers below the sliders are what the engine will actually use; the preview runs a real short generation.</p></div>
+    <div class="pair">
+      <div><div class="cap">Nyx</div><div class="phone nyx" data-screen="soul"></div></div>
+      <div><div class="cap">Helios</div><div class="phone helios" data-screen="soul"></div></div>
+      <div class="note">
+        <div><b>Slider:</b> hairline track, fill from the centre tick, lozenge thumb, live value in tabular figures; screen readers get +/- one step.</div>
+        <div><b>Stat row:</b> label over a real value; an honest dash when nothing was measured yet.</div>
+        <div><b>One primary action</b> per screen (Run preview); voice preview is a quiet button.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VI. PARTS -->
+  <section>
+    <div class="chapter"><span class="num">VI</span><h2>Parts</h2>
+      <p>The Eclipse in its five states, the controls, and the full stroke set (24dp, 1.5 stroke, square caps, mitred joins).</p></div>
+    <div class="pair">
+      <div class="sheet nyx" data-sheet></div>
+      <div class="sheet helios" data-sheet></div>
+    </div>
+  </section>
+
+  <p class="legal">Numbers in these mocks are illustrative. In the app every number on screen comes from the engine, the file system or the device.</p>
+</div>
+
+<script>
+/* ===== geometry: same math as mobile/src/ui/logic.ts ===== */
+const f2 = (n) => Number(n.toFixed(2));
+function moonPhasePath(lit, cx, cy, r) {
+  const f = Math.max(0, Math.min(1, lit));
+  if (f <= 0.001) return '';
+  const rx = f2(r * Math.abs(1 - 2 * f));
+  return `M${cx} ${f2(cy - r)}A${f2(r)} ${f2(r)} 0 0 1 ${cx} ${f2(cy + r)}A${rx} ${f2(r)} 0 0 ${f < 0.5 ? 0 : 1} ${cx} ${f2(cy - r)}Z`;
+}
+function meanderPath(width, height, units) {
+  const k = height / 10, n = units === undefined ? Math.ceil(width / (10 * k)) : units;
+  const p = (x, y) => `${f2(x * k)} ${f2(y * k)}`;
+  let d = `M${p(0, 10)}`;
+  for (let i = 0; i < n; i++) {
+    const o = i * 10;
+    d += `L${p(o, 0)}L${p(o + 8, 0)}L${p(o + 8, 6)}L${p(o + 4, 6)}L${p(o + 4, 4)}L${p(o + 6, 4)}L${p(o + 6, 2)}L${p(o + 2, 2)}L${p(o + 2, 10)}L${p(o + 10, 10)}`;
+  }
+  if (units !== undefined) d += `L${f2(width)} ${f2(height)}`;
+  return d;
+}
+/* ===== Eclipse: same drawing as mobile/src/ui/Eclipse.tsx ===== */
+function eclipse(state, progress, size, day) {
+  const c = size / 2, ring = size * 0.4, disc = size * 0.3, sw = Math.max(1, size / 24);
+  const lit = state === 'ready' || state === 'busy' ? 1 : state === 'loading' ? progress : 0;
+  const circ = 2 * Math.PI * ring;
+  const ringColor = state === 'error' ? 'var(--danger)' : state === 'idle' ? 'var(--borderStrong)' : 'var(--accent)';
+  let s = '';
+  s += `<circle cx="${c}" cy="${c}" r="${ring}" fill="none" stroke="${state === 'loading' ? 'var(--border)' : ringColor}" stroke-width="${sw}" ${state === 'error' ? `stroke-dasharray="${circ / 10} ${circ / 20}"` : ''}/>`;
+  if (state === 'loading') s += `<circle cx="${c}" cy="${c}" r="${ring}" fill="none" stroke="var(--accent)" stroke-width="${sw}" stroke-dasharray="${circ} ${circ}" stroke-dashoffset="${circ * (1 - lit)}" transform="rotate(-90 ${c} ${c})"/>`;
+  if (lit > 0) s += `<path d="${moonPhasePath(lit, c, c, disc)}" fill="var(--accent)"/>`;
+  if (lit > 0 && lit < 1) s += `<circle cx="${c}" cy="${c}" r="${disc}" fill="none" stroke="var(--accent)" stroke-opacity=".35" stroke-width="${sw * 0.75}"/>`;
+  if (day && state !== 'error' && state !== 'idle') for (let i = 0; i < 8; i++) {
+    const a = (i * Math.PI) / 4;
+    s += `<line x1="${c + Math.cos(a) * size * 0.45}" y1="${c + Math.sin(a) * size * 0.45}" x2="${c + Math.cos(a) * size * 0.5}" y2="${c + Math.sin(a) * size * 0.5}" stroke="var(--accent)" stroke-width="${sw}" stroke-opacity="${lit}"/>`;
+  }
+  if (state === 'error') s += `<line x1="${c - disc}" y1="${c + disc}" x2="${c + disc}" y2="${c - disc}" stroke="var(--danger)" stroke-width="${sw}"/>`;
+  const halo = state === 'busy' ? `<svg class="halo" width="${size}" height="${size}"><circle cx="${c}" cy="${c}" r="${size * 0.46}" fill="none" stroke="var(--accent)" stroke-width="${sw}"/></svg>` : '';
+  return `<span class="eclipse" style="width:${size}px;height:${size}px">${halo}<svg width="${size}" height="${size}">${s}</svg></span>`;
+}
+
+const I = (id, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#${id}"/></svg>`;
+const status = () => `<div class="status"><span>9:41</span><span class="bars"><b></b><i></i></span></div>`;
+const sect = (n, t) => `<div class="sect"><div class="h"><span class="rn">${n}</span><span class="ti">${t}</span></div><svg class="mz"></svg></div>`;
+const lrow = (t, v, extra = '') => `<div class="lrow"><div class="tx"><span class="t-strong">${t}</span>${extra}</div>${v ? `<span class="val">${v}</span>` : ''}<span class="chev">${I('chevron')}</span></div>`;
+const swrow = (t, sub, on) => `<div class="lrow"><div class="tx"><span class="t-strong">${t}</span>${sub ? `<span class="t-small">${sub}</span>` : ''}</div><span class="switch ${on ? 'on' : ''}"></span></div>`;
+const slider = (label, val, f, o, poles) => {
+  const lo = Math.min(f, o), w = Math.abs(f - o);
+  return `<div class="slider"><div class="top"><span class="t-label">${label}</span><span class="t-label accent num">${val}</span></div>
+    <div class="track"><span class="origin" style="left:${o * 100}%"></span><span class="fill" style="left:${lo * 100}%;width:${w * 100}%"></span><span class="thumb" style="left:${f * 100}%"></span></div>
+    <div class="poles"><span class="t-small">${poles[0]}</span><span class="t-small">${poles[1]}</span></div></div>`;
+};
+
+function sky(day) {
+  if (day) {
+    let rays = '';
+    for (let i = 0; i < 16; i++) {
+      const a = (i * Math.PI * 2) / 16, from = i % 2 ? 175 : 150, to = i % 2 ? 225 : 255;
+      rays += `<line x1="${260 + Math.cos(a) * from}" y1="${260 + Math.sin(a) * from}" x2="${260 + Math.cos(a) * to}" y2="${260 + Math.sin(a) * to}" stroke="#F2C14E" stroke-opacity=".4" stroke-width="1.5" stroke-linecap="square"/>`;
+    }
+    return `<div class="sun" aria-hidden="true"><div class="glow"></div><svg width="520" height="520">${rays}</svg></div>`;
+  }
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const groups = ['', '', '', ''];
+  for (let i = 0; i < 42; i++) {
+    const x = rnd() * 100, y = rnd() * 104 - 2, d = rnd() < 0.7 ? 1.5 : 2.5, o = 0.35 + rnd() * 0.6;
+    groups[i % 4] += i % 9 === 0 ? `<span class="sp" style="left:${x}%;top:${y}%"></span>` : `<span class="s" style="left:${x}%;top:${y}%;width:${d}px;height:${d}px;opacity:${o}"></span>`;
+  }
+  return `<div class="sky" aria-hidden="true"><div class="drift">${groups.map((g) => `<div class="g">${g}</div>`).join('')}<span class="meteor"></span></div></div>`;
+}
+
+const screens = {
+  arrival: (day) => `${status()}<div class="screen">
+    ${sky(day)}
+    <div class="topbar">
+      <button class="ib" aria-label="Menu">${I('menu')}</button>
+      <div class="model"><span class="nm">Qwen3.5 4B ${I('chevron', 's16')}</span>
+        <span class="st">${eclipse('loading', 0.64, 16, day)} Waking · 64%</span></div>
+      <button class="ib" aria-label="New chat">${I('new')}</button>
+    </div>
+    <div style="flex:1;display:grid;place-items:center;align-content:center;gap:16px;padding:0 24px;text-align:center">
+      ${eclipse('loading', 0.64, 96, day)}
+      <div style="font:600 28px/36px var(--cinzel);letter-spacing:4px;color:var(--accent)">CHIWIWI</div>
+      <div style="color:var(--muted)">What shall we explore?</div>
+    </div>
+    <div style="padding:0 16px">
+      ${lrow('Plan my week around three deadlines', '')}<div class="divider"></div>
+      ${lrow('Explain this error message', '')}<div class="divider"></div>
+      ${lrow('Write a gentle reply to a hard email', '')}
+    </div>
+    <div class="composer">
+      <button class="ib muted" aria-label="Attach">${I('plus')}</button>
+      <div class="in">Ask anything</div>
+      <button class="ib" aria-label="Talk">${I('mic')}</button>
+    </div>
+    <div class="hint">On this phone. Nothing leaves it.</div>
+  </div><div class="gesture"></div>`,
+
+  chat: (day) => `${status()}<div class="screen">
+    <div class="topbar">
+      <button class="ib" aria-label="Menu">${I('menu')}</button>
+      <div class="model"><span class="nm">Qwen3.5 4B ${I('chevron', 's16')}</span>
+        <span class="st">${eclipse('busy', 1, 16, day)} Writing · GPU · 21.4 tok/s</span></div>
+      <button class="ib" aria-label="New chat">${I('new')}</button>
+    </div>
+    <div class="thread">
+      <div class="msg user">Explain speculative decoding like I am a ship captain.</div>
+      <div class="msg ai">
+        <span class="thought">${I('chevron', 's16')} Thought for 3.2 s</span>
+        <p>Picture a fast <b>scout boat</b> running ahead of your flagship:</p>
+        <ul><li><span>The scout (a small draft model) sketches the next few words of the route.</span></li>
+            <li><span>Your flagship (the big model) checks the whole sketch in one pass and keeps every word it agrees with.</span></li></ul>
+        <span class="statline">18.2 tok/s · 164 tokens · first token 0.8 s · draft kept 71%</span>
+        <div class="acts"><span>Copy</span><span>Retry</span></div>
+      </div>
+      <div class="msg user">Shorter, please.</div>
+      <div class="msg ai"><p>A small model guesses ahead, the big one checks it all at once and keeps what it agrees with<span class="cursor"></span></p></div>
+    </div>
+    <div class="composer">
+      <button class="ib muted" aria-label="Attach">${I('plus')}</button>
+      <div class="in">Ask anything</div>
+      <button class="ib filled" aria-label="Stop">${I('stop', 'fill')}</button>
+    </div>
+    <div class="hint">On this phone. Nothing leaves it.</div>
+  </div><div class="gesture"></div>`,
+
+  vault: (day) => `${status()}<div class="screen">
+    <div class="hdr"><button class="ib" aria-label="Back">${I('back')}</button><h1>Model Vault</h1>
+      <button class="ib" aria-label="Downloads, 1 active">${I('download')}<span class="badge">1</span></button></div>
+    <div style="padding:0 16px 12px;display:grid;gap:12px;border-bottom:1px solid var(--border)">
+      <div class="search">${I('search')}<span>Search 34 models</span></div>
+      <div class="tags">
+        <span class="chip on">${I('check', 's16')}Fits this phone <small>14</small></span>
+        <span class="chip">Vision</span><span class="chip">Code</span><span class="chip">Reasoning</span><span class="chip">Voice</span><span class="chip">Uncensored</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="seg" style="width:150px"><span class="on">All</span><span>Any</span></div>
+        <span class="t-small" style="flex:1;text-align:center">14 of 34</span>
+        <span class="btn text" style="gap:6px">${I('sort')}Best fit</span>
+      </div>
+    </div>
+    <div class="scroll" style="padding-top:16px;gap:8px">
+      <div class="frame"><div class="card">
+        <span class="t-small">Recommended for this phone</span>
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span class="t-strong" style="font-size:20px;line-height:28px">Qwen3.5 4B</span><span class="t-small num">2.7 GB</span></div>
+        <div class="tags"><span class="tag acc">Grade S</span><span class="tag">Text</span><span class="tag">Vision</span><span class="tag">Reasoning</span></div>
+        <span class="t-small">Fits 12 GB RAM with room for an 8K conversation.</span>
+        <button class="btn primary">${I('download')}Download 2.7 GB</button>
+      </div></div>
+      <div class="lrow" style="padding-top:12px;align-items:flex-start">
+        <div class="tx" style="gap:6px"><span class="t-strong">Gemma 4 E2B</span>
+          <div class="progress"><i style="width:62%"></i></div>
+          <span class="t-small num">1.1 of 1.8 GB · 8.4 MB/s · 1 min left</span></div>
+        <button class="ib" aria-label="Pause">${I('pause')}</button></div>
+      <div class="divider"></div>
+      ${lrow('DeepSeek R1 Distill 7B', '4.7 GB', '<div class="tags" style="margin-top:6px"><span class="tag">Grade B</span><span class="tag">Reasoning</span><span class="tag">Text</span></div>')}
+      <div class="divider"></div>
+      ${lrow('Qwen2.5 Coder 3B', '2.0 GB', '<div class="tags" style="margin-top:6px"><span class="tag">Grade B</span><span class="tag">Code</span></div>')}
+      <div class="divider"></div>
+      ${lrow('Dolphin 3.0 Llama 3.2 3B', '2.0 GB', '<div class="tags" style="margin-top:6px"><span class="tag">Grade B</span><span class="tag">Text</span><span class="tag">Uncensored</span></div>')}
+    </div>
+  </div><div class="gesture"></div>`,
+
+  settings: (day) => `${status()}<div class="screen">
+    <div class="hdr"><button class="ib" aria-label="Back">${I('back')}</button><h1>Settings</h1></div>
+    <div class="scroll" style="padding-top:0">
+      ${sect('I', 'Soul')}
+      ${lrow('Soul & personality', 'Sovereign Mentor')}<div class="divider"></div>
+      ${lrow('Memory', '23 facts')}
+      ${sect('II', 'Models')}
+      ${lrow('Model Vault', '3 installed')}<div class="divider"></div>
+      ${lrow('Downloads', '1 active')}<div class="divider"></div>
+      ${lrow('Speculative turbo', 'Off')}
+      ${sect('III', 'Compute')}
+      ${lrow('Advanced compute', 'GPU · 6 threads')}
+      ${sect('IV', 'Privacy')}
+      ${swrow('Incognito by default', 'New chats are not saved', false)}<div class="divider"></div>
+      ${lrow('Security & privacy', 'Lock on')}
+      ${sect('V', 'Appearance')}
+      <div style="padding:8px 0"><div class="seg"><span>Phone</span><span class="${day ? '' : 'on'}">Nyx</span><span class="${day ? 'on' : ''}">Helios</span></div></div>
+    </div>
+  </div><div class="gesture"></div>`,
+
+  soul: (day) => `${status()}<div class="screen">
+    <div class="hdr"><button class="ib" aria-label="Back">${I('back')}</button><h1>Soul</h1>
+      <span class="btn text">Reset</span></div>
+    <div class="scroll" style="padding-top:0;gap:12px">
+      ${sect('I', 'Archetype')}
+      <div class="tags"><span class="chip on">${I('check', 's16')}Sovereign Mentor</span><span class="chip">Empathetic Confidant</span><span class="chip">Tactical Engineer</span><span class="chip">Playful Spark</span></div>
+      ${sect('II', 'Temperament')}
+      ${slider('Warmth', '+0.65', 0.825, 0.5, ['Cool', 'Warm'])}
+      ${slider('Energy', '+0.20', 0.6, 0.5, ['Calm', 'Lively'])}
+      ${slider('Assertiveness', '+0.40', 0.7, 0.5, ['Gentle', 'Direct'])}
+      <div class="stats" style="margin-top:4px"><div class="stat"><span class="t-small">Temperature</span><b>0.78</b></div><div class="stat"><span class="t-small">Top-p</span><b>0.90</b></div><div class="stat"><span class="t-small">Repeat</span><b>1.08</b></div></div>
+      <div class="row2"><button class="btn primary">${I('play')}Run preview</button><button class="btn quiet">${I('speaker')}Hear voice</button></div>
+    </div>
+  </div><div class="gesture"></div>`,
+};
+
+const ICONS = ['menu','new','send','stop','back','chevron','plus','check','close','more','chat','search','filter','sort','download','models','pause','play','mic','camera','image','file','attach','settings','persona','memory','shield','lock','storage','chip','speaker','bolt','trash','pin','edit','incognito','sun','moon'];
+function partsSheet(day) {
+  const states = [['idle', 0, 'Idle'], ['loading', 0.42, 'Loading 42%'], ['ready', 1, 'Ready'], ['busy', 1, 'Writing'], ['error', 0, 'Failed']];
+  return `<span class="lab">Eclipse · ${day ? 'sun' : 'moon'}</span>
+    <div class="ecl-row">${states.map(([s, p, l]) => `<figure>${eclipse(s, p, 40, day)}<figcaption>${l}</figcaption></figure>`).join('')}</div>
+    <span class="lab">Controls</span>
+    <div class="row2"><button class="btn primary">Load model</button><button class="btn quiet">Test</button></div>
+    <div class="tags"><span class="tag acc">Grade S</span><span class="tag">Text</span><span class="tag dan">Too big for this phone</span><span class="chip on">${I('check', 's16')}Vision</span><span class="chip">Code</span></div>
+    <div style="display:flex;gap:16px;align-items:center"><span class="switch on"></span><span class="switch"></span><div class="seg" style="flex:1"><span class="on">Auto</span><span>On</span><span>Off</span></div></div>
+    <div class="notice">Needs a vision model. Pick one in the Vault to send photos.</div>
+    <span class="lab">Icons · 24dp · 1.5 stroke · square caps</span>
+    <div class="iconset">${ICONS.map((n) => `<span title="${n}">${I(n, n === 'stop' || n === 'more' ? 'fill' : '')}</span>`).join('')}</div>`;
+}
+
+for (const el of document.querySelectorAll('[data-screen]')) el.innerHTML = screens[el.dataset.screen](el.classList.contains('helios'));
+for (const el of document.querySelectorAll('[data-sheet]')) el.innerHTML = partsSheet(el.classList.contains('helios'));
+function drawMeanders() {
+  for (const svg of document.querySelectorAll('svg.mz')) {
+    const w = Math.round(svg.getBoundingClientRect().width);
+    if (w) svg.innerHTML = `<path d="${meanderPath(w - 2, 10, 4)}" transform="translate(1 1)"/>`;
+  }
+}
+drawMeanders();
+addEventListener('resize', drawMeanders);
+</script>
+</body>
+</html>

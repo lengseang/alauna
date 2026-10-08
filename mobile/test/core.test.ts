@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { formatBytes, formatDuration, formatSpeed, formatPercent } from '../src/core/format.ts';
-import { MODEL_CATALOG, getModel, queryCatalog } from '../src/core/catalog.ts';
-import { estimateRamBytes, rateFit, defaultContext, fitFor, recommendModel } from '../src/core/fit.ts';
 import { safTreeUriToPath, uriToPath, pathToUri, joinPath, baseName } from '../src/core/paths.ts';
 import { parseThinking } from '../src/core/thinking.ts';
 import { buildPrompt, normalizeHistory, estimateTokens } from '../src/core/chatPrompt.ts';
@@ -25,128 +23,7 @@ test('format: bytes/speed/duration/percent', () => {
   assert.equal(formatPercent(7), '100%');
 });
 
-// --------------------------------------------------------------------------- catalog
-test('catalog: ids and files are unique (no duplicate-file entries)', () => {
-  const ids = new Set(MODEL_CATALOG.map((m) => m.id));
-  const files = new Set(MODEL_CATALOG.map((m) => `${m.repo}/${m.filename}`));
-  assert.equal(ids.size, MODEL_CATALOG.length);
-  assert.equal(files.size, MODEL_CATALOG.length);
-});
-
-test('catalog: every entry is well-formed and truthful', () => {
-  for (const m of MODEL_CATALOG) {
-    assert.ok(m.repo.includes('/'), `${m.id}: repo`);
-    assert.ok(m.filename.toLowerCase().endsWith('.gguf'), `${m.id}: filename`);
-    assert.ok(!/mmproj/i.test(m.filename), `${m.id}: projector files are not models`);
-    assert.ok(m.sizeBytes > 100_000_000, `${m.id}: size`);
-    assert.match(m.sha256, /^[0-9a-f]{64}$/, `${m.id}: a real sha256 is mandatory (downloads are verified against it)`);
-    // The app is text-chat only: no capability the app cannot deliver.
-    for (const c of m.capabilities) assert.ok(['Text', 'Code', 'Reasoning'].includes(c), `${m.id}: capability ${c}`);
-    // Reasoning flag must agree with the capability badge.
-    assert.equal(m.thinking !== 'none', m.capabilities.includes('Reasoning'), `${m.id}: thinking vs capability`);
-    // Id must not contradict the name's family (the old catalog had gemma-4-12b = Gemma 2 9B).
-    assert.ok(m.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(m.family.toLowerCase().replace(/[^a-z0-9]/g, '')), `${m.id}: name vs family`);
-  }
-});
-
-test('catalog: short, every entry has a plain-language role, one clear default', () => {
-  assert.ok(MODEL_CATALOG.length <= 6, 'keep the list short: more choices = more confusion');
-  const roles = MODEL_CATALOG.map((m) => m.role);
-  assert.equal(new Set(roles).size, roles.length, 'each role appears once');
-  const top = [...MODEL_CATALOG].sort((a, b) => b.priority - a.priority)[0];
-  assert.equal(top.role, 'Balanced (default)');
-  assert.equal(top.id, 'qwen3.5-4b', 'the default is the Qwen3.5 4B class model');
-  assert.ok(MODEL_CATALOG.some((m) => m.role === 'Smoke test' && m.sizeBytes < 700_000_000), 'a tiny smoke-test model exists');
-  // Every architecture must exist in the llama.cpp bundled with the pinned llama.rn (b10256).
-  for (const m of MODEL_CATALOG) assert.match(m.repo, /^unsloth\//, `${m.id}: curated, ungated, Apache-2.0 repos only`);
-});
-
-test('catalog: grades match size', () => {
-  for (const m of MODEL_CATALOG) {
-    if (m.grade === 'S') assert.ok(m.paramsB >= 7, m.id);
-    if (m.grade === 'C') assert.ok(m.paramsB < 2.2, m.id);
-  }
-});
-
-test('catalog: lookup and query (search / grade / AND-OR capability / sort)', () => {
-  assert.equal(getModel('qwen3.5-4b')?.name, 'Qwen3.5 4B');
-  assert.equal(getModel('nope'), undefined);
-  assert.equal(getModel(null), undefined);
-
-  const gemma = queryCatalog({ search: 'gemma' });
-  assert.ok(gemma.length >= 1 && gemma.every((m) => /gemma/i.test(m.name)));
-  assert.equal(queryCatalog({ search: 'balanced' })[0]?.id, 'qwen3.5-4b', 'search also matches the role');
-
-  const gradeS = queryCatalog({ grade: 'S' });
-  assert.ok(gradeS.length > 0 && gradeS.every((m) => m.grade === 'S'));
-
-  const any = queryCatalog({ capabilities: ['Reasoning', 'Code'], match: 'ANY' });
-  const all = queryCatalog({ capabilities: ['Reasoning', 'Code'], match: 'ALL' });
-  assert.ok(any.length >= all.length);
-  assert.ok(all.every((m) => m.capabilities.includes('Reasoning') && m.capabilities.includes('Code')));
-
-  assert.equal(queryCatalog({ onlyUncensored: true }).length, 0, 'no uncensored entries are offered');
-
-  const asc = queryCatalog({ sort: 'size_asc' });
-  for (let i = 1; i < asc.length; i++) assert.ok(asc[i - 1].sizeBytes <= asc[i].sizeBytes);
-  const desc = queryCatalog({ sort: 'size_desc' });
-  assert.equal(desc[0].sizeBytes, Math.max(...MODEL_CATALOG.map((m) => m.sizeBytes)));
-});
-
-// --------------------------------------------------------------------------- fit (device-aware)
-// Real totalMemory values Android reports are a bit below the marketing number.
-const GB = 1e9;
-const PHONES = { '4GB': 3.6 * GB, '6GB': 5.4 * GB, '8GB': 7.3 * GB, '12GB': 11.2 * GB, '16GB': 15.0 * GB };
-
-test('fit: ratings scale with real RAM (broad devices, not one phone)', () => {
-  const q9 = getModel('qwen3.5-9b')!;
-  const q4 = getModel('qwen3.5-4b')!;
-  const q08 = getModel('qwen3.5-0.8b')!;
-
-  assert.equal(fitFor(q9, PHONES['4GB']), 'too_heavy');
-  assert.equal(fitFor(q9, PHONES['8GB']), 'too_heavy');
-  assert.ok(['ok', 'tight'].includes(fitFor(q9, PHONES['12GB'])), '9B is the 12 GB ceiling, never "runs great"');
-  assert.notEqual(fitFor(q9, PHONES['16GB']), 'too_heavy');
-
-  assert.equal(fitFor(q08, PHONES['4GB']), 'great');
-  assert.equal(fitFor(q4, PHONES['12GB']), 'great');
-  assert.ok(['great', 'ok'].includes(fitFor(q4, PHONES['8GB'])));
-  assert.equal(fitFor(q4, PHONES['4GB']), 'too_heavy');
-});
-
-test('fit: unknown RAM never blocks, rating is "unknown"', () => {
-  assert.equal(rateFit(5e9, null), 'unknown');
-  assert.equal(rateFit(5e9, 0), 'unknown');
-  assert.equal(defaultContext(null), 2048);
-});
-
-test('fit: context default grows with RAM; larger context costs more memory', () => {
-  assert.equal(defaultContext(PHONES['4GB']), 1536);
-  assert.equal(defaultContext(PHONES['6GB']), 2048);
-  assert.equal(defaultContext(PHONES['8GB']), 3072);
-  assert.equal(defaultContext(PHONES['12GB']), 4096);
-  const m = getModel('qwen3.5-9b')!;
-  assert.ok(estimateRamBytes(m, 8192) > estimateRamBytes(m, 2048));
-  assert.ok(estimateRamBytes(m, 2048) > m.sizeBytes);
-});
-
-test('fit: recommendation is the 4B default on 8-16 GB phones, never the 8-9B tier (owner: 12 GB phone)', () => {
-  assert.equal(recommendModel(MODEL_CATALOG, PHONES['12GB'])!.id, 'qwen3.5-4b');
-  assert.equal(recommendModel(MODEL_CATALOG, PHONES['16GB'])!.id, 'qwen3.5-4b', 'more RAM does not change the default');
-  assert.equal(recommendModel(MODEL_CATALOG, PHONES['8GB'])!.id, 'qwen3.5-4b');
-  assert.equal(recommendModel(MODEL_CATALOG, PHONES['6GB'])!.id, 'qwen3.5-2b', '6 GB: the quick model');
-  assert.equal(recommendModel(MODEL_CATALOG, PHONES['4GB'])!.id, 'qwen3.5-2b');
-  for (const [label, ram] of Object.entries(PHONES)) {
-    const rec = recommendModel(MODEL_CATALOG, ram)!;
-    assert.equal(rec.contentPolicy, 'Standard', label);
-    assert.ok(['great', 'ok'].includes(fitFor(rec, ram)), `${label}: ${rec.id} -> ${fitFor(rec, ram)}`);
-    assert.ok(rec.paramsB < 8, `${label}: ${rec.id} must not be the heavy tier`);
-  }
-  // Very tiny phone still gets *something*: the smallest model.
-  assert.equal(recommendModel(MODEL_CATALOG, 1.5 * GB)!.id, 'qwen3.5-0.8b');
-  // RAM unknown (should not happen with expo-device): the quick model, not a guess at the biggest.
-  assert.equal(recommendModel(MODEL_CATALOG, null)!.role, 'Fast');
-});
+// catalog, library queries, fit and recommendation: test/catalog.test.ts
 
 // --------------------------------------------------------------------------- paths / SAF
 test('paths: SAF tree URI -> real path (primary, SD card, nested, encoded)', () => {

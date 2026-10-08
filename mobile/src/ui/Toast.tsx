@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Pressable, View } from 'react-native';
+import { AccessibilityInfo, Animated, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useToast } from '../services/toast.ts';
 import { hit, makeStyles, useTheme } from '../theme';
+import { curves } from './Motion';
 import { Text } from './Text';
 import { dismissUndo, useUndo } from './undo';
 
 /**
  * Render once at the app root. Shows `showToast()` messages (3s) and `showUndo()` messages (5s, with an Undo button).
- * Slides down from the top, never takes focus, and is announced to screen readers politely.
+ * A square slab with an accent edge. Slides down from the top, never takes focus, and is announced to screen readers politely.
  */
 export function ToastHost() {
   const { text, id } = useToast();
@@ -24,10 +25,10 @@ export function ToastHost() {
     if (shown) {
       setLast(shown);
       a.setValue(0);
-      Animated.timing(a, { toValue: 1, duration: reduceMotion ? 0 : motion.base, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+      Animated.timing(a, { toValue: 1, duration: reduceMotion ? 0 : motion.base, easing: curves.enter, useNativeDriver: true }).start();
       AccessibilityInfo.announceForAccessibility(shown.text);
     } else {
-      Animated.timing(a, { toValue: 0, duration: reduceMotion ? 0 : motion.fast, useNativeDriver: true }).start(({ finished }) => finished && setLast(null));
+      Animated.timing(a, { toValue: 0, duration: reduceMotion ? 0 : motion.fast, easing: curves.exit, useNativeDriver: true }).start(({ finished }) => finished && setLast(null));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown?.key]);
@@ -61,7 +62,7 @@ export function ToastHost() {
   );
 }
 
-const useStyles = makeStyles(({ colors, space, radius }) => ({
+const useStyles = makeStyles(({ colors, space, line }) => ({
   wrap: { position: 'absolute', left: space.lg, right: space.lg, alignItems: 'center', zIndex: 100, elevation: 100 },
   toast: {
     flexDirection: 'row',
@@ -69,8 +70,9 @@ const useStyles = makeStyles(({ colors, space, radius }) => ({
     maxWidth: '100%',
     backgroundColor: colors.surfaceAlt,
     borderColor: colors.borderStrong,
-    borderWidth: 1,
-    borderRadius: radius.lg,
+    borderWidth: line,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.accent,
     paddingVertical: space.sm,
     paddingLeft: space.lg,
     paddingRight: space.lg,

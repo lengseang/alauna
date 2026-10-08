@@ -8,6 +8,7 @@ import { formatPercent } from './format.ts';
 
 export type ModelStatusKind =
   | 'not_downloaded'
+  | 'queued'
   | 'resolving'
   | 'downloading'
   | 'paused'
@@ -45,6 +46,8 @@ export function deriveModelStatus(i: StatusInput): ModelStatus {
 
   const d = i.download;
   switch (d.status) {
+    case 'queued':
+      return { kind: 'queued', label: 'Queued - starts when the current download finishes', tone: 'accent' };
     case 'resolving':
       return { kind: 'resolving', label: 'Contacting Hugging Face...', tone: 'accent' };
     case 'downloading':
@@ -76,6 +79,8 @@ export function actionsFor(kind: ModelStatusKind, retryable: boolean): ModelActi
   switch (kind) {
     case 'not_downloaded':
       return ['download'];
+    case 'queued':
+      return ['cancel'];
     case 'resolving':
     case 'downloading':
       return ['pause', 'cancel'];

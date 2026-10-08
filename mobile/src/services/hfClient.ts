@@ -6,7 +6,7 @@
  * `etag` header after redirects, which is NOT the file's SHA-256, so it rejected
  * perfectly good downloads. The repo-tree API returns the true size and LFS sha256.
  */
-import { RemoteError, describeHttpStatus, parseTreeForFile, treeUrl, type RemoteFileInfo } from '../core/hf.ts';
+import { RemoteError, describeHttpStatus, parseTreeForFile, repoDir, treeUrl, type RemoteFileInfo } from '../core/hf.ts';
 
 export { RemoteError };
 
@@ -25,7 +25,7 @@ export async function fetchRemoteFileInfo(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetchImpl(treeUrl(repo), { signal: controller.signal, headers: { Accept: 'application/json' } });
+    const res = await fetchImpl(treeUrl(repo, 'main', repoDir(filename)), { signal: controller.signal, headers: { Accept: 'application/json' } });
     if (!res.ok) {
       const retryable = res.status === 429 || res.status >= 500;
       throw new RemoteError(describeHttpStatus(res.status), { status: res.status, retryable });

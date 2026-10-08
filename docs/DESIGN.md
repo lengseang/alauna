@@ -1,206 +1,214 @@
-# CHIWIWI design system (Phase 1)
+# CHIWIWI design system v2: "Temple"
 
-Owner brief: minimal, fast, smooth; the feel of the native Claude and ChatGPT apps; **chat is home**; light and dark; dark = starry night, light = sun day; Greek mythology as a quiet voice, not decoration; **not a rainbow**.
+Owner brief (v2): no rounded corners anywhere; unique, minimal, simple to reach; feels like the native Claude / ChatGPT
+apps; smooth and fast; alive; Greek mythology; dark = starry night (**Nyx**), light = sun day (**Helios**); no rainbow.
+The full old feature set returns (many settings, a big model library with tags and filters), so the system's main job
+is to make **dense information feel calm**.
 
-Everything below lives in `mobile/src/theme/` (tokens, provider) and `mobile/src/ui/` (primitives, screens). Nothing outside those folders knows a color or a font size.
+Concept mock (open in a browser): [`preview/design-v2.html`](../preview/design-v2.html): Arrival (empty chat), Chat,
+Model Vault, Settings hub, Soul, and a parts sheet, each in Nyx and Helios side by side at phone size.
 
-## 1. The shape of the app
+Code: tokens and theme in `mobile/src/theme/`, primitives in `mobile/src/ui/` (import from `src/ui/index.ts`).
+Screens never write a color, a font size, or a `borderRadius`.
+
+## 1. The concept in five rules
+
+1. **Cut stone.** Radius 0 on everything: buttons, cards, inputs, sheets, toasts, user message blocks, chips, switches.
+   The only round shapes are the Eclipse disc (a moon/sun, not a rounded corner) and a few icon glyphs (search lens, sun).
+2. **Hairlines, not boxes.** 1dp rules separate things. Rows sit on the page; a Card is used for one idea at a time;
+   exactly one item per screen may be **framed** (double hairline, an inscription panel), e.g. the recommended model.
+3. **One metal per sky.** Nyx: night indigo + gold leaf `#E6C76A`. Helios: sunlit marble + bronze `#8A5A00`.
+   Accent marks the one primary action, selection, live status and the meander. Everything else is ink and hairline.
+4. **Greek voice, sparingly.** Cinzel only for screen titles, section titles and the wordmark. Roman numerals index
+   settings sections (I, II, III...). A short Greek-key fillet sits under section titles. Nothing else is "themed".
+5. **Proof of life.** The Eclipse ring shows the model's real state: a moon that waxes as the model loads (sun in
+   Helios), full when ready, a pulsing halo while it writes, a broken ring on failure.
+
+## 2. The shape of the app
 
 ```
-Chat (home, always mounted)
- |- top bar:  [menu]   model name + live status line   [new chat]
- |- messages: plain text on the page, one subtle bubble for you
- |- composer: one pill  [+ attach] [ multiline field ] [Send -> Stop]
- |- swipe right / menu  ->  Drawer: New chat, saved chats (hold = delete + Undo), Models, Persona, Settings
- |- tap the model name  ->  Model sheet (switch model, think on/off, proof-of-life numbers)
- '- Models / Persona / Settings (+ Memory, Storage, Advanced, About) are pushed on top with a back arrow
+Chat (root, always mounted)
+ |- top bar:  [menu]   model name + Eclipse + live status line   [new chat]
+ |- messages: assistant = plain text on the page; you = square surfaceAlt block with a 2dp accent edge
+ |- composer: flat square bar  [+ attach] [ multiline field ] [mic -> send -> stop]
+ |- drawer (swipe right / menu): new chat, incognito chat, search, chats (pin, rename, delete + Undo), Settings
+ |- sheets: model switcher, attach (camera / photos / files), thread soul
+ '- everything else is PUSHED on the stack: Model Vault, Downloads, Speculative, Settings hub > 9 sub-screens, Soul...
 ```
 
-No tab bar. Android Back peels one layer: sheet, drawer, pushed screen, then minimises the app. Chat stays mounted underneath, so typed text, scroll position and a streaming reply survive any detour.
+No tab bar. Back (arrow, left-edge swipe, Android Back) peels one layer: sheet, drawer, pushed screen, then minimises.
+Chat stays mounted underneath, so typed text, scroll position and a streaming reply survive any detour.
 
-### Proof of life (the owner could not tell whether the AI was running)
+## 3. Tokens (`src/theme`)
 
-Every claim is a real engine number (`useEngineStatus()` from `services/engine.ts`):
+### Color (`palette.ts`)
 
-| Where | Shows | Source |
-|---|---|---|
-| Top bar, under the model name | `Loading 42%` -> `Testing first words` -> `Ready . CPU` (gold) / `Generating` / `Could not load` (red) / `Not loaded` / `Unloaded to free memory` / `Not downloaded` | `EngineStatus.state/progress/backend/unloadedReason` (`ui/engineStatus.ts` maps it, nothing invented) |
-| Model sheet | `Ready . CPU . 4096 token memory . loaded in 6.1s . last speed 18.2 tok/s . first token 0.8s`; engine error + fix | `nCtx, loadMs, lastTokPerSec, ttftMs, error, errorFix` |
-| In the answer, while working | pulsing dot + `Loading <model> 42%` / `Reading your message (~120 tokens)` / `Thinking 12s` / pulsing cursor while text streams | message `phase`, engine `loadProgress` |
-| After every reply | quiet line `18.2 tok/s . 164 tokens` | `message.stats` (measured by llama.cpp) |
-| Models > Test model | `Works. It answered "4" . first token in 0.8s . 18.2 tok/s . loaded in 6.1s . CPU` or the exact failure + fix | `runSelfTest()` |
-| App start | the chosen model loads by itself once per launch (`ChatScreen` effect), unless the last run died while loading it | `engine.mount` |
-
-Not available yet (validator/services, see section 7): live tokens/second **during** generation.
-
-## 2. Tokens (`src/theme`)
-
-### Color (`palette.ts`): one gold, two skies
-
-| token | Nyx (dark, starry night) | Helios (light, sun day) | use |
+| token | Nyx | Helios | use |
 |---|---|---|---|
-| bg | `#0A0D1C` | `#FBF6EA` | page |
-| surface | `#141935` | `#F3EBD5` | drawer, cards, sheets, composer |
-| surfaceAlt | `#1B2246` | `#EBE0C2` | user bubble, toast, pressed |
-| border | `#2E3660` | `#CDBE98` | hairline dividers only (fails 3:1 on purpose) |
-| borderStrong | `#5F6AA0` | `#8F7F55` | boundary of anything tappable (>= 3:1) |
-| text | `#EEF0FA` | `#2B2417` | primary text |
-| muted | `#9EA7CB` | `#675B40` | secondary text |
-| accent | `#E6C76A` starlight | `#8A5A00` bronze | the only brand hue |
-| accentSoft | gold 14% | bronze 7% | selected/pressed wash. Put `text` on it, not `accent` |
-| onAccent | `#0A0D1C` | `#FFFFFF` | on accent fills |
-| danger / dangerSoft | `#FF8B8B` / 14% | `#B3261E` / 10% | destructive only |
-| scrim | night 62% | ink 48% | sheet/drawer backdrop |
-| glow | `#EEF0FA` stars | `#F2C14E` sun | decoration only, never text |
+| bg | `#080A17` | `#FAF6EC` | page |
+| surface | `#0F1329` | `#F3ECDB` | sheets, drawer, composer, cards, inputs |
+| surfaceAlt | `#171C38` | `#EAE0C9` | your message block, selected segment, toast, pressed |
+| border | `#262C4F` | `#D6C8A7` | decorative hairlines only (fails 3:1 on purpose) |
+| borderStrong | `#5D679B` | `#8C7B52` | boundary of anything interactive (>= 3:1) |
+| text | `#EDEFF8` | `#29231A` | primary text |
+| muted | `#9AA2C6` | `#655941` | secondary text, values, poles |
+| accent | `#E6C76A` gold | `#8A5A00` bronze | the only hue |
+| accentSoft | gold 12% | bronze 8% | selected / pressed wash (put `text` on it) |
+| onAccent | `#080A17` | `#FFFFFF` | on accent fills |
+| danger / dangerSoft | `#FF8E8E` / 12% | `#B3261E` / 9% | destructive and errors only |
+| scrim | night 66% | ink 48% | sheet / drawer backdrop, covered stack layer dim |
+| glow | `#EDEFF8` | `#F2C14E` | stars, sun, meteor (never text) |
 
-Measured contrast (WCAG relative luminance; AA text = 4.5, UI = 3.0):
+Contrast, computed by `src/theme/contrast.ts` and **asserted in `test/designSystem.test.ts`** (AA text 4.5, UI 3.0):
 
-| pair | Nyx | Helios |
+| pair | Nyx (bg / surface / surfaceAlt) | Helios (bg / surface / surfaceAlt) |
 |---|---|---|
-| text / bg, surface, surfaceAlt | 17.00, 15.14, 13.55 | 14.24, 12.91, 11.68 |
-| muted / bg, surface, surfaceAlt | 8.13, 7.25, 6.48 | 6.19, 5.61, 5.08 |
-| accent / bg, surface, surfaceAlt | 11.72, 10.44, 9.34 | 5.50, 4.98, 4.51 |
-| onAccent / accent | 11.72 | 5.93 |
-| danger / bg, surface, surfaceAlt | 8.57, 7.64, 6.83 | 6.06, 5.50, 4.97 |
-| accent on accentSoft (over surface) | 7.79 | 4.56 |
-| danger on dangerSoft (over surface) | 6.03 | 4.70 |
-| borderStrong / bg, surface | 3.73, 3.32 | 3.65, 3.31 |
-| border / bg (decorative) | 1.67 | 1.71 |
+| text | 17.17 / 15.98 / 14.53 | 14.42 / 13.21 / 11.86 |
+| muted | 7.84 / 7.30 / 6.63 | 6.36 / 5.83 / 5.23 |
+| accent | 11.95 / 11.12 / 10.12 | 5.49 / 5.03 / 4.52 |
+| danger | 8.92 / 8.30 / 7.55 | 6.06 / 5.55 / 4.98 |
+| borderStrong | 3.64 / 3.39 / 3.08 | 3.84 / 3.52 / 3.16 |
+| onAccent on accent | 11.95 | 5.93 |
+| text on accentSoft (over bg / surface) | 13.96 / 12.57 | 12.98 / 11.88 |
+| accent on accentSoft (over bg / surface) | 9.72 / 8.75 | 4.94 / 4.53 |
+| danger on dangerSoft (over bg / surface) | 7.57 / 6.86 | 5.24 / 4.82 |
+| border (decorative) on bg | 1.46 | 1.53 |
 
-Dark is not inverted light: it is desaturated, tinted navy with the same gold. Status is never hue alone: words, a shape (the 3dp edge on `Notice`) or a pulsing dot always carry it.
+Status is never hue alone: the words carry it, plus a shape (Notice edge, segment lintel, check glyph, thumb position,
+Eclipse slash).
 
-### Type (`theme.ts`): four sizes, two weights
+### Type (`theme.ts`): four sizes, two Inter weights, Cinzel for titles
 
-| variant | size / line | weight | use |
+| variant | size / line | face | use |
 |---|---|---|---|
-| `display` | 28 / 36 | 600 | rare (hero numbers) |
-| `title` | 20 / 28 | 600 | screen titles, card titles (announced as headings) |
-| `strong` | 16 / 24 | 600 | row titles, button labels |
-| `body` | 16 / 24 | 400 | chat, paragraphs |
-| `label` | 14 / 20 | 600 | section labels, small actions |
-| `small` | 14 / 20 | 400 | helper text, status lines (muted by default) |
-| `wordmark` | 28 / 36, Cinzel 600, tracking 4 | | the CHIWIWI wordmark only |
+| `body` | 16 / 24 | Inter 400 | chat, paragraphs |
+| `strong` | 16 / 24 | Inter 600 | row titles, button labels |
+| `small` | 14 / 20 | Inter 400 (muted) | helper text, values, status lines |
+| `label` | 14 / 20 | Inter 600 | field labels, chips, small actions |
+| `title` | 20 / 28 | Inter 600 | card and sheet titles (model names) |
+| `heading` | 20 / 28 | Cinzel 600, tracking 1 | screen titles (`Screen`) |
+| `section` | 14 / 20 | Cinzel 600, tracking 1.5, caps | section titles (`SectionHeader`) |
+| `numeric` | 20 / 28 | Inter 600, tabular figures | `Stat` values |
+| `display` | 28 / 36 | Inter 600 | rare hero numbers |
+| `wordmark` | 28 / 36 | Cinzel 600, tracking 4 | CHIWIWI only |
 
-Fonts: Inter 400/600 + Cinzel 600 (`@expo-google-fonts`, deep imports, 3 files in the bundle). Loading has a 3s limit; on failure the app runs on the system font with the same sizes (`FontFamilies` empty -> `fontWeight`). Font scaling is honoured up to 1.6x; layouts use `minHeight`, never fixed heights.
+All sizes multiply by the in-app **text size** (1, 1.15, 1.3; never below 1, so nothing drops under 14sp) and honour
+system font scaling up to 1.6x. Fonts: Inter 400/600 + Cinzel 600 (3 files, deep imports); 3s load limit, then system
+fonts with the same sizes.
 
 ### Other tokens (`tokens.ts`)
 
-| token | values |
+| token | value |
 |---|---|
-| `space` | xs 4, sm 8, md 12, lg 16, xl 24, xxl 32 (screen gutter 16) |
-| `radius` | sm 8, md 12, lg 20, pill 999 (composer 28) |
-| `hit` | 48 (minimum touch target, with >= 8 between targets) |
-| `icon` | 24dp, stroke 1.75, round caps |
-| `motion` | fast 150, base 250, slow 400 ms (enter 250, exit 180) |
+| `space` | xs 4, sm 8, md 12, lg 16 (gutter), xl 24, xxl 32 |
+| `radius` | **all 0** (`none sm md lg pill` kept so old call sites compile and render square) |
+| `line` | 1 (hairline) |
+| `hit` | 48 (min target; >= 8 between targets; rows >= 56) |
+| `icon` | 24dp, stroke 1.5, square caps, mitred joins |
+| `motion` | fast 150, base 250, slow 400, push 320, pop 240 (ms) |
+| `curves` (`ui/Motion.tsx`) | enter `bezier(.22,1,.36,1)`, exit `bezier(.4,0,1,1)`, breathe sine |
 
 ### Theme plumbing
 
-- `ThemeProvider` (wrap the app once): user choice `system | light | dark`, persisted in its own file `chiwiwi_theme.json` (the shared settings model has no slot and is not UI-owned), `Appearance.setColorScheme` so native Alerts follow, `expo-system-ui` background, StatusBar style, `AccessibilityInfo` reduced-motion, fonts. Renders nothing until choice + fonts are known, so the native splash covers the wait and the first frame is already themed.
-- `useTheme()` -> `{ colors, space, radius, size, hit, motion, type, scheme, isDark, name, reduceMotion }`.
-- `useThemePref()` -> `{ pref, setPref }` (Settings > Appearance: "Follow my phone", "Nyx", "Helios").
-- `makeStyles(theme => ({...}))` returns a hook; styles rebuild only when the theme changes:
+- `ThemeProvider` once at the root: theme choice, text size, motion and haptics persisted in `chiwiwi_theme.json`
+  (v1 files `{ pref }` upgrade in place), OS reduced-motion, fonts, native background + status bar, `Appearance` so
+  Alerts follow. Renders nothing until prefs + fonts resolve (native splash covers the wait).
+- `useTheme()` -> `{ colors, space, radius, size, hit, line, motion, type, scheme, isDark, name, reduceMotion, textScale, haptics }`.
+  `reduceMotion` = OS setting OR Appearance > Reduce motion.
+- `useThemePref()` -> `{ pref, setPref, textScale, setTextScale, motion, setMotion, haptics, setHaptics, systemReduceMotion }`
+  (Settings > Appearance).
+- `makeStyles(theme => ({...}))` returns a hook; styles rebuild only when the theme changes.
 
-```tsx
-const useStyles = makeStyles(({ colors, space, radius }) => ({
-  box: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: space.lg },
-}));
-function Thing() { const s = useStyles(); return <View style={s.box} />; }
-```
+## 4. Primitives (`src/ui`)
 
-- Native: `app.json` has `userInterfaceStyle: "automatic"`; splash is ivory `#FBF6EA` with a dark-ink logo (`assets/splash-icon-light.png`, generated from the silver logo) and, in dark, `#0A0D1C` with the silver logo; adaptive icon background `#0A0D1C`.
-
-## 3. Components (`src/ui`, import from `./index`)
-
-| component | what it is | notes |
+| primitive | props (beyond the obvious) | notes |
 |---|---|---|
-| `Screen` | safe-area page with header (back arrow, title) | `scroll` = padded ScrollView (16 gutter, 16 gap); `ambient` = stars/sun behind (empty/onboarding only) |
-| `Text` | the only text | `variant`, `tone` (`text muted accent danger onAccent`) |
-| `Button` | every action with a side effect | `primary` (one per screen) / `quiet` (outlined) / `danger` / `text` (inline link). Always a text label. Async `onPress` shows a spinner; taps while busy or within 350ms are dropped; errors become a toast. 48dp. |
-| `IconButton` | 48dp icon target | `label` is required (spoken). `tone="filled"` = the accent disc (Send/Stop). |
-| `Icon` | 10 icons only | `menu compose send stop back plus check models persona settings`. `rotate={180}` on `back` = forward arrow |
-| `Card` | grouped surface | `selected` = accent outline + wash; `onPress` makes it one target. Not for list rows or chat messages |
-| `Row` | list row, no box | title, subtitle, trailing arrow/check/`right`. `selected` (true/false) = radio row. Separate rows with `Divider` |
-| `Divider` | 1dp hairline | |
-| `Field` | labeled input | visible label, hint, error under the field, accent border on focus |
-| `Notice` | inline message with colored edge | replaces banners, inline errors and info Alerts. `action` slot for a recovery button |
-| `ProgressBar` | determinate bar | announces its percent |
-| `Sheet` | bottom sheet | slides up 250ms, down 180ms; closes by Close, backdrop, swipe down on the handle, Android Back. Never stack two |
-| `DrawerLayout` | left drawer | right-swipe anywhere on the page or the menu button opens; follows the finger; native-driver settle |
-| `ToastHost` + `showToast` / `showUndo` | top toast | `showUndo(text, onUndo)` = 5s toast with Undo (use instead of a confirm for reversible deletes) |
-| `EmptyState` | one line + one action | optional wordmark, ambient |
-| `Wordmark`, `Breathe`, `PulseDot`, `FadeIn`, `Ambient` | the alive layer | see section 4 |
-| `RouteStack` + `nav.ts` | chat + pushed layers | `push(route)`, `goBack()`, `useBackHandler(enabled, fn)` |
+| `Text` | `variant`, `tone: text muted accent danger onAccent`, `ref` | the only text; heading variants announce as headers |
+| `Button` | `label`, `onPress` (may be async), `variant: primary quiet danger text`, `icon`, `loading`, `busyLabel`, `disabled` | square, 48dp; one `primary` per screen; busy/debounce/toast-on-error built in; haptics follow Appearance |
+| `IconButton` | `icon`, `label` (spoken, required), `tone: default filled outline`, `selected`, `color` | 48x48 square; `filled` = the accent key (Send/Stop) |
+| `Icon` | `name`, `color`, `size`, `rotate`; `iconNames` | 38 glyphs + aliases (below) |
+| `Card` | `onPress`, `selected`, `framed`, `accessibilityLabel/Hint` | one idea; `framed` = the one hero item |
+| `ListRow` (`Row`) | `title`, `subtitle`, `value`, `onPress` (chevron), `switchValue + onSwitch` (whole row toggles), `selected` (radio check), `icon`, `right`, `destructive`, `disabled` | >= 56dp, on the page, separated by `Divider` |
+| `Divider` | `inset` | 1dp decorative rule |
+| `SectionHeader` | `title`, `index` (roman numeral), `hint`, `right`, `meander` | Cinzel caps + Greek-key fillet |
+| `Meander` | `height` (10), `tone: accent border`, `units` | `units` = N keys then a hairline (fillet); omit for a full band |
+| `Field` | `label`, `hint`, `error` + TextInput props | visible label, accent left edge on focus, error under |
+| `SearchField` | `value`, `onChangeText`, `label` | search glyph, clear (x), role search |
+| `Tag` | `label`, `onPress` (= filter chip), `selected`, `tone: default accent danger`, `icon`, `count` | static 28dp hairline label; chip 36dp + 48dp hit, check glyph when on, role checkbox |
+| `Segmented` | `options [{value,label}]`, `value`, `onChange`, `label` | 2-4 choices; chosen cell raised + 2dp accent lintel; radiogroup |
+| `Switch` | `value`, `onValueChange`, `label` | square track and thumb; display-only without `onValueChange` (ListRow uses it so) |
+| `Slider` | `label`, `value`, `onChange` (live), `onCommit` (release), `min max step`, `origin` (bipolar), `format`, `poles`, `hint` | hairline track, lozenge thumb, tap/drag, adjustable for screen readers |
+| `Stat` | `label`, `value` (null = honest dash), `unit`, `hint` | tabular value; lay out in a row divided by hairlines |
+| `ProgressBar` | `fraction`, `label`, `tone: accent danger muted` | square 4dp channel |
+| `Notice` | `children`, `title`, `tone: info danger quiet`, `action` | square 2dp edge; replaces banners and non-destructive Alerts |
+| `Eclipse` | `state: idle loading ready busy error`, `progress`, `size`, `label` | proof of life (see section 5) |
+| `Sheet` | `visible`, `onClose`, `title`, `footer` | square slab, grip, swipe-down, Back; never stack two |
+| `ToastHost` + `showToast` / `showUndo` | | square slab with accent edge, top, polite |
+| `EmptyState`, `Wordmark`, `Ambient` | | arrival / boot / onboarding only |
+| `Breathe`, `PulseDot`, `FadeIn`, `useLoop`, `curves` | | motion helpers (native driver) |
+| `Screen` | `title`, `onBack`, `right`, `toolbar` (pinned under header), `ambient`, `scroll` | Cinzel title; moves screen-reader focus to the title on mount |
+| `DrawerLayout` | `open`, `onOpenChange`, `drawer` | left drawer following the finger |
 
-Usage:
+Icons (24dp, 1.5 stroke, square caps): `menu compose(new) send stop back chevron plus check close more chat search filter
+sort download models(temple) pause play mic camera image file attach settings persona(soul, a square mask) memory
+shield lock storage chip(compute) speaker(voice) bolt(turbo) trash pin edit incognito(eye-off) sun moon`. Only `stop` and
+`more` are filled. Use few per view: Chat shows menu, new, attach and one action key (mic -> send -> stop).
 
 ```tsx
-<Screen title="Models" onBack={goBack} scroll>
-  <Card>
-    <Text variant="title">Qwen3.5 4B</Text>
-    <Text tone="muted">Balanced. 2.7 GB.</Text>
-    <Button label="Download" icon="models" onPress={() => downloads.start(spec)} />
-  </Card>
-  <Row title="Storage" subtitle="App storage" onPress={() => push('settings/storage')} />
-  <Notice tone="danger" action={<Button label="Try again" variant="quiet" onPress={retry} />}>Could not reach Hugging Face.</Notice>
+<Screen title="Model Vault" onBack={goBack} toolbar={<SearchField label="Search models" value={q} onChangeText={setQ} />} scroll>
+  <Card framed><Text variant="title">Qwen3.5 4B</Text><Button label="Download 2.7 GB" icon="download" onPress={start} /></Card>
+  <SectionHeader index={2} title="Installed" />
+  <ListRow title="Gemma 4 E2B" value="1.8 GB" onPress={() => push('vault/model', { id })} />
+  <Divider />
+  <ListRow title="Incognito by default" switchValue={inc} onSwitch={setInc} />
+  <Slider label="Warmth" value={p} onChange={setP} onCommit={save} min={-1} max={1} step={0.05} origin={0} poles={['Cool', 'Warm']} />
 </Screen>
-
-<Sheet visible={open} onClose={() => setOpen(false)} title="Model">...</Sheet>
 ```
 
-## 4. The alive layer (restrained, native driver, honours reduced motion)
+## 5. The alive layer (native driver, stops under reduced motion)
 
 | where | what | cost |
 |---|---|---|
-| Empty chat, onboarding, boot (Nyx) | 38 stars in 4 groups that twinkle slowly (2.6-5s, offset) | 4 native animations, not 38 |
-| Same places (Helios) | soft radial sun (SVG gradient) breathing every 4.5s + 16 thin rays turning once per 2 min | 2 native animations |
-| Boot, empty chat while a model loads | wordmark breathes (opacity 1 -> 0.55, scale 1 -> 1.04) | 1 |
-| Streaming | pulsing accent dot as the cursor; pulsing dot beside live status text | 1 per live row |
-| New message | fade + 8dp rise, 250ms, only for messages created in the last 1.5s (scrolled-back rows do not replay it) | 1 per new row |
-| Pushed screen | slide 32dp + fade, 250ms in / 180ms out; Chat stays mounted | 1 |
-| Drawer, sheet, toast | slide/fade 250ms in, 180-200ms out; drawer tracks the finger | native driver |
+| Arrival / boot / onboarding (Nyx) | 42 square stars in 4 twinkle groups, gold four-point sparkles, the whole sky drifting 18dp over 30s, one meteor every ~14s | 6 loops |
+| Same (Helios) | soft radial sun breathing (4.5s) + 16 square-ended rays turning once per 2 min | 2 loops |
+| Eclipse | waxing disc with real progress; halo pulse (900ms) while generating | 1 loop while busy |
+| Streaming | lozenge cursor pulsing | 1 per live row |
+| Stack push / pop | slide in from the right 320ms (decelerating), out 240ms; the screen beneath shifts 28% left and dims; left-edge swipe follows the finger | 1 per layer |
+| Sheet, toast, drawer | 250ms in / 180ms out | native driver |
+| New message | fade + 8dp rise 250ms, only for rows created in the last 1.5s | 1 per new row |
+| Switch | thumb slides 150ms | 1 |
 
-With the OS setting "remove animations" on: loops stop, transitions are instant, drags still follow the finger.
+With reduce motion (OS or in-app): loops stop, transitions are instant, drags still follow the finger.
 
-Greek voice (quiet, never decoration): dark theme is "Nyx", light "Helios" (Settings > Appearance); empty chat with no model: "The oracle is silent. Pick a model to wake it."; greeting: "What shall we explore?". Tab/destination names stay plain (Models, Persona, Settings).
+## 6. Navigation (`nav.ts`, `routes.tsx`, `Stack.tsx`)
 
-## 5. Rules (review checklist)
+- Register a screen with ONE line in `src/ui/routes.tsx` (`'settings/audio': AudioSettings`). The key becomes a typed
+  `Route`.
+- `push(route, params?)` (a twin on top is ignored), `pop()`, `goBack()` (double-tap safe), `replace(route, params?)`,
+  `resetTo(route)`; in a screen, `useParams<{ id: string }>()`; `useRoute()`, `useEntries()`.
+- Back: App.tsx routes Android Back to `pop()`; open drawers/sheets register `useBackHandler` and win first.
+- Layers two deep are made invisible (no overdraw; state and scroll survive); covered layers are hidden from screen
+  readers; a pushed `Screen` moves focus to its title.
 
-1. **Max 4 icons on a screen** (Chat: menu, compose, attach, send/stop). The drawer's three rows may carry their icon. Icons never replace a label on a `Button`; `IconButton` always has a `label`. No emoji, no per-message badges.
-2. **One primary action per screen** (`Button variant="primary"`). Everything else is `quiet` or `text`.
-3. **No text under 14sp**, only 14/16/20/28, two weights, sentence case, no letter-spaced capitals.
-4. **Touch targets >= 48dp**, >= 8dp apart. Rows >= 56dp.
-5. **Confirm only destructive** actions (delete model, cancel download, forget all) via `confirm()`; reversible ones use `showUndo`. Info and success are toasts, never Alerts. Errors are inline (`Notice`) with a recovery button.
-6. **Tokens only.** No hex, no literal font size, no per-screen spacing. Check: `grep -rnE "fontSize|#[0-9a-fA-F]{3,8}|rgba\(" src/ui` returns only the one `type.small.fontSize` in `Markdown`.
-7. **Color is never the only signal.** Use words, the `Notice` edge, a pulsing dot.
-8. **Honest UI.** A status shows only what the engine/store reports. If it is not built, it is not shown (see `docs/ROADMAP.md`).
-9. **Both themes before merge.** Look at every screen in Nyx and Helios, with font scale 1.3 and with "remove animations" on.
-10. Chat performance: rows are `React.memo`, only the streaming row re-renders per token (the chat service coalesces updates to ~15/s), no `setState` on scroll except crossing the "Latest" threshold, animations on the native driver.
+## 7. Review checklist
 
-## 6. Chat internals (so Phase 2 does not undo them)
+1. Square everywhere: no `borderRadius` in `src/ui` (test enforces it for the primitives; screens use tokens, which are 0).
+2. Tokens only: no hex, no `rgba(`, no literal `fontSize` in `src/ui` (test enforces it for the primitives).
+3. One `primary` Button per screen; at most one `framed` Card; few icons per view.
+4. Text >= 14sp; Cinzel only via `heading`, `section`, `wordmark`.
+5. Targets >= 48dp, rows >= 56dp, >= 8dp between targets.
+6. Destructive = `confirm()`; reversible = `showUndo`; info = toast; errors = inline `Notice` with a recovery action.
+7. Color is never the only signal.
+8. Honest UI: every number comes from the engine, the file system or the device; nothing measured = `Stat` dash or words.
+9. Both skies, text size 1.3, font scale 1.3 and reduced motion checked before merge.
+10. Chat performance: memo rows, only the streaming row re-renders, animations on the native driver.
 
-- `ChatScreen` = `DrawerLayout` > [`ChatTopBar`, banners, `KeyboardAvoidingView` > (`EmptyChat` | inverted `FlatList` of `MessageRow`) + `Composer`], plus `ModelSheet`.
-- List: inverted, data reversed once per change, `maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}` (follows the bottom while you are near it, holds your place when you scroll up), "Latest" pill when > 320dp up.
-- `Composer` owns its text and attachments (typing never re-renders the list); `submitMessage()` is the one send path (also used by the prompt suggestions) and handles every refusal in words.
-- `MessageRow`: user = right-aligned `surfaceAlt` bubble; assistant = plain `Markdown` on the page, reasoning collapsed under "Thought for 12s", stats line, Copy/Retry on the newest reply only.
-- Delete a chat: hold it in the drawer (hint line says so), haptic, `Undo` toast restores the saved file.
+## 8. Notes for wave-2 screens
 
-## 7. Phase 2 handoff
-
-Each screen below works end to end today on the new language; Phase 2 improves polish, copy and edge cases. Files are in `mobile/src/ui/`.
-
-| Screen | Files | State now | Phase 2 work |
-|---|---|---|---|
-| **Chat** | `ChatScreen`, `ChatTopBar`, `MessageRow`, `Markdown`, `Composer`, `EmptyChat`, `ThreadDrawer`, `ModelSheet`, `Drawer` | Complete (section 6) | Device pass for the inverted-list + keyboard + drawer-gesture feel; code-block copy; per-message long-press; message edit; image attach only when real; live tok/s while streaming (needs the service hook below) |
-| **Models** | `ModelsScreen`, `ModelCards` (`DownloadCard`, `InstalledCard`, `AvailableRow`, options sheet), `SetupCard`, `modelActions.ts` | Recommended card on top (one tap = download, verify, load, prove), Downloading cards (progress, pause, resume, cancel), installed cards (Test model, More: integrity check / unload / delete), More models rows, storage row | Fit explanation, cellular warning, show disk space needed before download, empty/offline states, copy |
-| **Persona + Memory** | `PersonaScreen` (`PersonaScreen`, `MemoryScreen`) | Archetype list (applies to this chat and new chats), Fine-tune folded (3 steppers + extra instructions for this chat), Memory screen (add, forget, forget all) | Real preview of the system prompt, plain-word sliders, per-chat vs global scope control, "pause memory" (`isIncognito` is not wired in services) |
-| **Settings** | `SettingsScreens` (`SettingsHome`, `StorageSettings`, `AdvancedSettings`, `AboutSettings`), `StoragePicker` | Flat: Appearance (3 radio rows), Storage, Advanced, About (6 rows) | Voice/privacy rows only when implemented; storage "clean up" row |
-| **Onboarding** | `OnboardingScreen`, `StoragePicker` | Wordmark + stars/sun, phone summary, storage choice, then straight to Models | Merge into a single "Getting ready" screen driven by `useSetup()` |
-| **Foundation** | `src/theme/*`, `Button Card Divider EmptyState Field Icon IconButton Notice ProgressBar Row Screen Sheet Text Toast`, `Ambient Motion Wordmark`, `nav Stack` | Done | Add a primitive only when two screens need it |
-
-### Placeholders and gaps (be honest about them)
-
-- **Not run on a device.** The app is not installed on the test phone, so layout, gesture feel (drawer swipe vs the system back gesture, inverted-list auto-follow), fonts and the splash were verified by typecheck and the Android bundle only. First thing to do on device: both themes, font scale 1.3, reduced motion, keyboard open in Chat and in the Persona field.
-- Services/validator follow-ups: (1) live tokens/second while a reply streams (today only `message.stats` after the reply and `lastTokPerSec` after load); (2) `Settings` has no slot for the theme choice, so it lives in `chiwiwi_theme.json` (move it into settings if wanted); (3) `test/config.test.ts` asserts a black splash; it must now expect `#FBF6EA` (light) with `dark.backgroundColor` `#0A0D1C`; (4) `mobile/AGENTS.md` still says every button is `src/ui/Btn.tsx`; it is now `src/ui/Button.tsx`.
-- The attach button only accepts text files (that is all the engine can use); there is no mic, camera or image attach (not built).
-- Per-chat persona override still exists in the data model (`thread.soul`) but has one editor now (Persona screen), which updates both the default and the open chat.
-- Splash logo for light mode is an automatic recolor of the silver logo; a designer should hand-tune it.
+- `Composer.tsx` still has a literal `borderRadius: 28` (S1): make the bar square (use `colors.surface` + `line` border).
+- `Row` is now `ListRow` (same props, plus `value`, `switchValue/onSwitch`, `disabled`); nav rows show a chevron.
+- `Screen` titles are Cinzel now; long titles: keep them to two words ("Advanced compute").
+- Filters: `Tag onPress selected count`; match mode: `Segmented` All/Any; sort: a `Button variant="text" icon="sort"` that
+  opens a `Sheet` of radio `ListRow`s.
+- Proof of life: map engine status to `Eclipse` (`loading` + progress, `ready`, `busy` while generating, `error`,
+  `idle` when nothing is loaded) and keep the words next to it.

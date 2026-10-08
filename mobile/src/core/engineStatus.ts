@@ -6,7 +6,7 @@
  * estimate (`ramEstimateMb`). Nothing is invented: before the first real generation the speed fields are null.
  */
 import { getModel } from './catalog.ts';
-import type { EngineState } from './engineManager.ts';
+import type { EngineState, KvCacheState, SpeculativeState } from './engineManager.ts';
 import type { EngineErrorKind } from './engineTypes.ts';
 import { estimateRamBytes } from './fit.ts';
 
@@ -43,6 +43,20 @@ export interface EngineStatus {
   crashedModelId: string | null;
   /** The model was unloaded on purpose to free memory; it reloads on the next message. */
   unloadedReason: 'memory' | 'background' | null;
+  /** Backend devices llama.cpp used for this model (e.g. ["CPU"]), and why the GPU was not used. */
+  devices: string[];
+  gpu: boolean;
+  reasonNoGPU: string | null;
+  /** Prompt tokens / context used (prompt + reply) / tokens reused from the KV cache, most recent generation. */
+  promptTokens: number | null;
+  ctxUsed: number | null;
+  cachedTokens: number | null;
+  /** Experimental features switched off during the last load, each with its reason. */
+  fallbacks: string[];
+  speculative: SpeculativeState;
+  kvCache: KvCacheState;
+  /** The loaded model can see images (vision projector active). */
+  vision: boolean;
   /** One honest sentence for a status chip. */
   headline: string;
 }
@@ -80,7 +94,7 @@ export function deriveEngineStatus(s: EngineState, totalRamBytes: number | null)
       headline = `Testing ${name ?? 'model'} (first words)...`;
       break;
     case 'ready':
-      headline = `Ready - ${name ?? 'model'} · ${s.info?.backend ?? 'CPU'} · ${s.nCtx} ctx${speed}`;
+      headline = `Ready - ${name ?? 'model'} · ${s.info?.backend ?? 'CPU'} · ${s.nCtx} ctx${speed}${s.speculative?.active ? ' · speculative' : ''}`;
       break;
     case 'generating':
       headline = `Writing - ${name ?? 'model'}${speed}`;
@@ -112,6 +126,16 @@ export function deriveEngineStatus(s: EngineState, totalRamBytes: number | null)
     errorFix: s.errorFix,
     crashedModelId: s.crashedModelId,
     unloadedReason: s.unloadedReason,
+    devices: loaded ? (s.info?.devices ?? []) : [],
+    gpu: loaded && !!s.info?.gpu,
+    reasonNoGPU: loaded ? (s.info?.reasonNoGPU || null) : null,
+    promptTokens: s.lastPromptTokens ?? null,
+    ctxUsed: s.lastCtxUsed ?? null,
+    cachedTokens: s.lastCachedTokens ?? null,
+    fallbacks: s.fallbacks ?? [],
+    speculative: s.speculative,
+    kvCache: s.kvCache,
+    vision: loaded && !!s.info?.multimodal?.vision,
     headline,
   };
 }

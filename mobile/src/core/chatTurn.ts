@@ -8,7 +8,8 @@
  */
 import type { ModelSpec } from './catalog.ts';
 import { buildPrompt, type BuiltPrompt, type HistoryMessage, type PromptMessage } from './chatPrompt.ts';
-import { withAttachments, type Attachment, type ChatMessage, type MessageStats } from './chatTypes.ts';
+import { imagePaths, withAttachments, type Attachment, type ChatMessage, type MessageStats } from './chatTypes.ts';
+import type { SamplingSettings } from './settingsModel.ts';
 import { friendlyEngineError, type GenerateParams, type GenerateResult } from './engineTypes.ts';
 import { parseThinking, type OutputPhase } from './thinking.ts';
 
@@ -25,6 +26,10 @@ export interface TurnInput {
   /** Called for every streamed update (the caller should coalesce for rendering). */
   onUpdate: (patch: Partial<ChatMessage>) => void;
   temperature?: number;
+  /** Full sampling (soul-adjusted, core/persona.ts padToSampling). Wins over `temperature`. */
+  sampling?: SamplingSettings;
+  /** Backend label to store in the reply's stats ("CPU" / "GPU (...)"). */
+  backend?: string;
   /**
    * Exact prompt size from the model's own tokenizer (null = cannot count). When given, the prompt is re-trimmed until
    * it really fits, which the character-based estimate cannot guarantee for Khmer, CJK, digits or code.
@@ -51,11 +56,13 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
   const thinking = wantsThinking(spec, input.thinkingEnabled);
   const replyBudget = replyBudgetFor(spec, input.nCtx, thinking);
   const userContent = withAttachments(input.userText, input.attachments);
+  const userImages = imagePaths(input.attachments);
   const build = (tokenScale: number): BuiltPrompt =>
     buildPrompt({
       system: input.system,
       history: input.history,
       userMessage: userContent,
+      userImages,
       nCtx: input.nCtx,
       replyBudget,
       tokenScale,
@@ -110,7 +117,10 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
     const result = await input.generate({
       messages: built.messages,
       maxTokens: replyBudget,
-      temperature: input.temperature ?? 0.7,
+      temperature: input.sampling?.temperature ?? input.temperature ?? 0.7,
+      ...(input.sampling
+        ? { sampling: { topP: input.sampling.topP, topK: input.sampling.topK, minP: input.sampling.minP, repeatPenalty: input.sampling.repeatPenalty } }
+        : {}),
       enableThinking: thinking,
       onStart: (info) => {
         forcedOpen = forcedOpen || info.thinkingForcedOpen;
@@ -131,6 +141,10 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
       tokensPerSecond: result.tokensPerSecond || (result.predictedMs > 0 ? (result.generatedTokens * 1000) / result.predictedMs : 0),
       promptMs: result.promptMs,
       totalMs: endedAt - startedAt,
+      ...(result.ttftMs ? { ttftMs: result.ttftMs } : {}),
+      ...(result.cachedTokens !== undefined ? { cachedTokens: result.cachedTokens } : {}),
+      ...(result.draftTokens ? { draftTokens: result.draftTokens, draftAccepted: result.draftAccepted ?? 0 } : {}),
+      ...(input.backend ? { backend: input.backend } : {}),
     };
 
     if (result.contextFull) notes.push("The model's memory filled up, so the reply may be cut short. Start a new chat or raise the context size in Settings > Advanced.");

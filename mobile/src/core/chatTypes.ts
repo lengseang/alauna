@@ -9,13 +9,27 @@ export interface MessageStats {
   tokensPerSecond: number;
   promptMs: number;
   totalMs: number;
+  /** Time from request to first streamed token (ms), measured. */
+  ttftMs?: number;
+  /** Prompt tokens reused from the KV cache (llama.cpp `tokens_cached`). */
+  cachedTokens?: number;
+  /** Speculative decoding: tokens drafted / accepted in this reply (only when it was active). */
+  draftTokens?: number;
+  draftAccepted?: number;
+  /** "CPU" / "GPU (...)" as reported by llama.cpp at load. */
+  backend?: string;
 }
 
 export interface Attachment {
+  /** 'text' (default, older files have no kind) = content goes into the prompt; 'image' = sent to a vision model. */
+  kind?: 'text' | 'image';
   name: string;
-  /** Text content that was added to the prompt (truncated if large). */
+  /** Text content that was added to the prompt (truncated if large). '' for images. */
   content: string;
   truncated: boolean;
+  /** Real file path (no file://) of an image attachment, inside the vault media folder. */
+  path?: string;
+  mime?: string;
 }
 
 export type MessageStatus = 'streaming' | 'done' | 'stopped' | 'error';
@@ -55,9 +69,14 @@ export interface ChatThread {
   title: string;
   createdAt: number;
   updatedAt: number;
+  /** This chat's own soul. Only used when `soulOverride` is true; otherwise the global soul (Settings) applies. */
   soul: ThreadSoul;
+  /** true = this chat overrides the global soul (ThreadSoulModal). New chats follow the global soul. */
+  soulOverride: boolean;
   messages: ChatMessage[];
+  /** Never written to disk. */
   incognito: boolean;
+  pinned: boolean;
 }
 
 export const DEFAULT_TITLE = 'New chat';
@@ -76,9 +95,40 @@ export function newThread(archetype: SoulArchetypeKey, pad: PADVector, opts: { i
     createdAt: now,
     updatedAt: now,
     soul: { archetype, pad: { ...pad }, toneIntensity: 0.8 },
+    soulOverride: false,
     messages: [],
     incognito: !!opts.incognito,
+    pinned: false,
   };
+}
+
+/** The soul that applies to this chat: its own override, or the global one. */
+export function effectiveSoul(thread: Pick<ChatThread, 'soul' | 'soulOverride'>, global: ThreadSoul): ThreadSoul {
+  return thread.soulOverride ? thread.soul : global;
+}
+
+const DAY_MS = 86_400_000;
+
+/** Auto-purge rule: chats not updated for `days` days (pinned chats are always kept). days <= 0 = off. */
+export function staleThreadIds(metas: Array<{ id: string; updatedAt: number; pinned?: boolean }>, days: number, now: number): string[] {
+  if (!(days > 0)) return [];
+  const cutoff = now - days * DAY_MS;
+  return metas.filter((m) => !m.pinned && m.updatedAt < cutoff).map((m) => m.id);
+}
+
+/** Case-insensitive search over the title and every message. Returns a short snippet around the first hit, or null. */
+export function threadMatch(thread: Pick<ChatThread, 'title' | 'messages'>, query: string): { snippet: string } | null {
+  const q = query.trim().toLowerCase();
+  if (!q) return { snippet: '' };
+  if (thread.title.toLowerCase().includes(q)) return { snippet: thread.title };
+  for (const m of thread.messages) {
+    const i = m.text.toLowerCase().indexOf(q);
+    if (i >= 0) {
+      const start = Math.max(0, i - 30);
+      return { snippet: `${start > 0 ? '…' : ''}${m.text.slice(start, i + q.length + 50).replace(/\s+/g, ' ').trim()}` };
+    }
+  }
+  return null;
 }
 
 export function defaultSoul(archetype: SoulArchetypeKey): ThreadSoul {
@@ -97,7 +147,8 @@ export function toHistory(messages: ChatMessage[]): HistoryMessage[] {
   const out: HistoryMessage[] = [];
   for (const m of messages) {
     if (m.role === 'user') {
-      out.push({ role: 'user', content: withAttachments(m.text, m.attachments) });
+      const images = imagePaths(m.attachments);
+      out.push(images.length ? { role: 'user', content: withAttachments(m.text, m.attachments), images } : { role: 'user', content: withAttachments(m.text, m.attachments) });
     } else if ((m.status === 'done' || m.status === 'stopped') && m.text.trim()) {
       out.push({ role: 'assistant', content: m.text });
     }
@@ -105,9 +156,15 @@ export function toHistory(messages: ChatMessage[]): HistoryMessage[] {
   return out;
 }
 
+/** Paths of the image attachments (they go to the model as images, not as text). */
+export function imagePaths(attachments?: Attachment[]): string[] {
+  return (attachments ?? []).filter((a) => a.kind === 'image' && a.path).map((a) => a.path as string);
+}
+
 export function withAttachments(text: string, attachments?: Attachment[]): string {
-  if (!attachments || attachments.length === 0) return text;
-  const blocks = attachments.map(
+  const texts = (attachments ?? []).filter((a) => a.kind !== 'image');
+  if (texts.length === 0) return text;
+  const blocks = texts.map(
     (a) => `[Attached file: ${a.name}${a.truncated ? ' (truncated)' : ''}]\n\`\`\`\n${a.content}\n\`\`\``,
   );
   return `${blocks.join('\n\n')}\n\n${text}`.trim();
@@ -118,6 +175,11 @@ export const MAX_ATTACHMENT_CHARS = 8000;
 export function makeAttachment(name: string, content: string): Attachment {
   const truncated = content.length > MAX_ATTACHMENT_CHARS;
   return { name, content: truncated ? content.slice(0, MAX_ATTACHMENT_CHARS) : content, truncated };
+}
+
+/** An image for a vision model. `path` must be a real file path the engine can open (copy picker results into the vault first). */
+export function makeImageAttachment(name: string, path: string, mime?: string): Attachment {
+  return { kind: 'image', name, content: '', truncated: false, path: path.replace(/^file:\/\//, ''), ...(mime ? { mime } : {}) };
 }
 
 // ---------------------------------------------------------------- persistence
@@ -180,8 +242,11 @@ export function sanitizeThread(raw: unknown): ChatThread | null {
       customBackstory: typeof soulRaw.customBackstory === 'string' ? soulRaw.customBackstory : undefined,
       toneIntensity: typeof soulRaw.toneIntensity === 'number' ? Math.min(1, Math.max(0.1, soulRaw.toneIntensity)) : 0.8,
     },
+    // v1 files have no flag: v1 always used the chat's own soul, so keep that behaviour.
+    soulOverride: typeof r.soulOverride === 'boolean' ? r.soulOverride : true,
     messages,
     incognito: false,
+    pinned: r.pinned === true,
   };
 }
 

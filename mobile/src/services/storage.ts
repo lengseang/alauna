@@ -16,9 +16,13 @@ import { useSyncExternalStore } from 'react';
 import { Linking, PermissionsAndroid, Platform } from 'react-native';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as IntentLauncher from 'expo-intent-launcher';
+import { readWithFallback, writeAtomic } from '../core/atomicFile.ts';
+import { newId } from '../core/chatTypes.ts';
 import { createStore } from '../core/store.ts';
 import { baseName, joinPath, pathToUri, safTreeUriToPath, uriToPath } from '../core/paths.ts';
+import { directoryIO } from './atomicIo.ts';
 import { getDeviceProfile } from './device.ts';
+import { settingsStore, updateSettings } from './settings.ts';
 
 /** Must equal expo.android.package in app.json (checked by test/config.test.ts). */
 export const APP_PACKAGE = 'com.chiwiwi.sovereign';
@@ -27,14 +31,51 @@ const CONFIG_FILE = 'chiwiwi_storage_config.json';
 
 export type StorageMode = 'internal' | 'external';
 
+/**
+ * A storage slot = a root folder that can hold models (`<root>/models`). The main vault is always slot `primary`
+ * (it also holds chats, memory and media). Up to MAX_SLOTS roots in total: app storage and folders the user picked.
+ */
+export interface StorageSlot {
+  id: string;
+  kind: 'internal' | 'folder';
+  label: string;
+  /** Real filesystem path of the slot root (the CHIWIWI folder). */
+  rootPath: string;
+  pickedUri?: string;
+  addedAt: number;
+}
+
+export const MAX_SLOTS = 5;
+export const PRIMARY_SLOT_ID = 'primary';
+export const INTERNAL_SLOT_ID = 'internal';
+
 export interface StorageConfig {
-  version: 1;
+  version: 1 | 2;
   mode: StorageMode;
   /** Real filesystem path of the vault root (no scheme, not percent-encoded). */
   rootPath: string;
   /** Original SAF URI the user picked (external mode only). */
   pickedUri?: string;
   configuredAt: number;
+  /** v2: extra model slots (the vault itself is not listed here). */
+  slots?: StorageSlot[];
+}
+
+/** A slot with its live numbers (services/storageSlots.ts `refreshSlots`). */
+export interface SlotInfo extends StorageSlot {
+  isPrimary: boolean;
+  /** New model downloads go here (Settings.storage.modelSlotId). */
+  isDownloadTarget: boolean;
+  /** Folder exists and is readable right now. */
+  available: boolean;
+  /** Bytes of everything under the slot root (measured by walking the folder). */
+  usedBytes: number | null;
+  /** Bytes of GGUF/partial files in `<root>/models`, and their count. */
+  modelBytes: number | null;
+  modelFiles: number;
+  /** Free bytes on that volume; null = Android gives no number for this volume (e.g. SD card) without native code. */
+  freeBytes: number | null;
+  totalBytes: number | null;
 }
 
 export interface StorageState {
@@ -42,9 +83,11 @@ export interface StorageState {
   config: StorageConfig | null;
   /** Why the saved location cannot be used (status === 'unavailable'). */
   reason?: string;
+  /** Live slot list (refreshSlots); [] until measured. */
+  slots: SlotInfo[];
 }
 
-export const storageStore = createStore<StorageState>({ status: 'loading', config: null });
+export const storageStore = createStore<StorageState>({ status: 'loading', config: null, slots: [] });
 
 export type ExternalFailure = 'cancelled' | 'unmappable' | 'needs_permission' | 'not_writable';
 export type ExternalResult =
@@ -57,28 +100,48 @@ function dirAt(path: string): Directory {
   return new Directory(pathToUri(path));
 }
 
-function configFile(): File {
-  return new File(Paths.document, CONFIG_FILE);
-}
+const configIO = () => directoryIO(() => Paths.document);
 
-function readConfig(): StorageConfig | null {
-  try {
-    const f = configFile();
-    if (!f.exists) return null;
-    const parsed = JSON.parse(f.textSync()) as Partial<StorageConfig>;
-    if (parsed && parsed.version === 1 && typeof parsed.rootPath === 'string' && (parsed.mode === 'internal' || parsed.mode === 'external')) {
-      return parsed as StorageConfig;
-    }
-  } catch {
-    // corrupt config => treat as unconfigured
+/** Validate a config read from disk (v1 or v2). Exported for tests. */
+export function sanitizeStorageConfig(raw: unknown): StorageConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw as Partial<StorageConfig>;
+  if ((p.version !== 1 && p.version !== 2) || typeof p.rootPath !== 'string' || (p.mode !== 'internal' && p.mode !== 'external')) return null;
+  const slots: StorageSlot[] = [];
+  for (const x of Array.isArray(p.slots) ? p.slots : []) {
+    const s = x as Partial<StorageSlot>;
+    if (!s || typeof s.id !== 'string' || typeof s.rootPath !== 'string' || (s.kind !== 'internal' && s.kind !== 'folder')) continue;
+    if (s.id === PRIMARY_SLOT_ID || s.rootPath === p.rootPath || slots.some((o) => o.id === s.id || o.rootPath === s.rootPath)) continue;
+    slots.push({
+      id: s.id,
+      kind: s.kind,
+      label: typeof s.label === 'string' ? s.label : s.rootPath,
+      rootPath: s.rootPath,
+      ...(typeof s.pickedUri === 'string' ? { pickedUri: s.pickedUri } : {}),
+      addedAt: typeof s.addedAt === 'number' ? s.addedAt : 0,
+    });
   }
-  return null;
+  return {
+    version: 2,
+    mode: p.mode,
+    rootPath: p.rootPath,
+    ...(typeof p.pickedUri === 'string' ? { pickedUri: p.pickedUri } : {}),
+    configuredAt: typeof p.configuredAt === 'number' ? p.configuredAt : 0,
+    slots: slots.slice(0, MAX_SLOTS - 1),
+  };
 }
 
+async function readConfig(): Promise<StorageConfig | null> {
+  try {
+    return await readWithFallback(configIO(), CONFIG_FILE, (text) => sanitizeStorageConfig(JSON.parse(text)));
+  } catch {
+    return null; // corrupt config => treat as unconfigured
+  }
+}
+
+/** Atomic (tmp + rename): a kill mid-write cannot lose the storage choice. */
 function saveConfig(config: StorageConfig): void {
-  const f = configFile();
-  if (!f.exists) f.create({ intermediates: true });
-  f.write(JSON.stringify(config));
+  writeAtomic(configIO(), CONFIG_FILE, JSON.stringify({ ...config, version: 2 }));
 }
 
 /** Write -> read back -> delete a tiny file. The only reliable test that a folder is usable. */
@@ -98,10 +161,10 @@ export async function probeWritable(rootPath: string): Promise<{ ok: true } | { 
   }
 }
 
-function ensureLayout(rootPath: string): void {
+function ensureLayout(rootPath: string, subs: string[] = ['models', 'chats', 'media']): void {
   const root = dirAt(rootPath);
   if (!root.exists) root.create({ intermediates: true, idempotent: true });
-  for (const sub of ['models', 'chats', 'media']) {
+  for (const sub of subs) {
     const d = new Directory(root, sub);
     if (!d.exists) d.create({ idempotent: true });
   }
@@ -117,15 +180,20 @@ function ensureLayout(rootPath: string): void {
 
 function activate(config: StorageConfig): StorageConfig {
   ensureLayout(config.rootPath);
-  saveConfig(config);
-  storageStore.setState({ status: 'ready', config, reason: undefined });
-  return config;
+  // Keep the extra slots when the vault moves (minus one that now IS the vault).
+  const previous = storageStore.getState().config?.slots ?? [];
+  const next: StorageConfig = { ...config, version: 2, slots: config.slots ?? previous.filter((s) => s.rootPath !== config.rootPath) };
+  saveConfig(next);
+  storageStore.setState({ status: 'ready', config: next, reason: undefined });
+  return next;
 }
+
+/** Real path of the app-private vault folder. */
+export const internalVaultPath = (): string => uriToPath(new Directory(Paths.document, 'vault').uri);
 
 /** App-private storage: always works, no permission, removed if the app is uninstalled. */
 export async function useInternalStorage(): Promise<StorageConfig> {
-  const root = new Directory(Paths.document, 'vault');
-  return activate({ version: 1, mode: 'internal', rootPath: uriToPath(root.uri), configuredAt: Date.now() });
+  return activate({ version: 2, mode: 'internal', rootPath: internalVaultPath(), configuredAt: Date.now() });
 }
 
 export const canPickExternalFolder = (): boolean => Platform.OS === 'android';
@@ -181,7 +249,7 @@ export async function applyPickedFolder(pickedUri: string): Promise<ExternalResu
         }
       : { ok: false, reason: 'not_writable', pickedUri, rootPath, message: `This folder is not writable (${probe.error}).` };
   }
-  return { ok: true, config: activate({ version: 1, mode: 'external', rootPath, pickedUri, configuredAt: Date.now() }) };
+  return { ok: true, config: activate({ version: 2, mode: 'external', rootPath, pickedUri, configuredAt: Date.now() }) };
 }
 
 /** Send the user to the Android "All files access" screen for this app. */
@@ -203,7 +271,7 @@ export async function openAllFilesAccessSettings(): Promise<void> {
 
 /** Run at launch and whenever the app returns to the foreground. */
 export async function initStorage(): Promise<void> {
-  const config = readConfig();
+  const config = await readConfig();
   if (!config) {
     storageStore.setState({ status: 'unconfigured', config: null, reason: undefined });
     return;
@@ -250,22 +318,196 @@ export const modelsDir = (): Directory => new Directory(vaultRoot(), 'models');
 export const chatsDir = (): Directory => new Directory(vaultRoot(), 'chats');
 export const mediaDir = (): Directory => new Directory(vaultRoot(), 'media');
 
-/** Free bytes on the volume that holds app storage, or null if unknown / different volume. */
-export function freeSpaceBytes(): number | null {
+/**
+ * Is this path on the phone's internal data volume? App storage and /storage/emulated/* (emulated shared storage is
+ * backed by the same /data partition). SD cards / USB drives are other volumes.
+ */
+export function onInternalVolume(path: string): boolean {
+  return path.startsWith('/data/') || path.startsWith('/storage/emulated/') || path.startsWith('/sdcard');
+}
+
+/** Free / total bytes of the volume holding `path`; null when Android gives no number for it without native code. */
+export function volumeSpace(path: string): { freeBytes: number | null; totalBytes: number | null } {
+  if (!onInternalVolume(path)) return { freeBytes: null, totalBytes: null };
   try {
-    const { config } = storageStore.getState();
-    if (!config) return null;
-    const sameVolume = config.mode === 'internal' || config.rootPath.startsWith('/storage/emulated/0');
-    if (!sameVolume) return null;
     const free = Paths.availableDiskSpace;
-    return typeof free === 'number' && free > 0 ? free : null;
+    const total = Paths.totalDiskSpace;
+    return { freeBytes: typeof free === 'number' && free > 0 ? free : null, totalBytes: typeof total === 'number' && total > 0 ? total : null };
   } catch {
-    return null;
+    return { freeBytes: null, totalBytes: null };
   }
 }
 
+/** Free bytes on the volume that holds the vault, or null if unknown / different volume. */
+export function freeSpaceBytes(): number | null {
+  const { config } = storageStore.getState();
+  return config ? volumeSpace(config.rootPath).freeBytes : null;
+}
+
+/** First-run gate: what the user can choose, with the real free space of app storage. */
+export function getStorageChoices(): { internal: { path: string; freeBytes: number | null; totalBytes: number | null }; canPickFolder: boolean } {
+  const path = internalVaultPath();
+  return { internal: { path, ...volumeSpace(path) }, canPickFolder: canPickExternalFolder() };
+}
+
+// ----------------------------------------------------------------------- slots (roots that hold models)
+
+/** All slot roots, the vault first. */
+export function listSlotRoots(): StorageSlot[] {
+  const { config } = storageStore.getState();
+  if (!config) return [];
+  const primary: StorageSlot = {
+    id: PRIMARY_SLOT_ID,
+    kind: config.mode === 'internal' ? 'internal' : 'folder',
+    label: config.mode === 'internal' ? 'App storage (main)' : `${baseName(config.rootPath.replace(/\/CHIWIWI$/, '')) || config.rootPath} (main)`,
+    rootPath: config.rootPath,
+    ...(config.pickedUri ? { pickedUri: config.pickedUri } : {}),
+    addedAt: config.configuredAt,
+  };
+  return [primary, ...(config.slots ?? [])];
+}
+
+export function slotById(id: string | null | undefined): StorageSlot | undefined {
+  return listSlotRoots().find((s) => s.id === id);
+}
+
+export function slotModelsDir(slot: StorageSlot): Directory {
+  return new Directory(dirAt(slot.rootPath), 'models');
+}
+
+/** Where NEW model downloads go: the slot chosen in Settings > Storage, else the vault. */
+export function downloadSlot(): StorageSlot {
+  const roots = listSlotRoots();
+  if (roots.length === 0) throw new StorageNotReadyError();
+  return roots.find((s) => s.id === settingsStore.getState().storage?.modelSlotId) ?? roots[0];
+}
+
+export function downloadModelsDir(): Directory {
+  const dir = slotModelsDir(downloadSlot());
+  try {
+    if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
+  } catch {
+    // the caller's write reports the real error
+  }
+  return dir;
+}
+
+/** Find a model file (or `.part`) by name in any slot: the download slot first, then the vault, then the others. */
+export function locateModelFile(filename: string): { slotId: string; file: File } | null {
+  let order: StorageSlot[];
+  try {
+    const first = downloadSlot();
+    order = [first, ...listSlotRoots().filter((s) => s.id !== first.id)];
+  } catch {
+    return null;
+  }
+  for (const slot of order) {
+    try {
+      const f = new File(slotModelsDir(slot), filename);
+      if (f.exists) return { slotId: slot.id, file: f };
+    } catch {
+      // unavailable slot (SD card removed): skip
+    }
+  }
+  return null;
+}
+
+export type AddSlotResult =
+  | { ok: true; slot: StorageSlot }
+  | { ok: false; reason: ExternalFailure | 'limit' | 'duplicate' | 'not_ready'; message: string; pickedUri?: string };
+
+function addSlot(slot: StorageSlot): AddSlotResult {
+  const { config } = storageStore.getState();
+  if (!config) return { ok: false, reason: 'not_ready', message: 'Set up the main storage first.' };
+  const roots = listSlotRoots();
+  if (roots.length >= MAX_SLOTS) return { ok: false, reason: 'limit', message: `You can use up to ${MAX_SLOTS} storage locations. Remove one first.` };
+  if (roots.some((r) => r.rootPath === slot.rootPath || r.id === slot.id)) return { ok: false, reason: 'duplicate', message: 'That location is already in the list.' };
+  ensureLayout(slot.rootPath, ['models']);
+  const next: StorageConfig = { ...config, slots: [...(config.slots ?? []), slot] };
+  saveConfig(next);
+  storageStore.setState({ config: next });
+  return { ok: true, slot };
+}
+
+/** Add app-private storage as a model slot (when the vault itself is on a picked folder). */
+export async function addInternalSlot(): Promise<AddSlotResult> {
+  const path = internalVaultPath();
+  const probe = await probeWritable(path);
+  if (!probe.ok) return { ok: false, reason: 'not_writable', message: `App storage is not writable (${probe.error}).` };
+  return addSlot({ id: INTERNAL_SLOT_ID, kind: 'internal', label: 'App storage', rootPath: path, addedAt: Date.now() });
+}
+
+/** Pick a folder (SAF) - or pass the URI already picked - map it to a real path, prove it is writable, add it as a model slot. */
+export async function addFolderSlot(pickedUri?: string): Promise<AddSlotResult> {
+  let uri = pickedUri;
+  if (!uri) {
+    try {
+      uri = (await Directory.pickDirectoryAsync()).uri;
+    } catch {
+      return { ok: false, reason: 'cancelled', message: 'No folder was selected.' };
+    }
+  }
+  const mapped = uri.startsWith('file://') ? uriToPath(uri) : safTreeUriToPath(uri);
+  if (!mapped) {
+    return { ok: false, reason: 'unmappable', pickedUri: uri, message: 'That location (a cloud drive or the Downloads app) cannot hold models. Pick a normal folder on this phone or SD card.' };
+  }
+  const rootPath = baseName(mapped) === VAULT_DIRNAME ? mapped : joinPath(mapped, VAULT_DIRNAME);
+  const probe = await probeWritable(joinPath(rootPath, 'models'));
+  if (!probe.ok) {
+    const api = getDeviceProfile().apiLevel;
+    const needsAllFiles = Platform.OS === 'android' && (api === null || api >= 30);
+    return needsAllFiles
+      ? { ok: false, reason: 'needs_permission', pickedUri: uri, message: 'Android needs "All files access" so the AI engine can read models from this folder. Allow it, then add the folder again.' }
+      : { ok: false, reason: 'not_writable', pickedUri: uri, message: `This folder is not writable (${probe.error}).` };
+  }
+  return addSlot({ id: newId('folder'), kind: 'folder', label: baseName(mapped) || mapped, rootPath, pickedUri: uri, addedAt: Date.now() });
+}
+
+/** Model files (complete or partial) in a slot. */
+export function slotModelFileNames(slot: StorageSlot): string[] {
+  try {
+    const dir = slotModelsDir(slot);
+    if (!dir.exists) return [];
+    return dir
+      .list()
+      .filter((e): e is File => e instanceof File)
+      .map((f) => f.name)
+      .filter((n) => /\.gguf(\.part)?$/i.test(n));
+  } catch {
+    return [];
+  }
+}
+
+/** Remove an extra slot from the list. Never deletes files; refuses while it still holds models. */
+export function removeSlot(id: string): { ok: true } | { ok: false; message: string } {
+  const { config } = storageStore.getState();
+  if (!config) return { ok: false, message: 'Storage is not set up.' };
+  if (id === PRIMARY_SLOT_ID) return { ok: false, message: 'The main storage cannot be removed. Use "Change location" instead.' };
+  const slot = (config.slots ?? []).find((s) => s.id === id);
+  if (!slot) return { ok: false, message: 'That location is not in the list.' };
+  const files = slotModelFileNames(slot);
+  if (files.length > 0) return { ok: false, message: `This location still holds ${files.length} model file${files.length === 1 ? '' : 's'}. Move or delete them first.` };
+  const next: StorageConfig = { ...config, slots: (config.slots ?? []).filter((s) => s.id !== id) };
+  saveConfig(next);
+  storageStore.setState({ config: next, slots: storageStore.getState().slots.filter((s) => s.id !== id) });
+  if (settingsStore.getState().storage?.modelSlotId === id) updateSettings({ storage: { modelSlotId: null } });
+  return { ok: true };
+}
+
+/** Choose where new model downloads go. */
+export function setDownloadSlot(id: string): { ok: true } | { ok: false; message: string } {
+  if (!slotById(id)) return { ok: false, message: 'That location is not in the list.' };
+  updateSettings({ storage: { modelSlotId: id === PRIMARY_SLOT_ID ? null : id } });
+  return { ok: true };
+}
+
+
 export function describeLocation(config: StorageConfig): string {
   return config.mode === 'internal' ? 'App storage (private to CHIWIWI)' : config.rootPath;
+}
+
+export function useStorageSlots(): SlotInfo[] {
+  return useSyncExternalStore(storageStore.subscribe, () => storageStore.getState().slots);
 }
 
 export function useStorage(): StorageState {

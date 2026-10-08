@@ -58,14 +58,15 @@ export function fitFor(spec: ModelSpec, totalRamBytes: number | null, nCtx: numb
  * NOT "the biggest that fits": on a 12 GB phone that is an 8-9B model at 3-6 tok/s, a poor first impression.
  * Instead each catalog entry has an explicit `priority` (the 4B "Balanced (default)" model is highest), and we take
  * the highest-priority entry that rates "great" or "ok" on THIS phone. Heavier models stay available as opt-in.
- * Unknown RAM -> the "Fast" small model; nothing fits -> the smallest model overall.
+ * Unknown RAM -> the "Fast" small model; nothing fits -> the smallest recommendable model.
+ * Entries with `priority: 0` (uncensored, niche, tiny demos, 16 GB-only) are never auto-recommended.
  */
-export function recommendModel(catalog: ModelSpec[], totalRamBytes: number | null): ModelSpec | null {
-  const bySize = [...catalog].sort((a, b) => a.sizeBytes - b.sizeBytes);
+export function recommendModel(catalog: readonly ModelSpec[], totalRamBytes: number | null): ModelSpec | null {
+  const candidates = catalog.filter((m) => m.priority > 0 && m.contentPolicy !== 'Uncensored');
+  const bySize = [...(candidates.length > 0 ? candidates : catalog)].sort((a, b) => a.sizeBytes - b.sizeBytes);
   if (!totalRamBytes || totalRamBytes <= 0) return catalog.find((m) => m.role === 'Fast') ?? bySize[0] ?? null;
   const nCtx = defaultContext(totalRamBytes);
-  const eligible = catalog.filter((m) => {
-    if (m.contentPolicy === 'Uncensored') return false;
+  const eligible = candidates.filter((m) => {
     if (m.paramsB < 1) return false;
     const rating = fitFor(m, totalRamBytes, nCtx);
     return rating === 'great' || rating === 'ok';

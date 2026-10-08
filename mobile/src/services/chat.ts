@@ -10,6 +10,8 @@ import { getModel } from '../core/catalog.ts';
 import { runAssistantTurn } from '../core/chatTurn.ts';
 import {
   DEFAULT_TITLE,
+  effectiveSoul,
+  imagePaths,
   makeAttachment,
   newId,
   newThread,
@@ -20,16 +22,29 @@ import {
   type ChatThread,
   type ThreadSoul,
 } from '../core/chatTypes.ts';
-import { parseRememberCommand } from '../core/memory.ts';
-import { buildSystemPrompt } from '../core/persona.ts';
+import { activeFactTexts, parseRememberCommand } from '../core/memory.ts';
+import { buildSystemPrompt, padToSampling } from '../core/persona.ts';
 import { createStore } from '../core/store.ts';
-import { engine } from './engine.ts';
-import { deleteThreadFile, listThreads, loadThread, saveThread, type ThreadMeta } from './chatStore.ts';
+import { engine, modelHasVision } from './engine.ts';
+import {
+  deleteAllThreadFiles,
+  deleteThreadFile,
+  listThreads,
+  loadThread,
+  saveThread,
+  searchThreads,
+  sortThreads,
+  updateThreadFile,
+  type ThreadMeta,
+} from './chatStore.ts';
 import { addMemory, memoryStore } from './memory.ts';
 import { isInstalled } from './modelLibrary.ts';
 import { settingsStore } from './settings.ts';
+import { globalSoul } from './soul.ts';
 import { isStorageReady } from './storage.ts';
 import { showToast } from './toast.ts';
+
+export type { ThreadMeta } from './chatStore.ts';
 
 /** How often the in-progress answer is written to disk while it streams. */
 const PARTIAL_SAVE_MS = 2000;
@@ -41,7 +56,8 @@ export interface ChatState {
   saveError: string | null;
 }
 
-function freshThread(incognito = false): ChatThread {
+/** A blank chat that follows the global soul. Incognito by default when Settings > Security says so. */
+function freshThread(incognito: boolean = settingsStore.getState().incognitoDefault): ChatThread {
   const s = settingsStore.getState();
   return newThread(s.archetype, s.pad, { incognito });
 }
@@ -59,7 +75,10 @@ export function useChatState(): ChatState {
 
 export type SendResult =
   | { ok: true }
-  | { ok: false; reason: 'empty' | 'busy' | 'no_storage' | 'no_model' | 'not_installed' | 'engine'; message: string };
+  | { ok: false; reason: 'empty' | 'busy' | 'no_storage' | 'no_model' | 'not_installed' | 'no_vision' | 'engine'; message: string };
+
+const NO_VISION =
+  'This model cannot see images. Load a vision model (one that comes with an image projector) or remove the image and send the text.';
 
 // ------------------------------------------------------------------ helpers
 
@@ -90,6 +109,12 @@ export async function refreshThreadList(): Promise<void> {
   chatStore.setState({ threads: await listThreads() });
 }
 
+/** Search every saved chat (title + messages). Empty query = the full list. Each result has a `snippet`. */
+export async function searchChats(query: string): Promise<ThreadMeta[]> {
+  if (!isStorageReady()) return [];
+  return searchThreads(query);
+}
+
 // ------------------------------------------------------------------ lifecycle
 
 /** Call once the vault is ready: load history and open the latest chat (or a fresh one). */
@@ -111,7 +136,8 @@ export function canSwitchThread(): boolean {
   return !chatStore.getState().sending;
 }
 
-export function newChat(incognito = false): boolean {
+/** Start a blank chat. `incognito` defaults to Settings > Security "Incognito by default". */
+export function newChat(incognito: boolean = settingsStore.getState().incognitoDefault): boolean {
   if (!canSwitchThread()) {
     showNotice('Wait for the reply to finish (or press Stop) first.');
     return false;
@@ -148,9 +174,57 @@ export async function removeThread(id: string): Promise<void> {
   await refreshThreadList();
 }
 
+/** Give the open chat its own soul (overrides the global one for this chat only). */
 export function updateThreadSoul(soul: ThreadSoul): void {
-  chatStore.setState((s) => ({ thread: { ...s.thread, soul } }));
+  chatStore.setState((s) => ({ thread: { ...s.thread, soul, soulOverride: true } }));
   void persist();
+}
+
+/** The open chat follows the global soul again. */
+export function clearThreadSoul(): void {
+  chatStore.setState((s) => ({ thread: { ...s.thread, soulOverride: false } }));
+  void persist();
+}
+
+/** The soul the open chat really uses (its override, or the global soul). */
+export function currentSoul(): ThreadSoul {
+  return effectiveSoul(chatStore.getState().thread, globalSoul());
+}
+
+export async function renameThread(id: string, title: string): Promise<boolean> {
+  const clean = title.replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!clean) return false;
+  const { thread } = chatStore.getState();
+  if (thread.id === id) {
+    chatStore.setState({ thread: { ...thread, title: clean } });
+    if (thread.incognito || thread.messages.length === 0) return true;
+    await persist();
+    return true;
+  }
+  const ok = (await updateThreadFile(id, (t) => ({ ...t, title: clean }))) !== null;
+  await refreshThreadList();
+  return ok;
+}
+
+/** Pinned chats sort first and are never auto-purged. */
+export async function setThreadPinned(id: string, pinned: boolean): Promise<boolean> {
+  const { thread } = chatStore.getState();
+  if (thread.id === id) {
+    chatStore.setState({ thread: { ...thread, pinned } });
+    if (!thread.incognito && thread.messages.length > 0) await persist();
+    else chatStore.setState((s) => ({ threads: sortThreads(s.threads.map((m) => (m.id === id ? { ...m, pinned } : m))) }));
+    return true;
+  }
+  const ok = (await updateThreadFile(id, (t) => ({ ...t, pinned }))) !== null;
+  await refreshThreadList();
+  return ok;
+}
+
+/** Purge support: forget every chat (files are deleted by the caller) and open a blank one. */
+export async function resetAllChats(): Promise<number> {
+  const removed = deleteAllThreadFiles();
+  chatStore.setState({ thread: freshThread(), threads: [] });
+  return removed;
 }
 
 export async function pickAttachmentFromText(name: string, content: string): Promise<Attachment> {
@@ -178,6 +252,8 @@ export async function sendMessage(rawText: string, attachments: Attachment[] = [
   if (!isInstalled(spec)) {
     return { ok: false, reason: 'not_installed', message: `${spec.name} is not downloaded in the current storage folder. Download it from the Model Hub.` };
   }
+
+  if (imagePaths(attachments).length > 0 && !modelHasVision(spec)) return { ok: false, reason: 'no_vision', message: NO_VISION };
 
   const userMessage: ChatMessage = { id: newId('u'), role: 'user', text, attachments: attachments.length ? attachments : undefined, createdAt: Date.now(), status: 'done' };
   return runTurn(userMessage, true);
@@ -226,15 +302,25 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
       }
     }
 
+    if (imagePaths(userMessage.attachments).length > 0 && !engine.supportsVision()) {
+      const why = engine.state.info?.multimodalError ? ` (${engine.state.info.multimodalError})` : '';
+      patchMessage(assistantId, { status: 'error', error: `${NO_VISION}${why}`, phase: 'done' });
+      return { ok: false, reason: 'no_vision', message: NO_VISION };
+    }
+
     const { thread } = chatStore.getState();
     const settings = settingsStore.getState();
+    const soul = effectiveSoul(thread, globalSoul(settings));
     const system = buildSystemPrompt({
-      archetype: thread.soul.archetype,
-      pad: thread.soul.pad,
-      toneIntensity: thread.soul.toneIntensity,
-      backstory: thread.soul.customBackstory,
-      memories: memoryStore.getState().facts.map((f) => f.text),
+      archetype: soul.archetype,
+      pad: soul.pad,
+      toneIntensity: soul.toneIntensity,
+      backstory: soul.customBackstory,
+      memories: activeFactTexts(memoryStore.getState().facts),
     });
+    const sampling = padToSampling(soul.pad, soul.toneIntensity, settings.sampling);
+    // KV session cache: restore (or evaluate + save) the system-prompt prefix before the reply. Never throws.
+    await engine.preparePrefix(system, settings.thinkingEnabled && spec.thinking !== 'none');
 
     // Coalesce token updates (~15 fps) so long answers do not flood React with renders.
     let pending: Partial<ChatMessage> | null = null;
@@ -261,6 +347,8 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
       nCtx: engine.state.nCtx || engine.contextSize(),
       system,
       thinkingEnabled: settings.thinkingEnabled,
+      sampling,
+      backend: engine.state.info?.backend,
       generate: (p) => engine.generate(p),
       countPromptTokens: (messages, thinking) => engine.countPromptTokens(messages, thinking),
       now: () => Date.now(),

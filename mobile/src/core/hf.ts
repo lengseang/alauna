@@ -16,8 +16,17 @@ export function resolveUrl(repo: string, filename: string, revision = 'main'): s
   return `${HF_BASE}/${r}/resolve/${encodeURIComponent(revision)}/${file}?download=true`;
 }
 
-export function treeUrl(repo: string, revision = 'main'): string {
-  return `${HF_BASE}/api/models/${repo.trim()}/tree/${encodeURIComponent(revision)}`;
+/** Repo-tree listing; `dir` lists a sub-folder (files such as `MTP/mtp-x.gguf` are not in the root listing). */
+export function treeUrl(repo: string, revision = 'main', dir = ''): string {
+  const folder = dir.replace(/^\/+|\/+$/g, '');
+  const path = folder ? `/${folder.split('/').map(encodeURIComponent).join('/')}` : '';
+  return `${HF_BASE}/api/models/${repo.trim()}/tree/${encodeURIComponent(revision)}${path}`;
+}
+
+/** Folder part of a repo path (`MTP/x.gguf` -> `MTP`, `x.gguf` -> ``). */
+export function repoDir(filename: string): string {
+  const i = filename.lastIndexOf('/');
+  return i < 0 ? '' : filename.slice(0, i);
 }
 
 export interface RemoteFileInfo {

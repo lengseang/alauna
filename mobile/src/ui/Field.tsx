@@ -1,6 +1,7 @@
 import React, { forwardRef, useState } from 'react';
-import { TextInput, View, type TextInputProps } from 'react-native';
+import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
 import { hit, makeStyles, useTheme } from '../theme';
+import { Icon } from './Icon';
 import { Text } from './Text';
 
 export interface FieldProps extends Omit<TextInputProps, 'style'> {
@@ -11,7 +12,7 @@ export interface FieldProps extends Omit<TextInputProps, 'style'> {
   error?: string;
 }
 
-/** Labeled text input, >= 48dp, visible boundary (3:1), accent border on focus. */
+/** Labeled text input: square, >= 48dp, visible 3:1 boundary, accent edge on focus, error under the field. */
 export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, hint, error, multiline, onFocus, onBlur, ...rest }, ref) {
   const { colors, type } = useTheme();
   const s = useStyles();
@@ -25,6 +26,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, h
         accessibilityHint={hint}
         placeholderTextColor={colors.muted}
         selectionColor={colors.accent}
+        cursorColor={colors.accent}
         multiline={multiline}
         maxFontSizeMultiplier={1.6}
         {...rest}
@@ -39,7 +41,7 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, h
         style={[s.input, type.body, { color: colors.text }, multiline && s.multi, focused && s.focused, !!error && s.error]}
       />
       {error ? (
-        <Text variant="small" tone="danger">
+        <Text variant="small" tone="danger" accessibilityLiveRegion="polite">
           {error}
         </Text>
       ) : hint ? (
@@ -49,10 +51,62 @@ export const Field = forwardRef<TextInput, FieldProps>(function Field({ label, h
   );
 });
 
-const useStyles = makeStyles(({ colors, space, radius }) => ({
+export interface SearchFieldProps extends Omit<TextInputProps, 'style' | 'value' | 'onChangeText'> {
+  value: string;
+  onChangeText: (text: string) => void;
+  /** Spoken name, e.g. "Search models". Also the placeholder unless one is given. */
+  label: string;
+}
+
+/** Square search bar: glyph, input, clear (x) when there is text. 48dp. Sits under a screen header or in a sheet. */
+export const SearchField = forwardRef<TextInput, SearchFieldProps>(function SearchField({ value, onChangeText, label, placeholder, ...rest }, ref) {
+  const { colors, type } = useTheme();
+  const s = useStyles();
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={[s.search, focused && s.searchFocused]}>
+      <Icon name="search" color={colors.muted} />
+      <TextInput
+        ref={ref}
+        accessibilityRole="search"
+        accessibilityLabel={label}
+        placeholder={placeholder ?? label}
+        placeholderTextColor={colors.muted}
+        selectionColor={colors.accent}
+        cursorColor={colors.accent}
+        returnKeyType="search"
+        autoCorrect={false}
+        maxFontSizeMultiplier={1.6}
+        {...rest}
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={(e) => {
+          setFocused(true);
+          rest.onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          rest.onBlur?.(e);
+        }}
+        style={[s.searchInput, type.body, { color: colors.text }]}
+      />
+      {value ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => onChangeText('')} style={s.clear}>
+          <Icon name="close" color={colors.muted} size={20} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+});
+
+const useStyles = makeStyles(({ colors, space, line }) => ({
   wrap: { gap: space.xs },
-  input: { minHeight: hit, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  input: { minHeight: hit, borderWidth: line, borderColor: colors.borderStrong, backgroundColor: colors.surface, paddingHorizontal: space.lg, paddingVertical: space.sm },
   multi: { minHeight: 96, textAlignVertical: 'top', paddingTop: space.md },
-  focused: { borderColor: colors.accent, borderWidth: 2, paddingHorizontal: space.lg - 1 },
+  focused: { borderColor: colors.accent, borderLeftWidth: 3, paddingLeft: space.lg - 2 },
   error: { borderColor: colors.danger },
+  search: { minHeight: hit, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.md, borderWidth: line, borderColor: colors.borderStrong, backgroundColor: colors.surface },
+  searchFocused: { borderColor: colors.accent },
+  searchInput: { flex: 1, minHeight: hit - 2, paddingVertical: space.sm },
+  clear: { width: hit, height: hit - 2, alignItems: 'center', justifyContent: 'center' },
 }));

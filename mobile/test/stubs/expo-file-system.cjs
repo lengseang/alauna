@@ -33,6 +33,8 @@ class Base {
   constructor(...parts) { this.path = clean(parts.map(toPath).join('/')); }
   get uri() { return 'file://' + encodeURI(this.path); }
   get name() { return this.path.slice(this.path.lastIndexOf('/') + 1); }
+  // eslint-disable-next-line no-use-before-define
+  get parentDirectory() { return new Directory(parentOf(this.path)); }
 }
 
 class File extends Base {
@@ -43,6 +45,12 @@ class File extends Base {
   async text() { if (!this.exists) throw new Error('ENOENT ' + this.path); return store.get(this.path).content; }
   textSync() { if (!this.exists) throw new Error('ENOENT ' + this.path); return store.get(this.path).content; }
   delete() { store.delete(this.path); }
+  async copy(dest) {
+    if (!this.exists) throw new Error('ENOENT ' + this.path);
+    const to = dest instanceof Directory ? dest.path + '/' + this.name : dest.path;
+    mkdirs(parentOf(to));
+    store.set(to, { ...store.get(this.path) });
+  }
   rename(newName) {
     const dest = parentOf(this.path) + '/' + newName;
     if (store.has(dest)) throw new Error('destination exists: ' + dest);
@@ -60,6 +68,7 @@ class File extends Base {
 class Directory extends Base {
   get exists() { const e = store.get(this.path); return !!e && e.type === 'dir'; }
   create() { mkdirs(this.path); }
+  delete() { for (const k of [...store.keys()]) if (k === this.path || k.startsWith(this.path + '/')) store.delete(k); }
   list() {
     const out = [];
     for (const [k, v] of store) {

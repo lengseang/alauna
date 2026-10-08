@@ -20,7 +20,9 @@ test('settings: valid values round-trip; invalid fields fall back individually',
     verified: { 'qwen3.5-4b': { at: 5, tokensPerSecond: 11.5, loadMs: 900 } },
     contextOverride: 4096, threads: 6, useGpu: true, thinkingEnabled: false, pendingMountModelId: 'qwen3.5-9b',
   };
-  assert.deepEqual(sanitizeSettings(JSON.parse(JSON.stringify(good))), good);
+  // A v1 file keeps every v1 value (v2 adds fields around them; see settingsV2.test.ts).
+  const back = sanitizeSettings(JSON.parse(JSON.stringify(good)));
+  for (const [k, v] of Object.entries(good)) assert.deepEqual(back[k as keyof typeof back], v, k);
 
   const s = sanitizeSettings({ archetype: 'wizard', pad: { pleasure: 'hot' }, contextOverride: 12, threads: 99, useGpu: 'yes', thinkingEnabled: 1, verified: { a: null, b: { at: 'x' }, c: { at: 3 } } });
   assert.equal(s.archetype, 'empath', 'unknown archetype');

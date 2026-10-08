@@ -1,33 +1,34 @@
 /**
- * Persisted theme preference. The shared settings model has no slot for it (and lives outside src/ui),
- * so it gets its own tiny file next to it in app-private storage. Same File API as services/settings.ts.
+ * Appearance preferences (theme, text size, motion, haptics). Single source of truth: Settings v2 `appearance`
+ * (services/settings.ts). The old `chiwiwi_theme.json` is imported once by initSettings. Mapping: light = Helios,
+ * dark = Nyx; motion 'reduce' = reducedMotion.
  */
-import { File, Paths } from 'expo-file-system';
+import { initSettings, settingsStore, updateSection } from '../services/settings.ts';
+import { defaultPrefs, parsePrefs, type AppearancePrefs } from './theme';
 
-export type ThemePref = 'system' | 'light' | 'dark';
+export type { AppearancePrefs, MotionPref, ThemePref } from './theme';
+export { defaultPrefs } from './theme';
 
-const FILE_NAME = 'chiwiwi_theme.json';
-const file = () => new File(Paths.document, FILE_NAME);
-
-export async function loadThemePref(): Promise<ThemePref> {
+export async function loadAppearance(): Promise<AppearancePrefs> {
   try {
-    const f = file();
-    if (f.exists) {
-      const pref = (JSON.parse(await f.text()) as { pref?: unknown }).pref;
-      if (pref === 'light' || pref === 'dark' || pref === 'system') return pref;
-    }
+    await initSettings();
+    const a = settingsStore.getState().appearance;
+    return parsePrefs({
+      pref: a.theme === 'helios' ? 'light' : a.theme === 'nyx' ? 'dark' : 'system',
+      textScale: a.textScale,
+      motion: a.reducedMotion ? 'reduce' : 'system',
+      haptics: a.haptics,
+    });
   } catch {
-    // Corrupt or unreadable: fall back to following the system.
+    return defaultPrefs;
   }
-  return 'system';
 }
 
-export function saveThemePref(pref: ThemePref): void {
-  try {
-    const f = file();
-    if (!f.exists) f.create({ intermediates: true });
-    f.write(JSON.stringify({ pref }));
-  } catch {
-    // A preference is a convenience; never crash for it.
-  }
+export function saveAppearance(p: AppearancePrefs): void {
+  updateSection('appearance', {
+    theme: p.pref === 'light' ? 'helios' : p.pref === 'dark' ? 'nyx' : 'system',
+    textScale: p.textScale,
+    reducedMotion: p.motion === 'reduce',
+    haptics: p.haptics,
+  });
 }

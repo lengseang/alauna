@@ -2,32 +2,55 @@ import React, { useRef } from 'react';
 import { Pressable, View } from 'react-native';
 import { hit, makeStyles, useTheme } from '../theme';
 import { Icon, type IconName } from './Icon';
+import { Switch } from './Switch';
 import { Text } from './Text';
 
-export interface RowProps {
+export interface ListRowProps {
   title: string;
+  /** One or two lines of muted detail under the title. */
   subtitle?: string;
+  /** Trailing current value, e.g. "Nyx", "4 threads", "2.7 GB". Read with the title. */
+  value?: string;
+  /** Nav row: shows a chevron. (With `selected` it becomes a radio row; with `onSwitch` a switch row.) */
   onPress?: () => void;
-  /** Leading icon (use sparingly: drawer navigation only). */
-  icon?: IconName;
-  /** Pass true/false to make this a radio-style choice (check mark on the chosen one). */
+  /** Switch row: the WHOLE row toggles (one 56dp target), the square Switch is its visual. */
+  switchValue?: boolean;
+  onSwitch?: (next: boolean) => void;
+  /** Radio row: pass true/false; the chosen one shows a check. */
   selected?: boolean;
-  /** Replaces the default trailing arrow/check. */
+  /** Leading icon (sparingly: settings hub and drawer only). */
+  icon?: IconName;
+  /** Replaces the default trailing chevron/check/switch. */
   right?: React.ReactNode;
   /** Danger-colored title (e.g. "Forget everything"). */
   destructive?: boolean;
+  disabled?: boolean;
   accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
 /**
- * List row on the page background (no box). >= 56dp tall. A tappable row shows a forward arrow; a choice shows a check.
- * Rows are separated by <Divider />, not by cards.
+ * The list row: label / value / chevron / switch / check, on the page (no box), >= 56dp. Rows are separated by
+ * <Divider />, grouped under a <SectionHeader />. Dense settings stay calm because every row has the same rhythm.
  */
-export function Row({ title, subtitle, onPress, icon, selected, right, destructive, accessibilityLabel }: RowProps) {
+export function ListRow({ title, subtitle, value, onPress, switchValue, onSwitch, selected, icon, right, destructive, disabled, accessibilityLabel, accessibilityHint }: ListRowProps) {
   const { colors } = useTheme();
   const s = useStyles();
   const last = useRef(0);
-  const choice = selected !== undefined;
+  const isSwitch = onSwitch !== undefined;
+  const isChoice = selected !== undefined;
+  const press = isSwitch ? () => onSwitch(!switchValue) : onPress;
+
+  const trailing =
+    right ??
+    (isSwitch ? (
+      <Switch value={!!switchValue} />
+    ) : selected ? (
+      <Icon name="check" color={colors.accent} />
+    ) : !isChoice && onPress ? (
+      <Icon name="chevron" color={colors.muted} />
+    ) : null);
+
   const body = (
     <>
       {icon ? <Icon name={icon} color={colors.muted} /> : null}
@@ -41,30 +64,44 @@ export function Row({ title, subtitle, onPress, icon, selected, right, destructi
           </Text>
         ) : null}
       </View>
-      {right ?? (selected ? <Icon name="check" color={colors.accent} /> : !choice && onPress ? <Icon name="back" color={colors.muted} rotate={180} /> : null)}
+      {value ? (
+        <Text variant="small" numberOfLines={1} style={s.value}>
+          {value}
+        </Text>
+      ) : null}
+      {trailing}
     </>
   );
-  if (!onPress) return <View style={s.row}>{body}</View>;
+  if (!press) return <View style={[s.row, disabled && s.disabled]}>{body}</View>;
+  const spoken = accessibilityLabel ?? (value && !isSwitch ? `${title}, ${value}` : title);
   return (
     <Pressable
-      accessibilityRole={choice ? 'radio' : 'button'}
-      accessibilityLabel={accessibilityLabel ?? title}
-      accessibilityState={choice ? { checked: selected } : undefined}
+      accessibilityRole={isSwitch ? 'switch' : isChoice ? 'radio' : 'button'}
+      accessibilityLabel={spoken}
+      accessibilityHint={accessibilityHint ?? (isSwitch || isChoice ? undefined : subtitle)}
+      accessibilityState={isSwitch ? { checked: !!switchValue, disabled: !!disabled } : isChoice ? { checked: selected, disabled: !!disabled } : { disabled: !!disabled }}
+      disabled={disabled}
       onPress={() => {
         const now = Date.now();
         if (now - last.current < 300) return; // double-tap guard
         last.current = now;
-        onPress();
+        press();
       }}
-      style={({ pressed }) => [s.row, pressed && s.pressed]}
+      style={({ pressed }) => [s.row, pressed && s.pressed, disabled && s.disabled]}
     >
       {body}
     </Pressable>
   );
 }
 
-const useStyles = makeStyles(({ colors, space, radius }) => ({
-  row: { minHeight: hit + space.sm, flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm, paddingHorizontal: space.sm, borderRadius: radius.md },
+/** v1 name; same component. */
+export const Row = ListRow;
+export type RowProps = ListRowProps;
+
+const useStyles = makeStyles(({ colors, space }) => ({
+  row: { minHeight: hit + space.sm, flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.sm, paddingHorizontal: space.sm },
   text: { flex: 1, gap: 2 },
+  value: { maxWidth: '45%', textAlign: 'right' },
   pressed: { backgroundColor: colors.accentSoft },
+  disabled: { opacity: 0.45 },
 }));
