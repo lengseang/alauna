@@ -3,10 +3,12 @@
   "compilerOptions": {
     "strict": true,
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "noEmit": true
   },
   "exclude": [
     "node_modules",
-    "test"
+    "test",
+    "tsconfig.check.json"
   ]
 }

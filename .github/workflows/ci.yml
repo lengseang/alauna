@@ -1,0 +1,51 @@
+name: CI
+
+# Fast gate on every push / PR: strict typecheck (app + tests), unit tests, and a real Metro/Hermes bundle.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * 1'   # weekly: re-verify every catalog URL against Hugging Face
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: mobile
+      - name: Typecheck app + tests, run unit tests
+        run: npm run check
+        working-directory: mobile
+      - name: Root tests
+        run: node --no-warnings --experimental-strip-types --test test/suite.test.js
+      - name: Bundle for Android (proves the JS compiles under Metro/Hermes)
+        run: npx expo export --platform android --output-dir /tmp/chiwiwi-export
+        working-directory: mobile
+        env:
+          CI: '1'
+
+  catalog:
+    # Network-dependent, so it only runs on the weekly schedule or by hand (never blocks a push).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify every model URL, size and sha256 on Hugging Face
+        run: node --no-warnings --experimental-strip-types scripts/verify-catalog.mjs

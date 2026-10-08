@@ -1,89 +1,77 @@
-# CHIWIWI ⚡ Sovereign On-Device AI
+# CHIWIWI
 
-> **100% Offline • Zero Telemetry • On-Device GGUF Inference • Galaxy S23 Ultra Native**
+[![CI](https://github.com/lengseang/chiwiwi/actions/workflows/ci.yml/badge.svg)](https://github.com/lengseang/chiwiwi/actions/workflows/ci.yml)
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Android%20%7C%20iOS-black.svg)]()
-[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
+**A private AI chat app that runs entirely on your phone.** You download a model once from Hugging Face;
+after that, chatting uses no internet, no account and no analytics.
 
-CHIWIWI is an open-source, sovereign, offline-first personal intelligence agent built for the **Samsung Galaxy S23 Ultra** (Snapdragon 8 Gen 2 / 12GB LPDDR5X) and mobile devices. It runs quantized GGUF weights locally with zero cloud dependencies, zero external API keys, and zero telemetry.
+It works on any 64-bit Android phone (it reads your real device and RAM and recommends models that fit),
+not on one specific phone.
 
----
+## How it works for a user
 
-## 🌟 Key Architecture & Capabilities
+1. Install and open. The welcome screen shows **your** phone and what the app needs.
+2. **Choose where to keep data** (a folder you pick, or private app storage). Nothing works until you do.
+3. **Model Hub:** pick a model that fits your phone and download it (progress, speed, ETA, pause/resume).
+4. The app **verifies** it: file check, load into memory, and a real test reply.
+5. **Chat.** Replies stream in, with a live "what is the AI doing" panel (reading, thinking, writing) and a clean final answer.
 
-1. **Sub-Millisecond Decision Gateway (`<0.1ms`)**:
-   - Zero-overhead shorthand command routing and error log classification before calling LLM layers.
-2. **Speculative Turbo Decoding**:
-   - Pairs heavy Target foundation models (e.g. `Llama 3.1 8B`) with ultra-fast Draft models (e.g. `SmolLM3 1.7B` @ 58 tok/s) to achieve **2.8x speedup** on mobile DRAM.
-3. **KV-Cache Attention Freezing**:
-   - Pre-computes and caches system prompt and personality matrices to disk, slashing Time-To-First-Token (TTFT) from 1,500ms down to **<15ms**.
-4. **Sovereign Model Vault (22 Models)**:
-   - Built-in calibrated database for Galaxy S23 Ultra across **Grade S** (Titans 7B-12B), **Grade B** (Sweet Spot 3B-4B), and **Grade C** (Ultra-Light 1B-2B).
-   - Real-time search, Boolean `AND` / `OR` capability multi-filtering (`Text`, `Vision`, `Voice`, `Code`, `Video`), and sort controls.
-5. **Direct Hugging Face Resumable Downloader**:
-   - Byte-range HTTP resumption, ETA/speed telemetry, and **pure TypeScript streaming SHA-256 verification** without out-of-memory risks.
-6. **Hermetic Storage & Media Sandbox**:
-   - Automated `.nomedia` sandboxing preventing AI images or attachments from leaking to Google Photos or Android MediaStore.
-   - Claude-style rolling context compaction keeping long chat histories compact and lossless.
-7. **Affective Souls Engine**:
-   - 3D PAD Emotional Vector (Pleasure, Arousal, Dominance) with dual-tier customization (Global baseline + Per-chat overrides).
-8. **Live Voice Mode**:
-   - Punctuation-based streaming chunker emitting TTS audio packets with ~400ms conversational latency.
-   - OLED black theme, 100% featherweight SVG line icons, zero emojis.
+## What is real, what is not
 
----
+| | |
+|---|---|
+| Real on-device inference (llama.cpp via llama.rn) | Yes |
+| Resumable, verified model downloads | Yes |
+| 21 models checked against the live Hugging Face Hub | Yes |
+| Device-aware fit ratings, context size | Yes |
+| Streaming chat with real reasoning view, history, stop, retry, attachments (text files), memory, incognito | Yes |
+| Voice conversation, image understanding, speculative decoding, app lock | **Not built** - see [docs/ROADMAP.md](docs/ROADMAP.md) |
+| Tested on a physical phone | **Not yet by the automated pipeline** - run [docs/QA_PLAN.md](docs/QA_PLAN.md) sections 1-3 |
 
-## 📂 Project Structure
+Automated checks (typecheck, 96 unit tests, Android JS bundle, a successful native Android build, a live
+catalog check, and a run against a real Qwen3 model) are listed in [docs/QA_PLAN.md](docs/QA_PLAN.md).
 
-```
-CHIWIWI/
-├── docs/
-│   ├── ARCHITECTURE.md          # Complete system specifications
-│   └── ENTERPRISE_PLAN.md       # Open-source roadmap & MLLM adaptation
-├── mobile/                      # Expo SDK 57 / React Native application
-│   ├── src/
-│   │   ├── components/          # Pure SVG line icon library & modals
-│   │   ├── engine/              # Gateway, KV Cache, Speculative Harness, Voice
-│   │   ├── screens/             # Mihon/Material You Settings Hub & Vault
-│   │   ├── services/            # HF Downloader, Model Manager, Memory Vault
-│   │   └── types/               # Soul archetypes, S23 Ultra model database
-│   ├── app.json                 # Mobile metadata & audio permissions
-│   └── package.json
-├── preview/
-│   └── index.html               # Desktop simulator & web demo
-└── test/
-    ├── mobile.test.js           # Unit test suite
-    └── enterprise.test.js       # Speculative & integration test suite
-```
+## Quick start (developers)
 
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js 20+ (Node 22 recommended)
-- Android SDK / Expo CLI
-
-### 1. Install & Run Tests
 ```bash
 cd mobile
-npm install
-npm test
+npm ci
+npm run check        # strict typecheck (app + tests) + 96 unit tests, ~5 s
+npx expo export --platform android   # compile the JS
 ```
 
-### 2. Start Expo Development Server
-```bash
-npx expo start
+The app contains native code, so it needs a real build (it cannot run in Expo Go):
+see **[docs/BUILDING.md](docs/BUILDING.md)**: run live on your phone over a USB cable with no rebuild per code change,
+arm64-only release builds (3m38s measured on 4 vCPUs), and a GitHub Actions workflow with no queue.
+
+## Repository map
+
+```
+mobile/                 the app (Expo SDK 57, React Native 0.86, llama.rn)
+  src/core/             pure logic, unit-tested under Node
+  src/services/         phone adapters + app-wide stores
+  src/ui/               screens and components
+  test/                 node:test suites
+scripts/                verify-catalog.mjs, real-model-check.mjs
+docs/                   REQUIREMENTS, ARCHITECTURE, BUILDING, QA_PLAN, AUDIT, ROADMAP
+.github/workflows/      CI + APK build
+preview/index.html      static design mock (not the app)
 ```
 
-### 3. Build Production Standalone APK
-```bash
-# Build standalone Android APK
-npx eas build -p android --profile preview
-```
+| Doc | What it answers |
+|---|---|
+| [REQUIREMENTS](docs/REQUIREMENTS.md) | What the product must do (the original prompts, restructured, with IDs) |
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | How it is built and why |
+| [BUILDING](docs/BUILDING.md) | How to build fast |
+| [QA_PLAN](docs/QA_PLAN.md) | How to prove it works, on a phone |
+| [AUDIT](docs/AUDIT.md) | Every control and function reviewed |
+| [ROADMAP](docs/ROADMAP.md) | What is not built yet |
 
----
+## Privacy
 
-## 📜 License
-Apache-2.0 © 2026 Leng Seang. Sovereign AI Foundation.
+Chat never touches the network. The only network use is the Model Hub downloading from `huggingface.co`.
+Chats, memory and models are plain files in the storage folder you chose (not encrypted).
+
+## License
+
+Not finalised: see the housekeeping note in [docs/ROADMAP.md](docs/ROADMAP.md).
