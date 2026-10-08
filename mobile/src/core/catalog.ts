@@ -375,3 +375,66 @@ export function draftOptions(target: ModelSpec, catalog: readonly ModelSpec[] = 
 export function draftTargets(draft: ModelSpec, catalog: readonly ModelSpec[] = MODEL_CATALOG): ModelSpec[] {
   return catalog.filter((t) => draftOptions(t, [draft, t]).some((o) => o.kind === 'model' && o.spec.id === draft.id));
 }
+
+// -------------------------------------------------------------------- parameter bands, speed hint, image tools
+
+export type ParamBand = 'xs' | 's' | 'm' | 'l' | 'xl';
+
+/** Size bands for the Vault's "Parameters" grouping. Contiguous (no gaps): 2-2.5B counts as 1-2B, 4.0-5B as 3-4B. */
+export const PARAM_BANDS: readonly { id: ParamBand; label: string; maxB: number }[] = [
+  { id: 'xs', label: '\u22641B', maxB: 1.0 },
+  { id: 's', label: '1\u20132B', maxB: 2.5 },
+  { id: 'm', label: '3\u20134B', maxB: 5 },
+  { id: 'l', label: '7\u20139B', maxB: 10 },
+  { id: 'xl', label: '10\u201314B', maxB: Infinity },
+];
+
+export function paramBand(spec: Pick<ModelSpec, 'paramsB'>): ParamBand {
+  return (PARAM_BANDS.find((b) => spec.paramsB <= b.maxB) ?? PARAM_BANDS[PARAM_BANDS.length - 1]).id;
+}
+
+/** The 'Uncensored · small' quick filter: refusal-free models of at most 4B parameters (Gemma 4 E2B counts: 2B effective). */
+export const SMALL_MAX_B = 4.7;
+export const isSmallUncensored = (m: Pick<ModelSpec, 'contentPolicy' | 'paramsB'>): boolean => m.contentPolicy === 'Uncensored' && m.paramsB <= SMALL_MAX_B;
+
+/**
+ * "Fast on phone" class from the file size alone. Phone decoding is limited by memory bandwidth, so a smaller file
+ * generates faster. This is a class, not a measurement: the app shows real tokens/s only after a model has run.
+ */
+export function speedHint(spec: Pick<ModelSpec, 'sizeBytes'>): { label: string; fast: boolean } {
+  const gb = spec.sizeBytes / 1e9;
+  if (gb <= 1) return { label: 'Fast on phone: very fast class (under 1 GB)', fast: true };
+  if (gb <= 2.5) return { label: 'Fast on phone: fast class (1-2.5 GB)', fast: true };
+  if (gb <= 4) return { label: 'Moderate speed class (2.5-4 GB)', fast: false };
+  return { label: 'Slower class (over 4 GB)', fast: false };
+}
+
+/** Image generation / upscaling tools the owner asked to keep visible. llama.rn cannot run them: never downloadable. */
+export interface ImageToolSpec {
+  id: string;
+  name: string;
+  kind: 'image-tool';
+  status: 'engine-unavailable';
+  /** Reference source only (not downloaded by this app). */
+  sourceUrl: string;
+  license: string;
+  uniqueTag: string;
+  bestFor: string;
+  /** Why it is not available and what is needed. */
+  note: string;
+  /** Memory need: not measured because the tool cannot run in this build. */
+  ramNote: string;
+}
+
+export const IMAGE_TOOLS: readonly ImageToolSpec[] = [
+  {
+    id: 'sd-turbo', name: 'SD-Turbo', kind: 'image-tool', status: 'engine-unavailable', sourceUrl: 'https://huggingface.co/stabilityai/sd-turbo',
+    license: 'see model card', uniqueTag: '#TextToImage', bestFor: 'Generating a picture from text in one to four steps.',
+    note: 'Needs an image-diffusion/ONNX engine \u2014 not in this build.', ramNote: 'Memory use not measured yet (cannot run in this build).',
+  },
+  {
+    id: 'real-esrgan', name: 'Real-ESRGAN x4', kind: 'image-tool', status: 'engine-unavailable', sourceUrl: 'https://huggingface.co/qualcomm/Real-ESRGAN-x4plus',
+    license: 'bsd-3-clause', uniqueTag: '#Upscaler', bestFor: 'Sharpening and enlarging photos four times.',
+    note: 'Needs an image-diffusion/ONNX engine \u2014 not in this build.', ramNote: 'Memory use not measured yet (cannot run in this build).',
+  },
+];

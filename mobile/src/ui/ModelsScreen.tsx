@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, SectionList, View } from 'react-native';
-import { ALL_CAPABILITIES, CAPABILITY_INFO, MODEL_CATALOG, libraryFacets, type ModelGrade } from '../core/catalog.ts';
+import { ALL_CAPABILITIES, CAPABILITY_INFO, IMAGE_TOOLS, MODEL_CATALOG, PARAM_BANDS, isSmallUncensored, libraryFacets, paramBand, type ModelGrade } from '../core/catalog.ts';
 import { defaultContext, recommendModel } from '../core/fit.ts';
 import { formatBytes, formatDuration, formatSpeed } from '../core/format.ts';
 import { getDeviceProfile } from '../services/device.ts';
@@ -34,6 +34,7 @@ import {
   sectionsFor,
   sortInfo,
   toggle,
+  type GroupBy,
   type VaultFilters,
 } from './vaultLogic';
 
@@ -53,6 +54,7 @@ export function ModelsScreen() {
   const installedIds = useInstalledIds();
   const [f, setF] = useState<VaultFilters>(DEFAULT_FILTERS);
   const [sortOpen, setSortOpen] = useState(false);
+  const [groupBy, setGroupBy] = useState<GroupBy>('grade');
   const nCtx = settings.compute.nCtx ?? defaultContext(ram);
 
   // Re-read the disk whenever this screen opens (installed models, resumable partials) and restore the saved parallelism.
@@ -63,10 +65,12 @@ export function ModelsScreen() {
   const facets = useMemo(() => libraryFacets(), []);
   const fitCount = useMemo(() => (ram ? MODEL_CATALOG.filter((m) => fitVerdict(m, ram, nCtx).rating !== 'too_heavy').length : 0), [ram, nCtx]);
   const models = useMemo(() => runVaultQuery(f, { ramBytes: ram, nCtx, installedIds }), [f, ram, nCtx, installedIds]);
-  const sections = useMemo(() => sectionsFor(models, f.sort, { ramBytes: ram, nCtx }), [models, f.sort, ram, nCtx]);
+  const sections = useMemo(() => sectionsFor(models, f.sort, { ramBytes: ram, nCtx }, groupBy), [models, f.sort, ram, nCtx, groupBy]);
+  const smallCount = useMemo(() => MODEL_CATALOG.filter(isSmallUncensored).length, []);
+  const bandCounts = useMemo(() => PARAM_BANDS.map((b) => MODEL_CATALOG.filter((m) => paramBand(m) === b.id).length), []);
   const recommended = useMemo(() => recommendModel(MODEL_CATALOG, ram), [ram]);
   const showRecommended = !!recommended && !installedIds.includes(recommended.id) && activeFilterCount(f) === 0 && !f.search.trim();
-  const grouped = sortInfo(f.sort).grouped;
+  const grouped = groupBy === 'params' || sortInfo(f.sort).grouped;
 
   const set = useCallback((patch: Partial<VaultFilters>) => setF((cur) => ({ ...cur, ...patch })), []);
   const open = useCallback((id: string) => push('models/detail', { id }), []);
@@ -91,6 +95,11 @@ export function ModelsScreen() {
     <>
       <SearchField label="Search models" value={f.search} onChangeText={(search) => set({ search })} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={s.chipScroll} contentContainerStyle={s.chips}>
+        <Tag label="Uncensored" count={facets.policy.Uncensored} selected={f.policies.includes('Uncensored')} onPress={() => set({ policies: toggle(f.policies, 'Uncensored') })} tone="accent" accessibilityHint="Shows only models with refusals removed" />
+        <Tag label="Uncensored · small (≤4B)" count={smallCount} selected={f.smallUncensored} onPress={() => set({ smallUncensored: !f.smallUncensored })} tone="accent" accessibilityHint="Uncensored models of at most 4 billion parameters, quick on a phone" />
+        {PARAM_BANDS.map((b, i) => (
+          <Tag key={b.id} label={b.label} count={bandCounts[i]} selected={f.bands.includes(b.id)} onPress={() => set({ bands: toggle(f.bands, b.id) })} accessibilityHint={`Models with ${b.label} parameters`} />
+        ))}
         {ALL_CAPABILITIES.map((c) => (
           <Tag key={c} label={CAPABILITY_INFO[c].label} count={facets.capabilities[c]} selected={f.caps.includes(c)} onPress={() => set({ caps: toggle(f.caps, c) })} accessibilityHint={CAPABILITY_INFO[c].meaning} />
         ))}
@@ -98,10 +107,22 @@ export function ModelsScreen() {
           <Tag key={g} label={`Grade ${g}`} count={facets.grades[g]} selected={f.grades.includes(g)} onPress={() => set({ grades: toggle(f.grades, g) })} />
         ))}
         <Tag label="Standard" count={facets.policy.Standard} selected={f.policies.includes('Standard')} onPress={() => set({ policies: toggle(f.policies, 'Standard') })} />
-        <Tag label="Uncensored" count={facets.policy.Uncensored} selected={f.policies.includes('Uncensored')} onPress={() => set({ policies: toggle(f.policies, 'Uncensored') })} />
         {ram ? <Tag label="Fits this phone" count={fitCount} selected={f.fits} onPress={() => set({ fits: !f.fits })} accessibilityHint="Hides models that need more memory than this phone has" /> : null}
         <Tag label="Installed" count={installedIds.length} selected={f.installed} onPress={() => set({ installed: !f.installed })} />
       </ScrollView>
+      <View style={s.controls}>
+        <View style={s.match}>
+          <Segmented
+            label="Group by"
+            options={[
+              { value: 'grade', label: 'Group: Grade' },
+              { value: 'params', label: 'Group: Parameters' },
+            ]}
+            value={groupBy}
+            onChange={setGroupBy}
+          />
+        </View>
+      </View>
       <View style={s.controls}>
         <View style={s.match}>
           <Segmented
@@ -139,6 +160,15 @@ export function ModelsScreen() {
     </View>
   );
 
+  const imageTools = (
+    <View style={s.footer}>
+      <SectionHeader title="Image tools" hint="Not downloadable: llama.rn cannot run image models in this build." />
+      {IMAGE_TOOLS.map((tool) => (
+        <Row key={tool.id} title={`${tool.name} ${tool.uniqueTag}`} subtitle={`${tool.bestFor} ${tool.note} ${tool.ramNote}`} value="Engine unavailable" />
+      ))}
+    </View>
+  );
+
   const empty = (
     <View style={s.empty}>
       <Text variant="strong">{f.caps.includes('Video') && models.length === 0 ? 'No model can watch video yet' : 'No models match'}</Text>
@@ -163,7 +193,7 @@ export function ModelsScreen() {
         ItemSeparatorComponent={Divider}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={header}
-        ListFooterComponent={footer}
+        ListFooterComponent={<>{footer}{imageTools}</>}
         ListEmptyComponent={empty}
         contentContainerStyle={s.list}
         keyboardShouldPersistTaps="handled"

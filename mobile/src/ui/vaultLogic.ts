@@ -4,13 +4,17 @@
  */
 import {
   MODEL_CATALOG,
+  PARAM_BANDS,
   estimateModelRam,
+  isSmallUncensored,
+  paramBand,
   getModel,
   queryLibrary,
   type LibrarySort,
   type ModelCapability,
   type ModelGrade,
   type ModelSpec,
+  type ParamBand,
 } from '../core/catalog.ts';
 import type { DownloadState, FileKind } from '../core/downloadManager.ts';
 import type { EngineState } from '../core/engineManager.ts';
@@ -49,13 +53,19 @@ export interface VaultFilters {
   installed: boolean;
   match: 'AND' | 'OR';
   sort: LibrarySort;
+  /** Parameter size bands (empty = all). */
+  bands: ParamBand[];
+  /** Quick filter: uncensored models of at most 4B parameters. */
+  smallUncensored: boolean;
 }
 
-export const DEFAULT_FILTERS: VaultFilters = { search: '', caps: [], grades: [], policies: [], fits: false, installed: false, match: 'AND', sort: 'recommended' };
+export type GroupBy = 'grade' | 'params';
+
+export const DEFAULT_FILTERS: VaultFilters = { search: '', caps: [], grades: [], policies: [], fits: false, installed: false, match: 'AND', sort: 'recommended', bands: [], smallUncensored: false };
 
 /** Chips switched on (the search text and the sort are not chips). */
 export function activeFilterCount(f: VaultFilters): number {
-  return f.caps.length + f.grades.length + f.policies.length + (f.fits ? 1 : 0) + (f.installed ? 1 : 0);
+  return f.caps.length + f.grades.length + f.policies.length + (f.fits ? 1 : 0) + (f.installed ? 1 : 0) + f.bands.length + (f.smallUncensored ? 1 : 0);
 }
 
 export function toggle<T>(list: readonly T[], v: T): T[] {
@@ -85,6 +95,8 @@ export function runVaultQuery(f: VaultFilters, env: QueryEnv, catalog: readonly 
     },
     catalog,
   );
+  if (f.bands.length > 0) out = out.filter((m) => f.bands.includes(paramBand(m)));
+  if (f.smallUncensored) out = out.filter(isSmallUncensored);
   if (f.fits && env.ramBytes) out = out.filter((m) => fitVerdict(m, env.ramBytes, env.nCtx).rating !== 'too_heavy');
   return out;
 }
@@ -122,7 +134,13 @@ const FIT_RANK: Record<FitRating, number> = { great: 0, ok: 1, tight: 2, unknown
  * Grade groups for "Best fit" (the group holding the best-fitting model first, so the top of the list always suits this
  * phone) and "Grade" (S, B, C). Every other order is one flat list so the order the user asked for is the order they see.
  */
-export function sectionsFor(models: readonly ModelSpec[], sort: LibrarySort, env: Pick<QueryEnv, 'ramBytes' | 'nCtx'>): VaultSection[] {
+export function sectionsFor(models: readonly ModelSpec[], sort: LibrarySort, env: Pick<QueryEnv, 'ramBytes' | 'nCtx'>, groupBy: GroupBy = 'grade'): VaultSection[] {
+  if (groupBy === 'params') {
+    // Size bands keep the chosen sort order inside each band (models arrive already sorted).
+    return PARAM_BANDS.map((b) => ({ b, data: models.filter((m) => paramBand(m) === b.id) }))
+      .filter((x) => x.data.length > 0)
+      .map(({ b, data }) => ({ key: `p-${b.id}`, title: `${b.label} parameters`, hint: `${data.length} ${data.length === 1 ? 'model' : 'models'}, ${data.filter((m) => m.contentPolicy === 'Uncensored').length} uncensored.`, data }));
+  }
   if (!sortInfo(sort).grouped) {
     return models.length === 0 ? [] : [{ key: 'all', title: sortInfo(sort).label, hint: `${models.length} ${models.length === 1 ? 'model' : 'models'}`, data: [...models] }];
   }
@@ -248,6 +266,8 @@ export function licenseNote(license: string): { level: 'warn'; text: string } | 
   if (l.startsWith('lfm')) return { level: 'warn', text: 'Custom license with limits on commercial use. Read it before you use this model in a product.' };
   if (l.includes('minicpm')) return { level: 'warn', text: 'Custom license with its own terms for commercial use. Read it before you use this model in a product.' };
   if (l.startsWith('gemma')) return { level: 'warn', text: 'Gemma terms of use: a custom license with usage rules. Read it before you use this model in a product.' };
+  if (l.startsWith('cc-by-nc')) return { level: 'warn', text: 'Non-commercial license (CC BY-NC). Not for commercial use.' };
+  if (l === 'other') return { level: 'warn', text: 'Custom license from the model author. Read the model card before you use this model in a product.' };
   if (l.startsWith('llama')) return { level: 'warn', text: 'Llama community license: custom conditions apply. Read it before you use this model in a product.' };
   return null;
 }

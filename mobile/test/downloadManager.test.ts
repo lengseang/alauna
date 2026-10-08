@@ -10,7 +10,7 @@ const HTML = new TextEncoder().encode('<!DO');
 const specA: ModelSpec = {
   id: 'a', name: 'A', family: 'A', paramsB: 1, grade: 'C', role: 'Fast', priority: 1, kvBytesPerToken: 1000, repo: 'o/a', filename: 'a.gguf', sizeBytes: 1000,
   sha256: '', quantization: 'Q4_K_M', capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', description: '',
-  license: 'apache-2.0', contextLength: 4096, chatTemplate: 'chatml', draftKey: 'a', published: '2025-01-01',
+  uniqueTag: '#T', bestFor: 't', license: 'apache-2.0', contextLength: 4096, chatTemplate: 'chatml', draftKey: 'a', published: '2025-01-01',
 };
 const specB: ModelSpec = { ...specA, id: 'b', name: 'B', repo: 'o/b', filename: 'b.gguf' };
 const HASH = 'ab'.repeat(32);
