@@ -1,14 +1,22 @@
 import React, { useMemo } from 'react';
 import { ScrollView, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { parseMarkdown, type Block, type Inline } from '../core/markdown.ts';
+import { showToast } from '../services/toast.ts';
 import { makeStyles, useTheme } from '../theme';
+import { Button } from './Button';
 import { Text } from './Text';
+
+const copyCode = async (code: string) => {
+  await Clipboard.setStringAsync(code);
+  showToast('Code copied');
+};
 
 function Inlines({ items, bold }: { items: Inline[]; bold?: boolean }) {
   const s = useStyles();
   const { type } = useTheme();
   return (
-    <Text variant={bold ? 'strong' : 'body'} selectable>
+    <Text variant={bold ? 'strong' : 'body'}>
       {items.map((it, i) => {
         if (it.kind === 'bold')
           return (
@@ -41,7 +49,7 @@ function BlockView({ block }: { block: Block }) {
       return <Inlines items={block.inlines} />;
     case 'h':
       return (
-        <Text variant={block.level === 1 ? 'title' : 'strong'} selectable>
+        <Text variant={block.level === 1 ? 'title' : 'strong'}>
           {block.inlines.map((i) => i.text).join('')}
         </Text>
       );
@@ -71,9 +79,12 @@ function BlockView({ block }: { block: Block }) {
     case 'code':
       return (
         <View style={s.codeBox}>
-          {block.lang ? <Text variant="small">{block.lang}</Text> : null}
+          <View style={s.codeHead}>
+            <Text variant="small">{block.lang || 'code'}</Text>
+            {block.open ? null : <Button label="Copy" variant="text" accessibilityLabel={`Copy ${block.lang || 'code'}`} onPress={() => copyCode(block.code)} />}
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <Text variant="small" tone="text" selectable style={s.code}>
+            <Text variant="small" tone="text" style={s.code}>
               {block.code}
               {block.open ? ' ▍' : ''}
             </Text>
@@ -99,7 +110,7 @@ export const Markdown = React.memo(function Markdown({ text }: { text: string })
   );
 });
 
-const useStyles = makeStyles(({ colors, space, radius }) => ({
+const useStyles = makeStyles(({ colors, space, line }) => ({
   root: { gap: space.md },
   fill: { flex: 1 },
   italic: { fontStyle: 'italic' },
@@ -109,6 +120,7 @@ const useStyles = makeStyles(({ colors, space, radius }) => ({
   list: { gap: space.xs },
   li: { flexDirection: 'row', gap: space.sm },
   bullet: { width: space.xl },
-  codeBox: { backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: space.md, gap: space.xs },
+  codeBox: { backgroundColor: colors.surface, borderLeftWidth: 2, borderLeftColor: colors.borderStrong, paddingHorizontal: space.md, paddingBottom: space.md, gap: space.xs },
+  codeHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48, marginRight: -space.md, borderBottomWidth: line, borderBottomColor: colors.border },
   code: { fontFamily: 'monospace', lineHeight: 20 },
 }));

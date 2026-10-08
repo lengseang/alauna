@@ -5,23 +5,31 @@ import { getModel } from '../core/catalog.ts';
 import { useEngineStatus } from '../services/engine.ts';
 import { useSettings } from '../services/settings.ts';
 import { hit, makeStyles } from '../theme';
+import { eclipseFor } from './chatLogic';
+import { Eclipse } from './Eclipse';
 import { describeEngine } from './engineStatus';
+import { Icon } from './Icon';
 import { IconButton } from './IconButton';
-import { PulseDot } from './Motion';
 import { Text } from './Text';
 import { useIsInstalled } from './useInstalled';
 
 interface Props {
   onMenu: () => void;
   onModel: () => void;
+  onSoul: () => void;
+  onSettings: () => void;
   onNewChat: () => void;
+  /** This chat has its own soul (Soul button shows selected). */
+  soulOverride: boolean;
+  /** This chat is not saved: the bar says so. */
+  incognito: boolean;
 }
 
 /**
- * Exactly three controls: menu (left), model name + live status (centre, opens the model sheet), new chat (right).
- * The status line is the proof of life: Loading 42% -> Ready . CPU, straight from the engine store.
+ * Menu (left), model name + Eclipse + live status (centre, opens the model sheet), this chat's Soul, Settings and
+ * New chat (right). The status line and the Eclipse are the proof of life, straight from the engine store.
  */
-export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onNewChat }: Props) {
+export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSoul, onSettings, onNewChat, soulOverride, incognito }: Props) {
   const insets = useSafeAreaInsets();
   const s = useStyles();
   const eng = useEngineStatus();
@@ -35,29 +43,33 @@ export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onNe
       <IconButton icon="menu" label="Open menu" onPress={onMenu} />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${name}. ${line.text}`}
-        accessibilityHint="Opens the model list"
+        accessibilityLabel={`${name}. ${line.text}${incognito ? '. Incognito chat, not saved' : ''}`}
+        accessibilityHint="Switch, load or unload the model"
         onPress={onModel}
         style={({ pressed }) => [s.model, pressed && s.pressed]}
       >
-        <Text variant="strong" numberOfLines={1}>
-          {name}
-        </Text>
-        <View style={s.status}>
-          {line.busy ? <PulseDot size={6} /> : null}
-          <Text variant="small" tone={line.tone} numberOfLines={1}>
-            {line.text}
+        <View style={s.nameRow}>
+          <Eclipse state={eclipseFor(line.kind)} progress={eng.progress} size={18} />
+          {incognito ? <Icon name="incognito" size={18} /> : null}
+          <Text variant="strong" numberOfLines={1} style={s.shrink}>
+            {name}
           </Text>
         </View>
+        <Text variant="small" tone={line.tone} numberOfLines={1}>
+          {incognito ? `Incognito · ${line.text}` : line.text}
+        </Text>
       </Pressable>
+      <IconButton icon="persona" label={soulOverride ? 'This chat’s soul (custom)' : 'This chat’s soul'} selected={soulOverride} onPress={onSoul} />
+      <IconButton icon="settings" label="Settings" onPress={onSettings} />
       <IconButton icon="compose" label="New chat" onPress={onNewChat} />
     </View>
   );
 });
 
-const useStyles = makeStyles(({ colors, space, radius }) => ({
-  bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm, gap: space.xs, backgroundColor: colors.bg },
-  model: { flex: 1, minHeight: hit, alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: space.xs },
+const useStyles = makeStyles(({ colors, space, line }) => ({
+  bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, backgroundColor: colors.bg, borderBottomWidth: line, borderBottomColor: colors.border },
+  model: { flex: 1, minHeight: hit, justifyContent: 'center', paddingHorizontal: space.sm, paddingVertical: space.xs },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  shrink: { flexShrink: 1 },
   pressed: { backgroundColor: colors.accentSoft },
-  status: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
 }));

@@ -12,14 +12,16 @@ import { Ambient } from './Ambient';
 import { Button } from './Button';
 import { Card } from './Card';
 import { Notice } from './Notice';
+import { SectionHeader } from './SectionHeader';
 import { StoragePicker } from './StoragePicker';
 import { Text } from './Text';
 import { Wordmark } from './Wordmark';
 
 const NEEDS: Array<{ title: string; text: string }> = [
   { title: 'Storage', text: 'A folder for the AI models (1 to 7 GB each) and your chats. You choose it in the next step.' },
-  { title: 'Internet', text: 'Only to download models from Hugging Face. Chatting never uses the internet.' },
-  { title: 'Nothing else', text: 'No microphone, camera, contacts, location or accounts. No analytics.' },
+  { title: 'Internet', text: 'Only to download models from Hugging Face when you start a download. Chatting never uses the internet.' },
+  { title: 'Microphone and camera', text: 'Only if you talk to it or attach a photo. Android asks at that moment, never before.' },
+  { title: 'Nothing else', text: 'No contacts, location or accounts. No analytics.' },
 ];
 
 /**
@@ -50,9 +52,7 @@ export function OnboardingScreen() {
         {step === 1 ? (
           <>
             <Card>
-              <Text variant="label" tone="accent">
-                Your phone
-              </Text>
+              <SectionHeader index={1} title="Your phone" meander={false} />
               <Text variant="title">{device.name}</Text>
               <Text tone="muted">
                 {device.osName} {device.osVersion ?? ''}
@@ -66,7 +66,7 @@ export function OnboardingScreen() {
             </Card>
 
             <Card>
-              <Text variant="title">What CHIWIWI needs</Text>
+              <SectionHeader index={2} title="What CHIWIWI needs" meander={false} />
               {NEEDS.map((n) => (
                 <View key={n.title}>
                   <Text variant="strong">{n.title}</Text>
@@ -79,9 +79,8 @@ export function OnboardingScreen() {
           </>
         ) : (
           <>
-            <Text variant="title">Where should CHIWIWI keep its data?</Text>
+            <SectionHeader index={3} title="Where to keep your data" hint="Chats, memory and models. Nothing works until you choose; you can add more locations later." />
             {storage.status === 'unavailable' && storage.reason ? <Notice tone="danger">{storage.reason}</Notice> : null}
-            <Text tone="muted">Nothing works until you choose. You can change it later.</Text>
             <StoragePicker onDone={onStorageReady} />
             {storage.status !== 'unavailable' ? <Button label="Back" variant="text" onPress={() => setStep(1)} /> : null}
           </>

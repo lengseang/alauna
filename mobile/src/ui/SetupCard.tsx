@@ -1,10 +1,13 @@
 import React from 'react';
 import { View } from 'react-native';
-import type { ModelSpec } from '../core/catalog.ts';
+import { installSizeBytes, type ModelSpec } from '../core/catalog.ts';
+import { defaultContext } from '../core/fit.ts';
 import { formatBytes, formatDuration, formatPercent, formatSpeed } from '../core/format.ts';
+import { getDeviceProfile } from '../services/device.ts';
 import { downloads, useDownloadState } from '../services/downloads.ts';
 import { useEngineStatus } from '../services/engine.ts';
 import { downloadAndLoad, useSetup } from '../services/setup.ts';
+import { settingsStore } from '../services/settings.ts';
 import { showToast } from '../services/toast.ts';
 import { makeStyles } from '../theme';
 import { Button } from './Button';
@@ -13,6 +16,7 @@ import { push } from './nav';
 import { Notice } from './Notice';
 import { ProgressBar } from './ProgressBar';
 import { Text } from './Text';
+import { fitVerdict } from './vaultLogic';
 
 interface Props {
   spec: ModelSpec;
@@ -34,6 +38,9 @@ export function SetupCard({ spec, deviceName, tone }: Props) {
   const running = mine && setup.stage !== null && setup.stage !== 'done';
   const failed = mine && setup.result && !setup.result.ok && setup.result.reason !== 'paused' && setup.result.reason !== 'cancelled' ? setup.result : null;
   const fraction = dl.totalBytes > 0 ? dl.bytesWritten / dl.totalBytes : 0;
+  const total = installSizeBytes(spec);
+  const ram = getDeviceProfile().totalRamBytes;
+  const fit = fitVerdict(spec, ram, settingsStore.getState().compute.nCtx ?? defaultContext(ram));
 
   let progress: { value: number; text: string } | null = null;
   if (running || dl.status === 'paused') {
@@ -45,7 +52,7 @@ export function SetupCard({ spec, deviceName, tone }: Props) {
     else
       progress = {
         value: fraction,
-        text: `Downloading ${formatPercent(fraction)} · ${formatBytes(dl.bytesWritten)} of ${formatBytes(dl.totalBytes || spec.sizeBytes)}${dl.speedBps > 0 ? ` · ${formatSpeed(dl.speedBps)}${dl.etaSec > 0 ? ` · ${formatDuration(dl.etaSec)} left` : ''}` : ''}`,
+        text: `Downloading ${formatPercent(fraction)} · ${formatBytes(dl.bytesWritten)} of ${formatBytes(dl.totalBytes || total)}${dl.speedBps > 0 ? ` · ${formatSpeed(dl.speedBps)}${dl.etaSec > 0 ? ` · ${formatDuration(dl.etaSec)} left` : ''}` : ''}`,
       };
   }
 
@@ -55,7 +62,7 @@ export function SetupCard({ spec, deviceName, tone }: Props) {
   };
 
   return (
-    <Card>
+    <Card framed={tone === 'recommended'}>
       {tone === 'recommended' ? (
         <Text variant="label" tone="accent">
           Recommended for your phone
@@ -64,9 +71,10 @@ export function SetupCard({ spec, deviceName, tone }: Props) {
       <Text variant="title">{tone === 'welcome' ? 'The oracle is silent' : spec.name}</Text>
       <Text tone="muted">
         {tone === 'welcome'
-          ? `Wake it with ${spec.name}: ${formatBytes(spec.sizeBytes)}, chosen for your ${deviceName}. It downloads once, then everything works offline.`
-          : `${spec.description} ${formatBytes(spec.sizeBytes)}, a good fit for your ${deviceName}.`}
+          ? `Wake it with ${spec.name}: ${formatBytes(total)}, chosen for your ${deviceName}. It downloads once, then everything works offline.`
+          : `${spec.description} ${formatBytes(total)} to download. ${fit.label} on your ${deviceName}.`}
       </Text>
+      {tone === 'recommended' && !progress && !failed ? <Text variant="small">One tap: download, check the fingerprint, load it and make it answer once.</Text> : null}
       {progress ? (
         <View style={s.gap}>
           <ProgressBar fraction={progress.value} label={`${spec.name} setup`} />
@@ -79,7 +87,7 @@ export function SetupCard({ spec, deviceName, tone }: Props) {
       <View style={s.buttons}>
         {dl.status === 'downloading' || dl.status === 'resolving' ? <Button label="Pause" variant="quiet" onPress={() => downloads.pause(spec.id)} /> : null}
         {dl.status === 'paused' ? <Button label="Resume" onPress={start} /> : null}
-        {!running && dl.status !== 'paused' ? <Button label={failed ? 'Try again' : `Download · ${formatBytes(spec.sizeBytes)}`} icon="models" onPress={start} /> : null}
+        {!running && dl.status !== 'paused' ? <Button label={failed ? 'Try again' : `Download · ${formatBytes(total)}`} icon="models" onPress={start} /> : null}
         {tone === 'welcome' && !running ? <Button label="Choose another model" variant="text" onPress={() => push('models')} /> : null}
       </View>
     </Card>

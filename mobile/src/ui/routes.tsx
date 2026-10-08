@@ -1,7 +1,9 @@
 import type React from 'react';
+import { DownloadsScreen } from './DownloadsScreen';
+import { ModelDetailScreen } from './ModelDetailScreen';
 import { ModelsScreen } from './ModelsScreen';
-import { MemoryScreen, PersonaScreen } from './PersonaScreen';
-import { AboutSettings, AdvancedSettings, SettingsHome, StorageSettings } from './SettingsScreens';
+import { SpeculativeScreen } from './SpeculativeScreen';
+import { AboutScreen, AdvancedComputeScreen, AppearanceScreen, AudioVoiceScreen, MemoryScreen, SecurityScreen, SettingsHome, SoulScreen, StorageScreen, ThreadSoulSheet } from './SettingsScreens';
 
 /**
  * Route registry: name -> screen. Add ONE line per screen (wave 2: S1 chat extras, S2 vault/downloads/speculative,
@@ -10,12 +12,21 @@ import { AboutSettings, AdvancedSettings, SettingsHome, StorageSettings } from '
  */
 export const SCREENS = {
   models: ModelsScreen,
-  persona: PersonaScreen,
+  'models/detail': ModelDetailScreen,
+  downloads: DownloadsScreen,
+  speculative: SpeculativeScreen,
+  persona: SoulScreen,
   'persona/memory': MemoryScreen,
   settings: SettingsHome,
-  'settings/storage': StorageSettings,
-  'settings/advanced': AdvancedSettings,
-  'settings/about': AboutSettings,
+  'settings/soul': SoulScreen,
+  'settings/memory': MemoryScreen,
+  'settings/storage': StorageScreen,
+  'settings/audio': AudioVoiceScreen,
+  'settings/security': SecurityScreen,
+  'settings/advanced': AdvancedComputeScreen,
+  'settings/appearance': AppearanceScreen,
+  'settings/about': AboutScreen,
+  threadSoul: ThreadSoulSheet,
 } satisfies Record<string, React.ComponentType>;
 
 export type RouteName = keyof typeof SCREENS;

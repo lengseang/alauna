@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
-import { applyPickedFolder, canPickExternalFolder, chooseExternalFolder, openAllFilesAccessSettings, useInternalStorage, type ExternalResult } from '../services/storage.ts';
+import { formatBytes } from '../core/format.ts';
+import { applyPickedFolder, canPickExternalFolder, chooseExternalFolder, getStorageChoices, openAllFilesAccessSettings, useInternalStorage, type ExternalResult } from '../services/storage.ts';
 import { makeStyles } from '../theme';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -66,11 +67,14 @@ export function StoragePicker({ onDone }: Props) {
   }, [handle]);
 
   const external = canPickExternalFolder();
+  const { internal } = getStorageChoices();
+  const space = internal.freeBytes !== null ? `${formatBytes(internal.freeBytes)} free${internal.totalBytes ? ` of ${formatBytes(internal.totalBytes)}` : ''} on this phone.` : null;
   return (
     <View style={s.root}>
       <Card>
         <Text variant="title">App storage</Text>
         <Text tone="muted">The simplest option. Needs no permission and always works. Files are private to CHIWIWI and are deleted if you uninstall the app.</Text>
+        {space ? <Text variant="label">{space}</Text> : null}
         <Button label="Use app storage" variant={external ? 'quiet' : 'primary'} busyLabel="Setting up..." onPress={useApp} />
       </Card>
 
@@ -93,7 +97,7 @@ export function StoragePicker({ onDone }: Props) {
 
       {phase.kind === 'error' ? <Notice tone="danger">{`That did not work. ${phase.message}`}</Notice> : null}
 
-      <Text variant="small">You can change this later in Settings, Storage. Models are large (1 to 7 GB), so make sure there is free space.</Text>
+      <Text variant="small">You can change this later, and add up to five locations, in Settings, Data and storage. Models are large (1 to 7 GB), so make sure there is free space.</Text>
     </View>
   );
 }

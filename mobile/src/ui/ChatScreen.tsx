@@ -2,20 +2,26 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import { FlatList, KeyboardAvoidingView, Pressable, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { getModel } from '../core/catalog.ts';
 import type { ChatMessage } from '../core/chatTypes.ts';
-import { newChat, regenerate, useChatState } from '../services/chat.ts';
+import * as Clipboard from 'expo-clipboard';
+import { chatStore, newChat, regenerate, renameThread, showNotice, useChatState } from '../services/chat.ts';
 import { downloads } from '../services/downloads.ts';
 import { engine } from '../services/engine.ts';
 import { useSettings } from '../services/settings.ts';
 import { makeStyles } from '../theme';
 import { ChatTopBar } from './ChatTopBar';
-import { Composer } from './Composer';
+import { truncateAt, withoutMessage } from './chatLogic';
+import { Composer, setComposerDraft } from './Composer';
 import { DrawerLayout } from './Drawer';
 import { EmptyChat } from './EmptyChat';
-import { MessageRow } from './MessageRow';
+import { isSpeakingMessage, MessageRow, speakMessage, stopMessageSpeech } from './MessageRow';
 import { ModelSheet } from './ModelSheet';
 import { Notice } from './Notice';
 import { Button } from './Button';
 import { push } from './nav';
+import { ListRow } from './Row';
+import { Sheet } from './Sheet';
+import { showUndo } from './undo';
+import { VoiceOverlay } from './VoiceOverlay';
 import { Text } from './Text';
 import { ThreadDrawer } from './ThreadDrawer';
 
@@ -41,6 +47,8 @@ export function ChatScreen() {
   const [drawer, setDrawer] = useState(false);
   const [sheet, setSheet] = useState(false);
   const [far, setFar] = useState(false);
+  const [voice, setVoice] = useState(false);
+  const [acts, setActs] = useState<ChatMessage | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const farRef = useRef(false);
 
@@ -57,7 +65,7 @@ export function ChatScreen() {
   const retry = useCallback(() => regenerate(), []);
   const sending = chat.sending;
   const renderItem = useCallback(
-    ({ item, index }: { item: ChatMessage; index: number }) => <MessageRow message={item} isLast={index === 0} busy={index === 0 && sending} onRetry={retry} />,
+    ({ item, index }: { item: ChatMessage; index: number }) => <MessageRow message={item} isLast={index === 0} busy={index === 0 && sending} onRetry={retry} onActions={setActs} />,
     [sending, retry],
   );
 
@@ -74,6 +82,48 @@ export function ChatScreen() {
   const openSheet = useCallback(() => setSheet(true), []);
   const closeSheet = useCallback(() => setSheet(false), []);
   const onNew = useCallback(() => void newChat(false), []);
+  const onSoul = useCallback(() => push('threadSoul'), []);
+  const onSettings = useCallback(() => push('settings'), []);
+  const openVoice = useCallback(() => setVoice(true), []);
+  const closeVoice = useCallback(() => setVoice(false), []);
+
+  // Delete / edit&resend rewrite the open chat's messages, then save it (renameThread to the same title persists).
+  const setMessagesAndSave = (next: ChatMessage[]) => {
+    chatStore.setState((st) => ({ thread: { ...st.thread, messages: next } }));
+    const th = chatStore.getState().thread;
+    void renameThread(th.id, th.title);
+  };
+  const doAction = async (kind: 'copy' | 'regen' | 'edit' | 'speak' | 'delete') => {
+    const m = acts;
+    setActs(null);
+    if (!m) return;
+    const all = chatStore.getState().thread.messages;
+    if (kind === 'copy') {
+      await Clipboard.setStringAsync(m.text);
+      showNotice('Copied');
+      return;
+    }
+    if (kind === 'speak') {
+      if (isSpeakingMessage(m.id)) await stopMessageSpeech();
+      else await speakMessage(m);
+      return;
+    }
+    if (chatStore.getState().sending) {
+      showNotice('Wait for the reply to finish (or press Stop) first.');
+      return;
+    }
+    if (kind === 'regen') {
+      void regenerate();
+    } else if (kind === 'edit') {
+      const { kept, removed } = truncateAt(all, m.id);
+      setMessagesAndSave(kept);
+      setComposerDraft(m.text, m.attachments ?? []);
+      if (removed.length > 1) showUndo('Removed this and later messages', () => setMessagesAndSave(all));
+    } else {
+      setMessagesAndSave(withoutMessage(all, m.id));
+      showUndo('Message deleted', () => setMessagesAndSave(all));
+    }
+  };
 
   const crashNotice = crashedId ? (
     <View style={s.banner}>
@@ -94,7 +144,7 @@ export function ChatScreen() {
   return (
     <DrawerLayout open={drawer} onOpenChange={setDrawer} drawer={<ThreadDrawer onClose={closeDrawer} />}>
       <View style={s.root}>
-        <ChatTopBar onMenu={openDrawer} onModel={openSheet} onNewChat={onNew} />
+        <ChatTopBar onMenu={openDrawer} onModel={openSheet} onNewChat={onNew} onSoul={onSoul} onSettings={onSettings} soulOverride={chat.thread.soulOverride} incognito={chat.thread.incognito} />
         {crashNotice}
         {chat.saveError ? (
           <View style={s.banner}>
@@ -103,7 +153,7 @@ export function ChatScreen() {
         ) : null}
         <KeyboardAvoidingView behavior="padding" style={s.fill}>
           {messages.length === 0 ? (
-            <EmptyChat hasModel={anyInstalled} loading={engineState === 'mounting'} />
+            <EmptyChat hasModel={anyInstalled} loading={engineState === 'mounting'} incognito={chat.thread.incognito} />
           ) : (
             <View style={s.fill}>
               <FlatList
@@ -132,15 +182,23 @@ export function ChatScreen() {
               ) : null}
             </View>
           )}
-          <Composer placeholder={anyInstalled ? 'Message CHIWIWI' : 'Get a model to start chatting'} />
+          <Composer placeholder={anyInstalled ? 'Message CHIWIWI' : 'Get a model to start chatting'} onVoice={openVoice} />
         </KeyboardAvoidingView>
         <ModelSheet visible={sheet} onClose={closeSheet} />
+        <VoiceOverlay visible={voice} onClose={closeVoice} />
+        <Sheet visible={!!acts} onClose={() => setActs(null)} title="Message">
+          <ListRow icon="file" title="Copy" onPress={() => void doAction('copy')} />
+          {acts?.role === 'assistant' && acts.text ? <ListRow icon="speaker" title={isSpeakingMessage(acts.id) ? 'Stop reading' : 'Read aloud'} onPress={() => void doAction('speak')} /> : null}
+          {acts?.role === 'assistant' && acts.id === messages[messages.length - 1]?.id ? <ListRow icon="bolt" title="Regenerate" onPress={() => void doAction('regen')} /> : null}
+          {acts?.role === 'user' ? <ListRow icon="edit" title="Edit and resend" onPress={() => void doAction('edit')} /> : null}
+          <ListRow icon="trash" title="Delete message" destructive onPress={() => void doAction('delete')} />
+        </Sheet>
       </View>
     </DrawerLayout>
   );
 }
 
-const useStyles = makeStyles(({ colors, space, radius }) => ({
+const useStyles = makeStyles(({ colors, space }) => ({
   root: { flex: 1, backgroundColor: colors.bg },
   fill: { flex: 1 },
   list: { paddingHorizontal: space.lg, paddingVertical: space.md },
@@ -153,7 +211,6 @@ const useStyles = makeStyles(({ colors, space, radius }) => ({
     minHeight: 48,
     justifyContent: 'center',
     paddingHorizontal: space.xl,
-    borderRadius: radius.pill,
     backgroundColor: colors.surfaceAlt,
     borderWidth: 1,
     borderColor: colors.borderStrong,

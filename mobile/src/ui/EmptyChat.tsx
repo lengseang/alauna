@@ -4,6 +4,7 @@ import { getDeviceProfile } from '../services/device.ts';
 import { recommendedModel } from '../services/engine.ts';
 import { hit, makeStyles } from '../theme';
 import { Ambient } from './Ambient';
+import { Icon } from './Icon';
 import { submitMessage } from './Composer';
 import { SetupCard } from './SetupCard';
 import { Text } from './Text';
@@ -15,7 +16,7 @@ const PROMPTS = ['Explain how a rainbow forms, simply.', 'Write a short poem abo
  * First thing you see in a new chat: wordmark, one greeting line, then either four tappable prompts
  * or, when no model is installed yet, a single "Get a model" card. Stars (Nyx) or sun (Helios) behind.
  */
-export function EmptyChat({ hasModel, loading }: { hasModel: boolean; loading: boolean }) {
+export function EmptyChat({ hasModel, loading, incognito }: { hasModel: boolean; loading: boolean; incognito: boolean }) {
   const s = useStyles();
   const recommended = recommendedModel();
   return (
@@ -24,6 +25,14 @@ export function EmptyChat({ hasModel, loading }: { hasModel: boolean; loading: b
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={s.col}>
           <Wordmark breathing={loading} />
+          {incognito ? (
+            <View style={s.incognito}>
+              <Icon name="incognito" size={20} />
+              <Text variant="small" tone="text">
+                Incognito chat: not saved, not in your history.
+              </Text>
+            </View>
+          ) : null}
           {hasModel ? (
             <>
               <Text variant="title" style={s.center}>
@@ -48,22 +57,14 @@ export function EmptyChat({ hasModel, loading }: { hasModel: boolean; loading: b
   );
 }
 
-const useStyles = makeStyles(({ colors, space, radius }) => ({
+const useStyles = makeStyles(({ colors, space, line }) => ({
   root: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: space.lg },
   col: { gap: space.lg, alignItems: 'center' },
   center: { textAlign: 'center' },
-  prompts: { alignSelf: 'stretch', gap: space.sm },
-  prompt: {
-    minHeight: hit,
-    justifyContent: 'center',
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
+  incognito: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  prompts: { alignSelf: 'stretch', borderTopWidth: line, borderTopColor: colors.border },
+  prompt: { minHeight: hit, justifyContent: 'center', paddingHorizontal: space.sm, paddingVertical: space.md, borderBottomWidth: line, borderBottomColor: colors.border },
   pressed: { backgroundColor: colors.surfaceAlt },
   card: { alignSelf: 'stretch' },
 }));
