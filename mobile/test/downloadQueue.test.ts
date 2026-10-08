@@ -89,7 +89,7 @@ function world(opts: { free?: number | null; badSha?: string[]; intent?: string[
     now: (() => { let t = 1e6; return () => (t += 300); })(),
     sleep: async () => undefined,
   };
-  const manager = new DownloadManager(platform, { stallTimeoutMs: 0, stopGraceMs: 40, spaceMarginBytes: 0, maxConcurrent: opts.concurrency });
+  const manager = new DownloadManager(platform, { stallTimeoutMs: 0, stopGraceMs: 40, spaceMarginBytes: 0, verifyMode: 'always', maxConcurrent: opts.concurrency });
   return { manager, d, log, holds, release: (id: string) => gates.get(id)?.(), intent: () => [...intent] };
 }
 

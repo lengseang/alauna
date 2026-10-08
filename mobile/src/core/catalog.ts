@@ -129,6 +129,10 @@ export interface ModelSpec {
   mmproj?: HubFile;
   /** Dedicated draft head for speculative decoding (Gemma 4 MTP). Optional download. */
   draft?: HubFile;
+  /** Short hashtag that says what makes this model special (e.g. '#NativeMultimodal'). Shown on cards. */
+  uniqueTag: string;
+  /** One honest sentence: the job this model is best at. */
+  bestFor: string;
   /** Date the GGUF repo appeared on the Hub (YYYY-MM-DD), used by "newest" sorting. */
   published: string;
 }

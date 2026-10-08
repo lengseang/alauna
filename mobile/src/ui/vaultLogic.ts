@@ -192,7 +192,10 @@ export function rowState(spec: ModelSpec, dl: DownloadState, engine: EngineLike,
       label = 'Download failed';
       break;
     case 'installed':
-      label = verified ? 'Installed · works on this phone' : 'Installed';
+      if (dl.verifyPending) {
+        label = `${dl.verifyFraction !== undefined ? `Verifying ${formatPercent(dl.verifyFraction)}` : 'Verifying'} · usable now`;
+        fraction = dl.verifyFraction ?? 0;
+      } else label = verified ? 'Installed · works on this phone' : dl.verified ? 'Installed · Verified' : 'Installed';
       break;
     case 'loading':
       label = st.label.replace('...', '');
@@ -260,6 +263,8 @@ export interface DownloadGroups {
   failed: string[];
   /** Fully on the phone. */
   installed: string[];
+  /** Installed and usable, SHA-256 check still running in the background. */
+  verifying: string[];
 }
 
 export function partitionDownloads(items: Record<string, DownloadState>, queue: readonly string[]): DownloadGroups {
@@ -274,6 +279,7 @@ export function partitionDownloads(items: Record<string, DownloadState>, queue: 
     paused: sorted(by((s) => s.status === 'paused')),
     failed: sorted(by((s) => s.status === 'error')),
     installed: sorted(by((s) => s.status === 'completed')),
+    verifying: sorted(by((s) => s.status === 'completed' && !!s.verifyPending)),
   };
 }
 

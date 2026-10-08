@@ -11,6 +11,7 @@ import { showToast } from '../services/toast.ts';
 import { makeStyles } from '../theme';
 import { Button } from './Button';
 import { Divider } from './Divider';
+import { ProgressBar } from './ProgressBar';
 import { InstalledRow, QueueCard } from './ModelCards';
 import { Notice } from './Notice';
 import { Row } from './Row';
@@ -110,6 +111,21 @@ export function DownloadsScreen() {
       {queueSection('Waiting', groups.queued, 'They start in this order. Move one up to go next.')}
       {queueSection('Paused', groups.paused)}
       {queueSection('Needs attention', groups.failed)}
+      {groups.verifying.length > 0 ? (
+        <View style={s.section}>
+          <SectionHeader title="Verifying in the background" hint="These models are already usable. The fingerprint check never blocks the queue; a damaged file is removed automatically." />
+          {specs(groups.verifying).map((m) => {
+            const dl = hub.items[m.id];
+            return (
+              <View key={m.id}>
+                <Text variant="strong">{m.name}</Text>
+                <Text variant="small">{`Verifying ${Math.round((dl?.verifyFraction ?? 0) * 100)}% · usable now${dl?.verifyEtaSec ? ` · ${formatDuration(dl.verifyEtaSec)} left` : ''}`}</Text>
+                <ProgressBar fraction={dl?.verifyFraction ?? 0} label={`${m.name} verification`} />
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
 
       <View style={s.section}>
         <SectionHeader title="On this phone" hint={installed.length ? `${installed.length} ${installed.length === 1 ? 'model' : 'models'} · ${formatBytes(diskTotal)} on disk, add-ons included` : undefined} />

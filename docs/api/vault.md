@@ -78,6 +78,15 @@ One **install** = model + its image/audio projector (default) + optional MTP dra
 (`{ kind, totalBytes, done }`), `missing` (on `completed`: companions not on the phone). Bytes, speed and ETA cover the whole install.
 `verified` = every file of this install was SHA-256-checked in this download. `FILE_KIND_LABEL[kind]` = "model" / "image add-on" / "speed-up draft".
 
+**Background verification** (`verifyMode`, default `'background'`; `'always'` = old blocking check, `'off'` = size + GGUF header only; constant in
+`services/downloads.ts`, no settings field): after size + GGUF-magic checks the file is promoted and the install is `completed` at once with
+`verifyPending: true`, `verifyFraction`, `verifyEtaSec`; the SHA-256 then runs on the installed file in a job that holds NO queue slot (next
+download starts immediately) and is cancelled by `cancel`/`remove`. Done -> `verifyPending: false, verified: true`. Mismatch -> `onVerifyFailed`
+(services unloads the engine if it holds that model, shows a Toast), the file is deleted, state = `error` ("does not match the official checksum").
+Pending checks persist in `chiwiwi_verify.json` (platform `savePendingVerify/loadPendingVerify`) and `refreshDownloads()` resumes them; the model
+stays loadable meanwhile. `downloads.setAppActive(false/true)` (wired to AppState in `lifecycle.ts`) parks hashing between slices while backgrounded
+(no progress lost, never failed). `verifyingIds()` / `groups.verifying` feed the Downloads Hub "Verifying in the background" section.
+
 `useDownloadsHub()` -> `{ items, queue, concurrency, summary: { active, queued, paused, failed, bytesRemaining, speedBps, etaSec } }` for the Hub header.
 
 Kept from v1 (tests still green): resume via Range after pause/kill, mandatory SHA-256 before rename (Hub hash first), pause never "completed",

@@ -144,18 +144,48 @@ function loadIntent(): string[] {
   }
 }
 
+const VERIFY_FILE = 'chiwiwi_verify.json';
+
+/** Background SHA-256 checks still to finish, so an app kill does not lose them. */
+function savePendingVerify(entries: string[]): void {
+  try {
+    const f = new File(Paths.document, VERIFY_FILE);
+    if (entries.length === 0) {
+      if (f.exists) f.delete();
+      return;
+    }
+    if (!f.exists) f.create({ intermediates: true });
+    f.write(JSON.stringify({ pending: entries }));
+  } catch {
+    // best effort
+  }
+}
+
+function loadPendingVerify(): string[] {
+  try {
+    const f = new File(Paths.document, VERIFY_FILE);
+    if (!f.exists) return [];
+    const parsed = JSON.parse(f.textSync()) as { pending?: unknown };
+    return Array.isArray(parsed.pending) ? parsed.pending.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 export const expoDownloadPlatform: DownloadPlatform = {
   isStorageReady,
   freeSpaceBytes: freeSpace,
   files: filesFor,
   fetchInfo: (f) => fetchRemoteFileInfo(f.repo, f.filename),
   createTask: ({ spec, url, onProgress }) => new ExpoTransfer(spec, url, onProgress),
-  async verifySha256(f, expected, onProgress, shouldStop) {
-    const r = await hashFile(partFile(f), onProgress, shouldStop);
+  async verifySha256(f, expected, onProgress, shouldStop, opts) {
+    const r = await hashFile(opts?.which === 'dest' ? destFile(f) : partFile(f), onProgress, shouldStop, undefined, opts?.gate);
     return { ok: !r.stopped && r.actual === expected.toLowerCase(), actual: r.actual, stopped: r.stopped };
   },
   saveIntent,
   loadIntent,
+  savePendingVerify,
+  loadPendingVerify,
   modelDir,
   keepAwake: (on) => {
     if (on) void activateKeepAwakeAsync(KEEP_AWAKE_TAG).catch(() => undefined);

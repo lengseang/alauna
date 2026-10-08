@@ -64,6 +64,9 @@ export function deriveModelStatus(i: StatusInput): ModelStatus {
       return { kind: 'download_error', label: 'Download problem', tone: 'bad' };
     case 'completed':
       if (mine && i.engine.status === 'error') return { kind: 'load_failed', label: 'Could not load', tone: 'bad' };
+      if (d.verifyPending) {
+        return { kind: 'installed', label: `${d.verifyFraction !== undefined ? `Verifying ${formatPercent(d.verifyFraction)}` : 'Verifying'} · usable now`, tone: 'accent' };
+      }
       return i.verified
         ? { kind: 'installed', label: 'Installed · Verified on this phone', tone: 'good' }
         : { kind: 'installed', label: d.verified ? 'Installed · Checksum OK · Load it to test' : 'Installed · Load it to verify', tone: 'neutral' };

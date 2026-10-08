@@ -11,7 +11,7 @@ import { MemoryGuard } from '../core/memoryGuard.ts';
 import { createStore } from '../core/store.ts';
 import { engine } from './engine.ts';
 import { chatStore, initChat } from './chat.ts';
-import { refreshDownloads } from './downloads.ts';
+import { downloads, refreshDownloads } from './downloads.ts';
 import { loadMemory } from './memory.ts';
 import { autoPurgeOldChats } from './privacy.ts';
 import { initSettings, updateSettings } from './settings.ts';
@@ -63,6 +63,9 @@ export function installMemoryGuard(): void {
   AppState.addEventListener('change', (next) => {
     if (next === 'background') guard.onBackground();
     else if (next === 'active') guard.onForeground();
+    // Background SHA-256 checks wait while the app is suspended and carry on (not fail) when it returns.
+    if (next === 'background') downloads.setAppActive(false);
+    else if (next === 'active') downloads.setAppActive(true);
   });
   AppState.addEventListener('memoryWarning', () => guard.onMemoryWarning());
 }

@@ -37,6 +37,10 @@ Read `GEMINI.md` (rules) first. Status date: 2026-10-08. Nothing has ever run on
 16. [ ] Update stale docs: `ARCHITECTURE.md`, `QA_PLAN.md`, `REQUIREMENTS.md`, `docs/audit/00-master-spec.md`.
 17. [ ] Release build: `--profile production`; set versionCode; keep `arm64-v8a` only.
 
+### Future option: native hash module
+Background SHA-256 is pure JS and Android suspends JS in the background (hashing is parked, resumed on foreground). A native module (or a foreground
+service) hashing the file would finish while the app is closed; it needs a new APK, so it was not added. Contract to keep: `DownloadPlatform.verifySha256`.
+
 ## Known limits and owner decisions pending
 - Vision projector downloads by default (+0.2–1.5 GB)? Default yes. Licence warning on non-commercial models? Default yes.
 - Voice tag means "model has an audio encoder" (Gemma 4, Qwen2.5-Omni). Video tag exists, no model uses it yet.
