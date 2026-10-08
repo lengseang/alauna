@@ -204,6 +204,8 @@ export async function hashFile(
   onProgress: (fraction: number) => void,
   shouldStop: () => boolean,
   sliceMs = 12,
+  /** Returns a promise while hashing must wait (app in background); checked between slices. */
+  gate?: () => Promise<void> | undefined,
 ): Promise<{ actual: string; stopped: boolean }> {
   const total = fileSize(file);
   const digest = new Sha256Digest();
@@ -226,6 +228,8 @@ export async function hashFile(
       }
       if (now - sliceStart >= sliceMs) {
         await yieldToUi();
+        const wait = gate?.();
+        if (wait) await wait;
         sliceStart = Date.now();
       }
     }

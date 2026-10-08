@@ -10,9 +10,19 @@ import {
   type StartResult,
 } from '../core/downloadManager.ts';
 import { expoDownloadPlatform } from './downloadPlatform.ts';
+import { engine } from './engine.ts';
+import { showToast } from './toast.ts';
 
 /** App-wide singleton: downloads keep running while the user navigates between screens. */
-export const downloads = new DownloadManager(expoDownloadPlatform);
+export const downloads = new DownloadManager(expoDownloadPlatform, {
+  // New installs are usable at once; the SHA-256 check runs in the background ('always' = block until checked, 'off' = skip).
+  verifyMode: 'background',
+  onVerifyFailed: (specId, _kind, message) => {
+    // A damaged file must never stay loaded: release it before the manager deletes it.
+    if (engine.store.getState().modelId === specId) void engine.unmount();
+    showToast(`${getModel(specId)?.name ?? 'A model'}: ${message}`, 8000);
+  },
+});
 
 export function refreshDownloads(): void {
   downloads.refresh(MODEL_CATALOG);

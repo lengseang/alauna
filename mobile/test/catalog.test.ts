@@ -114,8 +114,10 @@ test('library: every entry is well-formed and verified data (never hand-typed ze
     assert.equal(m.thinking !== 'none', m.capabilities.includes('Reasoning'), `${m.id}: thinking vs Reasoning tag`);
     // Name, id and family agree (the old app had "Moondream 2" pointing at SmolLM2 360M).
     assert.ok(m.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes(m.family.toLowerCase().replace(/[^a-z0-9]/g, '')), `${m.id}: name vs family`);
+    assert.match(m.uniqueTag, /^#[A-Za-z0-9]+$/, `${m.id}: uniqueTag`);
+    assert.ok(m.bestFor.length > 15 && m.bestFor.length < 160, `${m.id}: bestFor`);
     // "Uncensored" only for builds that really are abliterated / refusal-free upstream.
-    if (m.contentPolicy === 'Uncensored') assert.match(`${m.repo} ${m.name}`, /abliterated|dolphin/i, `${m.id}: uncensored claim`);
+    if (m.contentPolicy === 'Uncensored') assert.match(`${m.repo} ${m.name}`, /abliterated|dolphin|uncensored|heretic|stheno|lunaris|rocinante|gemmasutra/i, `${m.id}: uncensored claim`);
     else assert.doesNotMatch(`${m.repo}/${m.filename}`, /abliterated/i, `${m.id}: abliterated file labelled Standard`);
     assert.equal(m.grade, gradeFor(m), `${m.id}: grade is computed`);
     if (m.draft) assert.ok(m.draftKey === 'gemma4', `${m.id}: only Gemma 4 ships MTP draft heads here`);
@@ -228,7 +230,7 @@ test('query: the v1 queryCatalog API still behaves as before', () => {
 
 test('speculative: drafts share the tokenizer key, are at most half the size, smallest first; Gemma 4 offers its MTP head first', () => {
   const q4 = draftOptions(getModel('qwen3.5-4b')!);
-  assert.deepEqual(q4.map((o) => (o.kind === 'model' ? o.spec.id : 'mtp')), ['qwen3.5-0.8b', 'qwen3.5-2b']);
+  assert.deepEqual(q4.map((o) => (o.kind === 'model' ? o.spec.id : 'mtp')), ['qwen3.5-0.8b', 'qwen3.5-2b', 'qwen3.5-2b-hauhau-aggressive']);
   const g = draftOptions(getModel('gemma-4-12b')!);
   assert.equal(g[0].kind, 'mtp');
   assert.ok(g.some((o) => o.kind === 'model' && o.spec.id === 'gemma-4-e2b'));
@@ -243,7 +245,8 @@ test('speculative: drafts share the tokenizer key, are at most half the size, sm
   assert.deepEqual(draftOptions(getModel('qwen3.5-9b')!, MODEL_CATALOG, ['qwen3.5-2b']).map((o) => (o.kind === 'model' ? o.spec.id : 'mtp')), ['qwen3.5-2b']);
   // A standard target prefers a standard draft even when an abliterated one is smaller-or-equal.
   const q7 = draftOptions(getModel('qwen2.5-7b')!).filter((o) => o.kind === 'model').map((o) => (o.kind === 'model' ? o.spec.contentPolicy : ''));
-  assert.equal(q7.indexOf('Uncensored'), q7.length - 1);
+  assert.equal(q7.indexOf('Uncensored'), q7.lastIndexOf('Standard') + 1);
+  assert.ok(q7.includes('Uncensored'));
   assert.ok(draftTargets(getModel('qwen3.5-0.8b')!).some((m) => m.id === 'qwen3.5-9b'));
 });
 
@@ -290,4 +293,20 @@ test('fit: recommendation is the 4B default on 8-16 GB phones; never uncensored,
   // A very small phone still gets the smallest recommendable model (not a 135M demo).
   assert.equal(recommendModel(MODEL_CATALOG, 1.5 * GB)!.id, 'qwen3.5-0.8b');
   assert.equal(recommendModel(MODEL_CATALOG, null)!.role, 'Fast');
+});
+
+test('library v2.1: parameter bands, small-uncensored set, speed class and honest image tools', async () => {
+  const { PARAM_BANDS, paramBand, isSmallUncensored, speedHint, IMAGE_TOOLS } = await import('../src/core/catalog.ts');
+  assert.deepEqual(PARAM_BANDS.map((b) => b.label), ['\u22641B', '1\u20132B', '3\u20134B', '7\u20139B', '10\u201314B']);
+  assert.equal(paramBand({ paramsB: 0.6 }), 'xs');
+  assert.equal(paramBand({ paramsB: 2.0 }), 's');
+  assert.equal(paramBand({ paramsB: 3.2 }), 'm');
+  assert.equal(paramBand({ paramsB: 8 }), 'l');
+  assert.equal(paramBand({ paramsB: 14.8 }), 'xl');
+  assert.ok(MODEL_CATALOG.filter(isSmallUncensored).length >= 15);
+  assert.ok(MODEL_CATALOG.some((m) => m.id === 'gemma-4-e2b-hauhau-aggressive' && m.contentPolicy === 'Uncensored'));
+  assert.equal(speedHint({ sizeBytes: 4e8 }).fast, true);
+  assert.equal(speedHint({ sizeBytes: 6e9 }).fast, false);
+  for (const t of IMAGE_TOOLS) assert.ok(t.status === 'engine-unavailable' && /not in this build/.test(t.note), t.id);
+  assert.ok(IMAGE_TOOLS.length >= 2 && !MODEL_CATALOG.some((m) => IMAGE_TOOLS.some((t) => t.id === m.id)));
 });

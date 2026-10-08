@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
-import { installSizeBytes, type ModelSpec } from '../core/catalog.ts';
+import { installSizeBytes, isSmallUncensored, speedHint, type ModelSpec } from '../core/catalog.ts';
 import { formatBytes, formatDuration, formatPercent, formatSpeed } from '../core/format.ts';
 import { actionsFor } from '../core/modelStatus.ts';
 import { downloads, useDownloadState } from '../services/downloads.ts';
@@ -58,13 +58,14 @@ export const ModelRow = React.memo(function ModelRow({ spec, eng, verified, ramB
         <Text variant="small" tone={tone}>
           {status}
         </Text>
+        <Text variant="small">{`${spec.uniqueTag} · ${spec.bestFor}${isSmallUncensored(spec) ? ' · ' + speedHint(spec).label : ''}`}</Text>
         {st.fraction !== null ? <ProgressBar fraction={st.fraction} label={`${spec.name}, ${st.label}`} tone={st.tone === 'bad' ? 'danger' : 'accent'} /> : null}
         <View style={s.tags}>
           {showGrade ? <Tag label={`Grade ${spec.grade}`} tone="accent" /> : null}
           {spec.capabilities.map((c) => (
             <Tag key={c} label={c} />
           ))}
-          {spec.contentPolicy === 'Uncensored' ? <Tag label="Uncensored" /> : null}
+          {spec.contentPolicy === 'Uncensored' ? <Tag label="Uncensored" tone="accent" /> : null}
         </View>
       </Pressable>
       {st.primary && action ? (

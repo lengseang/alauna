@@ -41,6 +41,10 @@ export interface DownloadState {
   verified?: boolean;
   /** 0..1 while the SHA-256 check of the current file runs (status 'finalizing'). */
   verifyFraction?: number;
+  /** 'completed' but the SHA-256 check still runs in the background: the model is usable now (verifyFraction / verifyEtaSec tell how far). */
+  verifyPending?: boolean;
+  /** Seconds left of the background check (0 = unknown). */
+  verifyEtaSec?: number;
   /** File being transferred / verified right now. */
   part?: FileKind;
   /** The files of this install, in download order. */
@@ -146,7 +150,12 @@ export interface DownloadPlatform {
     expected: string,
     onProgress: (fraction: number) => void,
     shouldStop: () => boolean,
+    /** `which` 'dest' = hash the installed file (background mode); `gate` returns a promise to wait on while hashing is suspended (app in background). */
+    opts?: { which?: 'part' | 'dest'; gate?: () => Promise<void> | undefined },
   ): Promise<{ ok: boolean; actual: string; stopped: boolean }>;
+  /** Background checks still to finish (JSON strings), so a process kill does not lose them. */
+  savePendingVerify?(entries: string[]): void;
+  loadPendingVerify?(): string[];
   /** Remember which installs are running or queued so the next app launch can continue them (process kill / swipe-away). */
   saveIntent?(entries: string[]): void;
   loadIntent?(): string[];
@@ -275,6 +284,8 @@ interface Run {
   /** Bytes still to download (shared disk-space check between parallel installs). */
   remaining: number;
   allVerified: boolean;
+  /** Files installed but still to be SHA-checked in the background. */
+  pending: BgItem[];
   task: TransferTask | null;
   /** File id the task belongs to (a paused task is only reused for the same file). */
   taskFile: string | null;
@@ -289,6 +300,22 @@ interface Run {
   /** Force-settles the transfer promise (set only while a transfer is in flight). */
   abandon: (() => void) | null;
   done: Promise<void>;
+}
+
+interface BgItem {
+  file: DownloadFile;
+  expected: string;
+}
+
+interface BgJob {
+  spec: ModelSpec;
+  items: BgItem[];
+  /** Total items (for one progress fraction) and how many are done. */
+  total: number;
+  done: number;
+  verified: boolean;
+  stop: boolean;
+  running: Promise<void>;
 }
 
 export interface DownloadManagerOptions {
@@ -306,10 +333,13 @@ export interface DownloadManagerOptions {
   /** If a retry made at least this many new bytes, the retry budget starts over (long downloads on flaky networks). */
   retryResetBytes?: number;
   /**
-   * 'always' (default): a file is only installed after its SHA-256 matches the Hub's (or the catalog's) hash.
+   * 'background' (default): installed at once, SHA-256 checked afterwards without holding a queue slot; a mismatch deletes the file.
+   * 'always': a file is only installed after its SHA-256 matches the Hub's (or the catalog's) hash.
    * 'off': size + GGUF header only. Exists because the check is pure JavaScript and may be slow on a phone.
    */
-  verifyMode?: 'always' | 'off';
+  verifyMode?: 'background' | 'always' | 'off';
+  /** A background check found a damaged file (it is about to be deleted). The app unloads the model and shows a message. */
+  onVerifyFailed?: (specId: string, kind: FileKind, message: string) => void;
   /** How long pause/cancel wait for the native transfer to report back before the run is abandoned (native cancel can hang). */
   stopGraceMs?: number;
   /** Installs transferring at the same time (default 1, max 4). The rest wait in the queue. */
@@ -338,7 +368,11 @@ export class DownloadManager {
   private readonly stallMs: number;
   private readonly stallCheckMs: number;
   private readonly retryResetBytes: number;
-  private readonly verifyMode: 'always' | 'off';
+  private readonly verifyMode: 'background' | 'always' | 'off';
+  private readonly onVerifyFailed?: DownloadManagerOptions['onVerifyFailed'];
+  private readonly bg = new Map<string, BgJob>();
+  private appActive = true;
+  private resumeGate: { promise: Promise<void>; open: () => void } | null = null;
   private readonly stopGraceMs: number;
   private awakeCount = 0;
 
@@ -350,7 +384,8 @@ export class DownloadManager {
     this.stallMs = options.stallTimeoutMs ?? 45_000;
     this.stallCheckMs = options.stallCheckMs ?? 5_000;
     this.retryResetBytes = options.retryResetBytes ?? 8 * 1024 * 1024;
-    this.verifyMode = options.verifyMode ?? 'always';
+    this.verifyMode = options.verifyMode ?? 'background';
+    this.onVerifyFailed = options.onVerifyFailed;
     this.stopGraceMs = options.stopGraceMs ?? 4000;
     this.concurrency = clampConcurrency(options.maxConcurrent ?? 1);
     this.store.setState({ concurrency: this.concurrency });
@@ -457,6 +492,7 @@ export class DownloadManager {
   /** Cancel; by default the partial files are deleted too (never a file another install is still transferring). */
   async cancel(spec: ModelSpec, deletePartial = true): Promise<void> {
     this.dequeue(spec.id);
+    await this.stopBg(spec.id);
     const run = this.runs.get(spec.id);
     if (run) {
       run.cancelling = true;
@@ -517,7 +553,7 @@ export class DownloadManager {
     if (!this.platform.isStorageReady()) return;
     for (const spec of specs) {
       const run = this.runs.get(spec.id);
-      if (run?.active || this.queue.includes(spec.id)) continue;
+      if (run?.active || this.queue.includes(spec.id) || this.bg.has(spec.id)) continue;
       // Keep a visible error until the user acts on it (Resume / Cancel).
       if (run && this.stateOf(spec.id).status === 'error') continue;
       try {
@@ -567,6 +603,7 @@ export class DownloadManager {
     } catch {
       entries = [];
     }
+    this.resumePendingVerify(specs);
     let started = 0;
     for (const entry of entries) {
       const { id, opts } = decodeIntent(entry);
@@ -748,6 +785,7 @@ export class DownloadManager {
       run.meter.reset(doneBytes(), p.now());
       // "verified" = every file of this install was SHA-checked in this download (a file found on disk was not).
       run.allVerified = plan.every((x) => !x.done);
+      run.pending = [];
 
       for (let i = 0; i < plan.length; i++) {
         const step = plan[i];
@@ -787,6 +825,7 @@ export class DownloadManager {
         this.patch(spec.id, { parts: partsOf() });
       }
       this.complete(run, run.allVerified && run.files.length > 0);
+      if (run.pending.length > 0) this.startBg(run.spec, run.pending, run.allVerified);
     } catch (e) {
       if (this.stopped(run)) return this.afterStop(run);
       const f = toFailure(e);
@@ -956,6 +995,12 @@ export class DownloadManager {
     const meta = run.metas?.[run.files.indexOf(file)];
     const expected = (meta?.sha256 || file.sha256 || '').toLowerCase();
     let verified = false;
+    if (expected && this.verifyMode === 'background' && p.verifySha256) {
+      // Usable now; the checksum runs afterwards (startBg) and deletes the file if it does not match.
+      files.promotePart();
+      run.pending.push({ file, expected });
+      return 'done';
+    }
     if (expected && this.verifyMode === 'always' && p.verifySha256) {
       const t0 = p.now();
       const r = await p.verifySha256(
@@ -989,6 +1034,163 @@ export class DownloadManager {
     return 'done';
   }
 
+  // ---------------------------------------------------------------- background verification
+
+  /** Installed models whose SHA-256 check is still running (the Downloads Hub lists them apart from the queue). */
+  verifyingIds(): string[] {
+    return [...this.bg.keys()];
+  }
+
+  /** Resolves when no background check is running (tests; never needed by the UI). */
+  async verifySettled(): Promise<void> {
+    while (this.bg.size > 0) await Promise.all([...this.bg.values()].map((j) => j.running.catch(() => undefined)));
+  }
+
+  /** App went to the background / came back. While suspended, hashing waits (no progress lost, never marked failed). */
+  setAppActive(active: boolean): void {
+    if (active === this.appActive) return;
+    this.appActive = active;
+    if (!active) {
+      let open: () => void = () => undefined;
+      this.resumeGate = { promise: new Promise<void>((r) => (open = r)), open };
+    } else {
+      this.resumeGate?.open();
+      this.resumeGate = null;
+    }
+  }
+
+  private startBg(spec: ModelSpec, items: BgItem[], verified: boolean): void {
+    const id = spec.id;
+    const existing = this.bg.get(id);
+    if (existing) {
+      existing.items.push(...items);
+      existing.total += items.length;
+      existing.verified = existing.verified && verified;
+      this.savePending();
+      return;
+    }
+    const job: BgJob = { spec, items: [...items], total: items.length, done: 0, verified, stop: false, running: Promise.resolve() };
+    this.bg.set(id, job);
+    this.patch(id, { verifyPending: true, verifyFraction: 0, verifyEtaSec: 0 });
+    this.savePending();
+    job.running = this.runBg(job).finally(() => {
+      if (this.bg.get(id) === job) this.bg.delete(id);
+      this.savePending();
+    });
+  }
+
+  private async runBg(job: BgJob): Promise<void> {
+    const p = this.platform;
+    const id = job.spec.id;
+    const t0 = p.now();
+    const idle = { verifyPending: false, verifyFraction: undefined, verifyEtaSec: undefined };
+    while (job.items.length > 0 && !job.stop) {
+      const item = job.items[0];
+      let r: { ok: boolean; stopped: boolean };
+      try {
+        r = await p.verifySha256!(
+          item.file,
+          item.expected,
+          (fraction) => {
+            const f = Math.min(1, Math.max(0, (job.done + fraction) / job.total));
+            const elapsed = Math.max(1, p.now() - t0);
+            this.patch(id, { verifyPending: true, verifyFraction: f, verifyEtaSec: f > 0.01 ? Math.round((elapsed / f - elapsed) / 1000) : 0 });
+          },
+          () => job.stop,
+          { which: 'dest', gate: () => this.resumeGate?.promise },
+        );
+      } catch {
+        // The file could not be read (storage unplugged...): not proof of damage, so nothing is deleted.
+        this.patch(id, idle);
+        return;
+      }
+      if (r.stopped || job.stop) return;
+      job.items.shift();
+      job.done++;
+      if (!r.ok) {
+        job.items.length = 0;
+        this.failBg(job, item.file);
+        return;
+      }
+      this.savePending();
+    }
+    if (job.stop) return;
+    this.patch(id, { ...idle, ...(job.verified ? { verified: true } : {}) });
+  }
+
+  /** Mismatch: stop using the file (unload through the callback), delete it, say so. */
+  private failBg(job: BgJob, file: DownloadFile): void {
+    const id = job.spec.id;
+    const what = file.kind === 'model' ? 'file' : FILE_KIND_LABEL[file.kind];
+    const message = `The downloaded ${what} does not match the official checksum (it is damaged), so it was deleted. Tap Try again to download it fresh.`;
+    try {
+      this.onVerifyFailed?.(id, file.kind, message);
+    } catch {
+      // the callback must not stop the delete below
+    }
+    try {
+      this.platform.files(file).deleteDest();
+    } catch {
+      // surfaced by refresh() if the file is still there
+    }
+    if (file.kind === 'model') {
+      this.bg.delete(id);
+      this.set(id, { ...IDLE_STATE, status: 'error', error: message, retryable: true });
+    } else {
+      const s = this.stateOf(id);
+      this.patch(id, { verifyPending: false, verifyFraction: undefined, verifyEtaSec: undefined, note: message, missing: [...new Set([...(s.missing ?? []), file.kind])] });
+    }
+  }
+
+  private async stopBg(id: string): Promise<void> {
+    const job = this.bg.get(id);
+    if (!job) return;
+    job.stop = true;
+    this.resumeGate?.open();
+    await job.running.catch(() => undefined);
+    this.bg.delete(id);
+    this.savePending();
+  }
+
+  private savePending(): void {
+    try {
+      const out: string[] = [];
+      for (const j of this.bg.values()) for (const it of j.items) out.push(JSON.stringify({ specId: j.spec.id, file: it.file, expected: it.expected, verified: j.verified }));
+      this.platform.savePendingVerify?.(out);
+    } catch {
+      // best effort
+    }
+  }
+
+  /** After a process kill: continue the checks that were still pending (the files are installed and loadable meanwhile). */
+  private resumePendingVerify(specs: readonly ModelSpec[]): void {
+    if (!this.platform.verifySha256 || this.verifyMode === 'off') return;
+    let entries: string[] = [];
+    try {
+      entries = this.platform.loadPendingVerify?.() ?? [];
+    } catch {
+      return;
+    }
+    const grouped = new Map<string, { items: BgItem[]; verified: boolean }>();
+    for (const e of entries) {
+      try {
+        const x = JSON.parse(e) as { specId: string; file: DownloadFile; expected: string; verified?: boolean };
+        if (!x.expected || !this.platform.files(x.file).destExists()) continue; // deleted meanwhile: nothing to check
+        const g = grouped.get(x.specId) ?? { items: [], verified: true };
+        g.items.push({ file: x.file, expected: x.expected });
+        g.verified = g.verified && x.verified !== false;
+        grouped.set(x.specId, g);
+      } catch {
+        // corrupt record: drop it
+      }
+    }
+    for (const [id, g] of grouped) {
+      const spec = specs.find((s) => s.id === id) ?? this.known.get(id);
+      if (spec && this.stateOf(id).status === 'completed') this.startBg(spec, g.items, g.verified);
+    }
+    if (entries.length > 0 && grouped.size === 0) this.savePending();
+  }
+
   private complete(run: Run, verified: boolean): void {
     const have = new Set(run.files.map((f) => f.kind));
     const offered: FileKind[] = [...(run.spec.mmproj ? (['mmproj'] as const) : []), ...(run.spec.draft ? (['draft'] as const) : [])];
@@ -999,7 +1201,8 @@ export class DownloadManager {
       totalBytes: run.total,
       parts: run.files.map((f, i) => ({ kind: f.kind, totalBytes: run.metas?.[i]?.size ?? f.sizeBytes, done: true })),
       missing: offered.filter((k) => !have.has(k)),
-      ...(verified ? { verified: true } : {}),
+      ...(verified && run.pending.length === 0 ? { verified: true } : {}),
+      ...(run.pending.length > 0 ? { verifyPending: true, verifyFraction: 0, verifyEtaSec: 0 } : {}),
     });
   }
 }
@@ -1014,6 +1217,7 @@ function newRun(spec: ModelSpec): Run {
     base: 0,
     remaining: 0,
     allVerified: true,
+    pending: [],
     task: null,
     taskFile: null,
     active: false,

@@ -1,11 +1,11 @@
 # Vault API (W1): model library, queries, downloads
 
-Owner: W1. Files: `mobile/src/core/catalog.ts` (types, aliases, queries, draft pairing), `mobile/src/core/catalogData.ts` (54 entries),
+Owner: W1. Files: `mobile/src/core/catalog.ts` (types, aliases, queries, draft pairing), `mobile/src/core/catalogData.ts` (94 entries),
 `mobile/src/core/fit.ts`, `mobile/src/core/downloadManager.ts`, `mobile/src/core/hf.ts`, `mobile/src/services/downloads.ts`,
 `mobile/src/services/downloadPlatform.ts`, `mobile/src/services/modelLibrary.ts`, `mobile/src/services/hfClient.ts`,
 `scripts/verify-catalog.mjs`. Tests: `test/catalog.test.ts`, `test/downloadQueue.test.ts`, `test/downloadManager.test.ts`.
 
-Verified 2026-10-08: `node scripts/verify-catalog.mjs` = **Catalog OK (54 entries)**: every model, projector and draft file is ungated, exact LFS
+Verified 2026-10-08: `node scripts/verify-catalog.mjs` = **Catalog OK (94 entries)**: every model, projector and draft file is ungated, exact LFS
 size + sha256, `Range: bytes=0-3` answers 206 with the right total and `GGUF`; architecture present in the bundled llama.cpp (b10256);
 `Image` tag <=> projector header has a vision encoder, `Voice` <=> audio encoder; context length and KV bytes read from each GGUF header.
 Nothing here has run on a phone.
@@ -77,6 +77,15 @@ One **install** = model + its image/audio projector (default) + optional MTP dra
 + `status: 'queued'`, `queuePosition` (1-based), `part` (`'model' | 'mmproj' | 'draft'` being transferred/verified), `parts[]`
 (`{ kind, totalBytes, done }`), `missing` (on `completed`: companions not on the phone). Bytes, speed and ETA cover the whole install.
 `verified` = every file of this install was SHA-256-checked in this download. `FILE_KIND_LABEL[kind]` = "model" / "image add-on" / "speed-up draft".
+
+**Background verification** (`verifyMode`, default `'background'`; `'always'` = old blocking check, `'off'` = size + GGUF header only; constant in
+`services/downloads.ts`, no settings field): after size + GGUF-magic checks the file is promoted and the install is `completed` at once with
+`verifyPending: true`, `verifyFraction`, `verifyEtaSec`; the SHA-256 then runs on the installed file in a job that holds NO queue slot (next
+download starts immediately) and is cancelled by `cancel`/`remove`. Done -> `verifyPending: false, verified: true`. Mismatch -> `onVerifyFailed`
+(services unloads the engine if it holds that model, shows a Toast), the file is deleted, state = `error` ("does not match the official checksum").
+Pending checks persist in `chiwiwi_verify.json` (platform `savePendingVerify/loadPendingVerify`) and `refreshDownloads()` resumes them; the model
+stays loadable meanwhile. `downloads.setAppActive(false/true)` (wired to AppState in `lifecycle.ts`) parks hashing between slices while backgrounded
+(no progress lost, never failed). `verifyingIds()` / `groups.verifying` feed the Downloads Hub "Verifying in the background" section.
 
 `useDownloadsHub()` -> `{ items, queue, concurrency, summary: { active, queued, paused, failed, bytesRemaining, speedBps, etaSec } }` for the Hub header.
 
@@ -155,3 +164,12 @@ not deleted while another model uses it; a damaged projector is deleted but the 
 New: qwen3.5-0.8b/2b/9b (+projectors), qwen3-4b-instruct-2507, qwen3-vl-2b/4b, qwen2.5-omni-3b, qwen2.5-coder-3b/7b, gemma-3-1b, gemma-3-4b (+projector),
 lfm2.5-1.2b, lfm2.5-vl-1.6b, ministral-3-3b, hermes-3-llama-3.2-3b, dolphin-3.0-llama3.2-3b, smollm3-3b, qwen3-1.7b, qwen3-4b, deepseek-r1-7b,
 huihui-qwen3.5-9b-abliterated. Re-verify any time: `node scripts/verify-catalog.mjs` (Windows OK; `--write` refills sizes/hashes/KV/context).
+
+## 7. Library expansion (v2.1)
+
+- 94 entries (54 + 40): HauhauCS Aggressive/Balanced (Gemma 4 E2B/E4B/12B, Qwen3.5 2B/4B/9B, Qwen3 4B 2507, Qwen3-VL 8B, Nemotron 3 Nano 4B), R1 distills (Llama 8B + abliterated, Qwen 7B/14B abliterated), Llama 3.1 8B abliterated, Rocinante, Stheno, Lunaris, Gemmasutra, Hermes 3 8B, Dolphin Qwen2.5 1.5B/3B, Josiefied Qwen3 8B, Phi-4 mini/Gemma 3/Llama 3.2/Qwen2.5/Qwen3 abliterated, huihui VL builds. All verified by `verify-catalog.mjs`.
+- New required fields on `ModelSpec`: `uniqueTag` (`#Hashtag`) and `bestFor` (one honest sentence). Shown on rows and in detail.
+- `PARAM_BANDS` / `paramBand(spec)`: <=1B, 1-2B (to 2.5), 3-4B (to 5), 7-9B (to 10), 10-14B. Vault: "Group: Grade | Parameters" toggle, band chips, prominent Uncensored chip and "Uncensored · small (<=4B)" (`isSmallUncensored`, >= 15 entries).
+- `speedHint(spec)`: "Fast on phone" class derived from file size only (not a measurement).
+- `IMAGE_TOOLS` (SD-Turbo, Real-ESRGAN): `kind: 'image-tool'`, `status: 'engine-unavailable'`, never downloadable; shown in a separate "Image tools" section.
+- Needs owner decision: Q4_K_P (HauhauCS E2B) is a custom quant; RP finetunes (Stheno, Rocinante, Lunaris, Gemmasutra) are tagged Uncensored as marketed, not abliterated; non-commercial licenses (cc-by-nc, qwen-research, other) now warn; owner's own tag/best-for wording and image-tool RAM figures were not supplied, so wording is mine and RAM is "not measured yet".

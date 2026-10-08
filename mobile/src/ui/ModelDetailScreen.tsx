@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { CAPABILITY_INFO, getModel, installSizeBytes, type ModelSpec } from '../core/catalog.ts';
+import { CAPABILITY_INFO, getModel, installSizeBytes, speedHint, type ModelSpec } from '../core/catalog.ts';
 import { defaultContext } from '../core/fit.ts';
 import { formatBytes, formatDuration, formatPercent, formatSpeed } from '../core/format.ts';
 import { actionsFor, type ModelAction } from '../core/modelStatus.ts';
@@ -171,6 +171,9 @@ function Detail({ spec }: { spec: ModelSpec }) {
         {spec.contentPolicy === 'Uncensored' ? <Tag label="Uncensored" /> : null}
         {spec.thinking !== 'none' ? <Tag label={spec.thinking === 'always' ? 'Thinks first' : 'Optional thinking'} /> : null}
       </View>
+      <Text variant="strong">{spec.uniqueTag}</Text>
+      <Text>{`Best for: ${spec.bestFor}`}</Text>
+      <Text variant="small">{speedHint(spec).label}. A class from file size, not a measurement.</Text>
       <Text tone="muted">{spec.description}</Text>
 
       {/* ------------------------------------------------ status and actions */}

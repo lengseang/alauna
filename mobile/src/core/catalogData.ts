@@ -16,6 +16,7 @@ export const MODEL_DATA: ModelData[] = [
   // ------------------------------------------------------------------ tiny / smoke tests
   {
     id: 'smollm2-135m-nano', name: 'SmolLM2 135M Nano', family: 'SmolLM2', paramsB: 0.135, role: 'Tiny', priority: 0,
+    uniqueTag: '#PipelineTest', bestFor: 'Checking that downloads and the engine work in seconds; not for real questions.',
     capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'smollm2',
     repo: 'bartowski/SmolLM2-135M-Instruct-GGUF', filename: 'SmolLM2-135M-Instruct-Q4_K_M.gguf', sizeBytes: 105_454_432, sha256: '2e8040ceae7815abe0dcb3540b9995eaa1fa0d2ca9e797d0a635ae4433c68c2d',
     kvBytesPerToken: 23_040, contextLength: 8_192, published: '2024-10-31',
@@ -23,6 +24,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'smollm2-360m', name: 'SmolLM2 360M', family: 'SmolLM2', paramsB: 0.36, role: 'Tiny', priority: 0,
+    uniqueTag: '#TinyQuick', bestFor: 'Instant short rewrites and simple questions on any phone.',
     capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'smollm2',
     repo: 'bartowski/SmolLM2-360M-Instruct-GGUF', filename: 'SmolLM2-360M-Instruct-Q4_K_M.gguf', sizeBytes: 270_590_880, sha256: '2fa3f013dcdd7b99f9b237717fa0b12d75bbb89984cc1274be1471a465bac9c2',
     kvBytesPerToken: 40_960, contextLength: 8_192, published: '2024-10-31',
@@ -30,6 +32,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3.5-0.8b', name: 'Qwen3.5 0.8B', family: 'Qwen', paramsB: 0.8, role: 'Smoke test', priority: 40,
+    uniqueTag: '#SpeedDemon', bestFor: 'A first download to test the app, with photo input in about 0.5 GB.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
     repo: 'unsloth/Qwen3.5-0.8B-GGUF', filename: 'Qwen3.5-0.8B-Q4_K_M.gguf', sizeBytes: 532_517_120, sha256: 'bd258782e35f7f458f8aced1adc053e6e92e89bc735ba3be89d38a06121dc517',
     mmproj: { repo: 'unsloth/Qwen3.5-0.8B-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 204_987_232, sha256: '56e4c6cfe73b0c82e3e82bc518d7591997e61d81f723fc41a586f4fa69ea2453' },
@@ -38,6 +41,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'smolvlm-500m', name: 'SmolVLM 500M', family: 'SmolVLM', paramsB: 0.51, role: 'Vision', priority: 0,
+    uniqueTag: '#TinyEyes', bestFor: 'Quickly testing photo input with the smallest vision model.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q8_0', license: 'apache-2.0', chatTemplate: 'smolvlm', draftKey: 'smolvlm',
     repo: 'ggml-org/SmolVLM-500M-Instruct-GGUF', filename: 'SmolVLM-500M-Instruct-Q8_0.gguf', sizeBytes: 436_806_912, sha256: '9d4612de6a42214499e301494a3ecc2be0abdd9de44e663bda63f1152fad1bf4',
     mmproj: { repo: 'ggml-org/SmolVLM-500M-Instruct-GGUF', filename: 'mmproj-SmolVLM-500M-Instruct-Q8_0.gguf', sizeBytes: 108_783_360, sha256: 'd1eb8b6b23979205fdf63703ed10f788131a3f812c7b1f72e0119d5d81295150' },
@@ -48,6 +52,7 @@ export const MODEL_DATA: ModelData[] = [
   // ------------------------------------------------------------------ small (C)
   {
     id: 'llama-3.2-1b', name: 'Llama 3.2 1B', family: 'Llama', paramsB: 1.24, role: 'Small & quick', priority: 20,
+    uniqueTag: '#PocketLlama', bestFor: 'Casual, fast chat when RAM and battery matter.',
     capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'llama3.2', chatTemplate: 'llama3', draftKey: 'llama3',
     repo: 'bartowski/Llama-3.2-1B-Instruct-GGUF', filename: 'Llama-3.2-1B-Instruct-Q4_K_M.gguf', sizeBytes: 807_694_464, sha256: '6f85a640a97cf2bf5b8e764087b1e83da0fdb51d7c9fab7d0fece9385611df83',
     kvBytesPerToken: 32_768, contextLength: 131_072, published: '2024-09-25',
@@ -55,6 +60,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'gemma-3-1b', name: 'Gemma 3 1B', family: 'Gemma', paramsB: 1.0, role: 'Small & quick', priority: 15,
+    uniqueTag: '#GemmaLite', bestFor: 'Light everyday chat from the Gemma family.',
     capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma', draftKey: 'gemma3',
     repo: 'unsloth/gemma-3-1b-it-GGUF', filename: 'gemma-3-1b-it-Q4_K_M.gguf', sizeBytes: 806_058_272, sha256: '8270790f3ab69fdfe860b7b64008d9a19986d8df7e407bb018184caa08798ebd',
     kvBytesPerToken: 26_624, contextLength: 32_768, published: '2025-03-12',
@@ -62,6 +68,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'lfm2.5-1.2b', name: 'LFM2.5 1.2B', family: 'LFM2.5', paramsB: 1.17, role: 'Small & quick', priority: 25,
+    uniqueTag: '#HybridSpeed', bestFor: 'Fast replies on small phones thanks to its hybrid design.',
     capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'lfm1.0', chatTemplate: 'lfm2', draftKey: 'lfm2',
     repo: 'LiquidAI/LFM2.5-1.2B-Instruct-GGUF', filename: 'LFM2.5-1.2B-Instruct-Q4_K_M.gguf', sizeBytes: 730_895_168, sha256: 'b1b3de114215d9507409a662a501a631095a479a419584e8a2ded6304b19b4f5',
     kvBytesPerToken: 12_288, contextLength: 128_000, published: '2026-01-04',
@@ -69,6 +76,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'lfm2.5-vl-1.6b', name: 'LFM2.5-VL 1.6B', family: 'LFM2.5', paramsB: 1.6, role: 'Vision', priority: 10,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Small photo understanding with a tiny memory cost.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'lfm1.0', chatTemplate: 'lfm2', draftKey: 'lfm2-vl',
     repo: 'LiquidAI/LFM2.5-VL-1.6B-GGUF', filename: 'LFM2.5-VL-1.6B-Q4_K_M.gguf', sizeBytes: 730_896_256, sha256: 'aefc3c97c9eb30d9c0dd6af4c38250f5f5106b57c8cf92de7914c7d0a9c94da2',
     mmproj: { repo: 'LiquidAI/LFM2.5-VL-1.6B-GGUF', filename: 'mmproj-LFM2.5-VL-1.6b-Q8_0.gguf', sizeBytes: 583_109_888, sha256: '2ce89e610c56f3198ece2b86cf61743a08b9307279c89125eb2412ebb908689d' },
@@ -77,6 +85,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-1.5b', name: 'Qwen2.5 1.5B', family: 'Qwen', paramsB: 1.54, role: 'Small & quick', priority: 20,
+    uniqueTag: '#SteadyBasic', bestFor: 'Plain, dependable small chat with broad language coverage.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5',
     repo: 'bartowski/Qwen2.5-1.5B-Instruct-GGUF', filename: 'Qwen2.5-1.5B-Instruct-Q4_K_M.gguf', sizeBytes: 986_048_768, sha256: '1adf0b11065d8ad2e8123ea110d1ec956dab4ab038eab665614adba04b6c3370',
     kvBytesPerToken: 28_672, contextLength: 32_768, published: '2024-09-17',
@@ -84,6 +93,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-1.5b-uncensored', name: 'Qwen2.5 1.5B Abliterated', family: 'Qwen', paramsB: 1.54, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'Unfiltered chat in a very small download.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5',
     repo: 'mradermacher/Qwen2.5-1.5B-Instruct-abliterated-GGUF', filename: 'Qwen2.5-1.5B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 986_049_088, sha256: '59aa9f44bde5349dbe292d7024d197db605f422b8baf65f3246a59abbde4e8e9',
     kvBytesPerToken: 28_672, contextLength: 32_768, published: '2024-11-04',
@@ -91,6 +101,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'smollm2-1.7b', name: 'SmolLM2 1.7B', family: 'SmolLM2', paramsB: 1.71, role: 'Small & quick', priority: 10,
+    uniqueTag: '#OpenTiny', bestFor: 'Small, fully open model for simple writing help.',
     capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'smollm2',
     repo: 'HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF', filename: 'smollm2-1.7b-instruct-q4_k_m.gguf', sizeBytes: 1_055_609_536, sha256: 'decd2598bc2c8ed08c19adc3c8fdd461ee19ed5708679d1c54ef54a5a30d4f33',
     kvBytesPerToken: 196_608, contextLength: 8_192, published: '2024-10-31',
@@ -98,6 +109,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3-1.7b', name: 'Qwen3 1.7B', family: 'Qwen', paramsB: 1.72, role: 'Reasoning', priority: 30,
+    uniqueTag: '#DeepThinker', bestFor: 'Step-by-step answers (thinking mode) at a small size.',
     capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
     repo: 'unsloth/Qwen3-1.7B-GGUF', filename: 'Qwen3-1.7B-Q4_K_M.gguf', sizeBytes: 1_107_409_472, sha256: 'b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897',
     kvBytesPerToken: 114_688, contextLength: 40_960, published: '2025-04-28',
@@ -105,6 +117,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'deepseek-r1-1.5b', name: 'DeepSeek-R1 Distill 1.5B', family: 'DeepSeek', paramsB: 1.78, role: 'Reasoning', priority: 15,
+    uniqueTag: '#DeepThinker', bestFor: 'Showing its reasoning on short maths or logic questions.',
     capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'always', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'mit', chatTemplate: 'deepseek-r1', draftKey: 'deepseek-r1-qwen',
     repo: 'bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF', filename: 'DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf', sizeBytes: 1_117_320_800, sha256: '1741e5b2d062b07acf048bf0d2c514dadf2a48f94e2b4aa0cfe069af3838ee2f',
     kvBytesPerToken: 28_672, contextLength: 131_072, published: '2025-01-20',
@@ -112,6 +125,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'deepseek-r1-1.5b-abliterated', name: 'DeepSeek-R1 Distill 1.5B Abliterated', family: 'DeepSeek', paramsB: 1.78, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelThinker', bestFor: 'Reasoning chains without refusals, at 1.5B.',
     capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'always', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'mit', chatTemplate: 'deepseek-r1', draftKey: 'deepseek-r1-qwen',
     repo: 'mradermacher/DeepSeek-R1-Distill-Qwen-1.5B-abliterated-GGUF', filename: 'DeepSeek-R1-Distill-Qwen-1.5B-abliterated.Q4_K_M.gguf', sizeBytes: 1_117_321_504, sha256: '20ad8fbd18fcf24656c457bc6929e4491324f63f7fdc239417bed5598d0133ec',
     kvBytesPerToken: 28_672, contextLength: 131_072, published: '2025-04-12',
@@ -119,6 +133,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3.5-2b', name: 'Qwen3.5 2B', family: 'Qwen', paramsB: 2.0, role: 'Fast', priority: 80,
+    uniqueTag: '#SpeedDemon', bestFor: 'Fast general chat with photo input; the quick default.',
     capabilities: ['Text', 'Image', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
     repo: 'unsloth/Qwen3.5-2B-GGUF', filename: 'Qwen3.5-2B-Q4_K_M.gguf', sizeBytes: 1_280_835_840, sha256: 'aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223',
     mmproj: { repo: 'unsloth/Qwen3.5-2B-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 668_227_264, sha256: '7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7' },
@@ -127,6 +142,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3-vl-2b', name: 'Qwen3-VL 2B', family: 'Qwen', paramsB: 2.13, role: 'Vision', priority: 20,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Describing photos and reading text in images on a small budget.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3-vl',
     repo: 'Qwen/Qwen3-VL-2B-Instruct-GGUF', filename: 'Qwen3VL-2B-Instruct-Q4_K_M.gguf', sizeBytes: 1_107_409_952, sha256: '089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae',
     mmproj: { repo: 'Qwen/Qwen3-VL-2B-Instruct-GGUF', filename: 'mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf', sizeBytes: 445_053_216, sha256: 'f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82' },
@@ -135,6 +151,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'smolvlm2-2.2b', name: 'SmolVLM2 2.2B', family: 'SmolVLM', paramsB: 2.25, role: 'Vision', priority: 5,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Short photo descriptions from an open vision model.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'smolvlm', draftKey: 'smolvlm',
     repo: 'ggml-org/SmolVLM2-2.2B-Instruct-GGUF', filename: 'SmolVLM2-2.2B-Instruct-Q4_K_M.gguf', sizeBytes: 1_112_602_656, sha256: '0cf76814555b8665149075b74ab6b5c1d428ea1d3d01c1918c12012e8d7c9f58',
     mmproj: { repo: 'ggml-org/SmolVLM2-2.2B-Instruct-GGUF', filename: 'mmproj-SmolVLM2-2.2B-Instruct-Q8_0.gguf', sizeBytes: 592_523_200, sha256: 'ae07ea1facd07dd3230c4483b63e8cda96c6944ad2481f33d531f79e892dd024' },
@@ -143,6 +160,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'moondream2', name: 'Moondream 2', family: 'Moondream', paramsB: 1.87, role: 'Vision', priority: 5,
+    uniqueTag: '#CaptionSpecialist', bestFor: 'Short captions and simple questions about one photo.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'F16', license: 'apache-2.0', chatTemplate: 'vicuna', draftKey: 'moondream',
     repo: 'ggml-org/moondream2-20250414-GGUF', filename: 'moondream2-text-model-f16_ct-vicuna.gguf', sizeBytes: 2_839_535_072, sha256: '925bcb666baf69ed747e26121af287b16ae7764483be9548b1382f29783689a5',
     mmproj: { repo: 'ggml-org/moondream2-20250414-GGUF', filename: 'moondream2-mmproj-f16-20250414.gguf', sizeBytes: 909_777_984, sha256: '4cc1cb3660d87ff56432ebeb7884ad35d67c48c7b9f6b2856f305e39c38eed8f' },
@@ -151,6 +169,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'gemma-2-2b', name: 'Gemma 2 2B', family: 'Gemma', paramsB: 2.61, role: 'All-rounder', priority: 10,
+    uniqueTag: '#SmoothTalker', bestFor: 'Natural-sounding chat from an older but polished Gemma.',
     capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma', draftKey: 'gemma2',
     repo: 'bartowski/gemma-2-2b-it-GGUF', filename: 'gemma-2-2b-it-Q4_K_M.gguf', sizeBytes: 1_708_582_752, sha256: 'e0aee85060f168f0f2d8473d7ea41ce2f3230c1bc1374847505ea599288a7787',
     kvBytesPerToken: 106_496, contextLength: 8_192, published: '2024-07-31',
@@ -160,6 +179,7 @@ export const MODEL_DATA: ModelData[] = [
   // ------------------------------------------------------------------ mid (B)
   {
     id: 'qwen2.5-3b', name: 'Qwen2.5 3B', family: 'Qwen', paramsB: 3.09, role: 'All-rounder', priority: 15,
+    uniqueTag: '#SteadyAllrounder', bestFor: 'General chat and summaries in the 3B class.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'qwen-research', chatTemplate: 'chatml', draftKey: 'qwen2.5',
     repo: 'bartowski/Qwen2.5-3B-Instruct-GGUF', filename: 'Qwen2.5-3B-Instruct-Q4_K_M.gguf', sizeBytes: 1_929_903_264, sha256: '9c9f56a391a3abbd5b89d0245bf6106081bcc3173119d4229235dd9d23253f94',
     kvBytesPerToken: 36_864, contextLength: 32_768, published: '2024-09-16',
@@ -167,6 +187,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-coder-3b', name: 'Qwen2.5-Coder 3B', family: 'Qwen', paramsB: 3.09, role: 'Coding', priority: 20,
+    uniqueTag: '#PocketCoder', bestFor: 'Quick code snippets and explanations offline.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'qwen-research', chatTemplate: 'chatml', draftKey: 'qwen2.5',
     repo: 'bartowski/Qwen2.5-Coder-3B-Instruct-GGUF', filename: 'Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf', sizeBytes: 1_929_903_360, sha256: '3da3afe6cf5c674ac195803ea0dd6fee7e1c228c2105c1ce8c66890d1d4ab460',
     kvBytesPerToken: 36_864, contextLength: 32_768, published: '2024-11-07',
@@ -174,6 +195,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'llama-3.2-3b', name: 'Llama 3.2 3B', family: 'Llama', paramsB: 3.21, role: 'All-rounder', priority: 25,
+    uniqueTag: '#SweetSpot', bestFor: 'The best everyday balance of speed and quality at 3B.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'llama3.2', chatTemplate: 'llama3', draftKey: 'llama3',
     repo: 'bartowski/Llama-3.2-3B-Instruct-GGUF', filename: 'Llama-3.2-3B-Instruct-Q4_K_M.gguf', sizeBytes: 2_019_377_696, sha256: '6c1a2b41161032677be168d354123594c0e6e67d2b9227c84f296ad037c728ff',
     kvBytesPerToken: 114_688, contextLength: 131_072, published: '2024-09-25',
@@ -181,6 +203,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'llama-3.2-3b-abliterated', name: 'Llama 3.2 3B Abliterated', family: 'Llama', paramsB: 3.21, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'Unfiltered chat with the Llama 3.2 3B base.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'llama3.2', chatTemplate: 'llama3', draftKey: 'llama3',
     repo: 'mradermacher/Llama-3.2-3B-Instruct-abliterated-GGUF', filename: 'Llama-3.2-3B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 2_241_004_512, sha256: '3a8ad1732ca90048bc5ecf44dcb3b789469e8a68d389ab79516853bf0d27ad34',
     kvBytesPerToken: 114_688, contextLength: 131_072, published: '2024-11-20',
@@ -188,6 +211,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'hermes-3-llama-3.2-3b', name: 'Hermes 3 Llama 3.2 3B', family: 'Hermes', paramsB: 3.21, role: 'All-rounder', priority: 10,
+    uniqueTag: '#SteerableAgent', bestFor: 'Following system prompts, roles and structured output.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'llama3', chatTemplate: 'chatml', draftKey: 'hermes3',
     repo: 'NousResearch/Hermes-3-Llama-3.2-3B-GGUF', filename: 'Hermes-3-Llama-3.2-3B.Q4_K_M.gguf', sizeBytes: 2_019_373_888, sha256: '91776fe0f6cd7483d9d5e06162fdd1f8f0262c15ced269791b4d96a655e8a5a2',
     kvBytesPerToken: 114_688, contextLength: 131_072, published: '2024-12-11',
@@ -195,6 +219,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'dolphin-3.0-llama3.2-3b', name: 'Dolphin 3.0 Llama 3.2 3B', family: 'Dolphin', paramsB: 3.21, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'Steerable, low-refusal chat in a 3B model.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'llama3.2', chatTemplate: 'chatml', draftKey: 'dolphin3',
     repo: 'bartowski/Dolphin3.0-Llama3.2-3B-GGUF', filename: 'Dolphin3.0-Llama3.2-3B-Q4_K_M.gguf', sizeBytes: 2_019_382_400, sha256: '5d6d02eeefa1ab5dbf23f97afdf5c2c95ad3d946dc3b6e9ab72e6c1637d54177',
     kvBytesPerToken: 114_688, contextLength: 131_072, published: '2025-01-05',
@@ -202,6 +227,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'smollm3-3b', name: 'SmolLM3 3B', family: 'SmolLM3', paramsB: 3.08, role: 'Reasoning', priority: 15,
+    uniqueTag: '#DeepThinker', bestFor: 'Long-context reasoning in a fully open 3B model.',
     capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'smollm3', draftKey: 'smollm3',
     repo: 'bartowski/HuggingFaceTB_SmolLM3-3B-GGUF', filename: 'HuggingFaceTB_SmolLM3-3B-Q4_K_M.gguf', sizeBytes: 1_915_305_792, sha256: '519732558d5fa7420ab058e1b776dcfe73da78013c2fe59c7ca43c325ef89132',
     kvBytesPerToken: 73_728, contextLength: 65_536, published: '2025-07-08',
@@ -209,6 +235,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'ministral-3-3b', name: 'Ministral 3 3B', family: 'Ministral', paramsB: 3.85, role: 'Vision', priority: 20,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Photo understanding with a modern Mistral base.',
     capabilities: ['Text', 'Image', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'mistral', draftKey: 'ministral3',
     repo: 'unsloth/Ministral-3-3B-Instruct-2512-GGUF', filename: 'Ministral-3-3B-Instruct-2512-Q4_K_M.gguf', sizeBytes: 2_146_497_824, sha256: 'fd46fc371ff0509bfa8657ac956b7de8534d7d9baaa4947975c0648c3aa397f4',
     mmproj: { repo: 'unsloth/Ministral-3-3B-Instruct-2512-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 840_296_608, sha256: '5ddb0f568242657aa527c6dadafd5d0fd55438d68d7b40830dc502b8d7231b88' },
@@ -217,6 +244,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-vl-3b', name: 'Qwen2.5-VL 3B', family: 'Qwen', paramsB: 3.75, role: 'Vision', priority: 15,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Reading screenshots and documents in photos.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'qwen-research', chatTemplate: 'chatml', draftKey: 'qwen2.5-vl',
     repo: 'ggml-org/Qwen2.5-VL-3B-Instruct-GGUF', filename: 'Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf', sizeBytes: 1_929_901_056, sha256: 'd02fe9b69ad8cadbbd228e387667af66612c44bed29ffc8eb1e7caf9ac486c12',
     mmproj: { repo: 'ggml-org/Qwen2.5-VL-3B-Instruct-GGUF', filename: 'mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf', sizeBytes: 844_757_728, sha256: '980c9b2f78c04e6cff93d277ada09e768394f112d75db3b4e9dea8a69f9fb904' },
@@ -225,6 +253,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-vl-3b-abliterated', name: 'Qwen2.5-VL 3B Abliterated', family: 'Qwen', paramsB: 3.75, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelEyes', bestFor: 'Photo questions without refusals (projector unverified on device).',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'qwen-research', chatTemplate: 'chatml', draftKey: 'qwen2.5-vl',
     repo: 'mradermacher/Qwen2.5-VL-3B-Instruct-abliterated-GGUF', filename: 'Qwen2.5-VL-3B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 1_929_902_976, sha256: 'c3812fd281ba7eddf9de4e03e95fd1d111d2878ce722c3bb1cf53186d07254c3',
     mmproj: { repo: 'ggml-org/Qwen2.5-VL-3B-Instruct-GGUF', filename: 'mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf', sizeBytes: 844_757_728, sha256: '980c9b2f78c04e6cff93d277ada09e768394f112d75db3b4e9dea8a69f9fb904' },
@@ -233,6 +262,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-omni-3b', name: 'Qwen2.5-Omni 3B', family: 'Qwen', paramsB: 3.4, role: 'Voice + vision', priority: 20,
+    uniqueTag: '#HearAndSee', bestFor: 'Taking speech and photos directly into one model.',
     capabilities: ['Text', 'Image', 'Voice'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'qwen-research', chatTemplate: 'chatml', draftKey: 'qwen2.5-omni',
     repo: 'ggml-org/Qwen2.5-Omni-3B-GGUF', filename: 'Qwen2.5-Omni-3B-Q4_K_M.gguf', sizeBytes: 2_104_931_648, sha256: '4b0bd358c1e9ec55dd3055ef6d71c958c821533d85916a10cfa89c4552a86e29',
     mmproj: { repo: 'ggml-org/Qwen2.5-Omni-3B-GGUF', filename: 'mmproj-Qwen2.5-Omni-3B-Q8_0.gguf', sizeBytes: 1_538_031_328, sha256: '4e6c816cd33f7298d07cb780c136a396631e50e62f6501660271f8c6e302e565' },
@@ -241,6 +271,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3-4b', name: 'Qwen3 4B', family: 'Qwen', paramsB: 4.02, role: 'Reasoning', priority: 50,
+    uniqueTag: '#DeepThinker', bestFor: 'Step-by-step reasoning at 4B.',
     capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
     repo: 'Qwen/Qwen3-4B-GGUF', filename: 'Qwen3-4B-Q4_K_M.gguf', sizeBytes: 2_497_280_256, sha256: '7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5',
     kvBytesPerToken: 147_456, contextLength: 40_960, published: '2025-05-05',
@@ -248,6 +279,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3-4b-instruct-2507', name: 'Qwen3 4B Instruct', family: 'Qwen', paramsB: 4.02, role: 'No-thinking (safe fallback)', priority: 70,
+    uniqueTag: '#NoThinkFast', bestFor: 'Direct answers without a thinking phase.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
     repo: 'unsloth/Qwen3-4B-Instruct-2507-GGUF', filename: 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf', sizeBytes: 2_497_281_120, sha256: '3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597',
     kvBytesPerToken: 147_456, contextLength: 262_144, published: '2025-08-06',
@@ -255,6 +287,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3.5-4b', name: 'Qwen3.5 4B', family: 'Qwen', paramsB: 4.0, role: 'Balanced (default)', priority: 100,
+    uniqueTag: '#DefaultPick', bestFor: 'The recommended all-round model: chat, photos and thinking.',
     capabilities: ['Text', 'Image', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
     repo: 'unsloth/Qwen3.5-4B-GGUF', filename: 'Qwen3.5-4B-Q4_K_M.gguf', sizeBytes: 2_740_937_888, sha256: '00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4',
     mmproj: { repo: 'unsloth/Qwen3.5-4B-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 672_423_616, sha256: 'cd88edcf8d031894960bb0c9c5b9b7e1fea6ebee02b9f7ce925a00d12891f864' },
@@ -263,6 +296,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3-vl-4b', name: 'Qwen3-VL 4B', family: 'Qwen', paramsB: 4.44, role: 'Vision', priority: 30,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Higher-quality photo understanding than the 2B vision models.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3-vl',
     repo: 'unsloth/Qwen3-VL-4B-Instruct-GGUF', filename: 'Qwen3-VL-4B-Instruct-Q4_K_M.gguf', sizeBytes: 2_497_282_336, sha256: 'd4dcd426bfba75752a312b266b80fec8136fbaca13c62d93b7ac41fa67f0492b',
     mmproj: { repo: 'unsloth/Qwen3-VL-4B-Instruct-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 836_180_640, sha256: '1b9f4e92f0fbda14d7d7b58baed86039b8a980fe503d9d6a9393f25c0028f1fc' },
@@ -271,6 +305,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'phi-4-mini-3.8b', name: 'Phi-4 Mini 3.8B', family: 'Phi', paramsB: 3.84, role: 'All-rounder', priority: 20,
+    uniqueTag: '#LogicBrain', bestFor: 'Maths, logic and structured answers in a small footprint.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'mit', chatTemplate: 'phi4', draftKey: 'phi4',
     repo: 'unsloth/Phi-4-mini-instruct-GGUF', filename: 'Phi-4-mini-instruct-Q4_K_M.gguf', sizeBytes: 2_491_874_272, sha256: '88c00229914083cd112853aab84ed51b87bdf6b9ce42f532d8c85c7c63b1730a',
     kvBytesPerToken: 131_072, contextLength: 131_072, published: '2025-02-28',
@@ -278,6 +313,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'gemma-3-4b', name: 'Gemma 3 4B', family: 'Gemma', paramsB: 4.3, role: 'Vision', priority: 25,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Photo chat from the Gemma family at 4B.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma', draftKey: 'gemma3',
     repo: 'unsloth/gemma-3-4b-it-GGUF', filename: 'gemma-3-4b-it-Q4_K_M.gguf', sizeBytes: 2_489_894_016, sha256: '04a43a22e8d2003deda5acc262f68ec1005fa76c735a9962a8c77042a74a7d19',
     mmproj: { repo: 'unsloth/gemma-3-4b-it-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 851_251_328, sha256: '731199e016ec5f227b8293fef839899472e0ee4c51adf5f9e5cb66f6558fa142' },
@@ -286,6 +322,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'gemma-4-e2b', name: 'Gemma 4 E2B', family: 'Gemma', paramsB: 4.65, role: 'Different family', priority: 60,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Photos and recorded speech with fast MTP speed-up.',
     capabilities: ['Text', 'Image', 'Voice', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'gemma4', draftKey: 'gemma4',
     repo: 'unsloth/gemma-4-E2B-it-GGUF', filename: 'gemma-4-E2B-it-Q4_K_M.gguf', sizeBytes: 3_106_738_272, sha256: '740185b21d22ceb83a11c3aa62ad5842ef32c70f6096d756bbee85a1e4ec34b8',
     mmproj: { repo: 'unsloth/gemma-4-E2B-it-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 985_654_080, sha256: '140be8d7849741f88c50757d529b84373ee8e27052cc2236855b537f4a8215fa' },
@@ -297,6 +334,7 @@ export const MODEL_DATA: ModelData[] = [
   // ------------------------------------------------------------------ heavy (S)
   {
     id: 'gemma-4-e4b', name: 'Gemma 4 E4B', family: 'Gemma', paramsB: 7.5, role: 'Voice + vision', priority: 35,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Higher-quality photos and speech than E2B, still phone-sized.',
     capabilities: ['Text', 'Image', 'Voice', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'gemma4', draftKey: 'gemma4',
     repo: 'unsloth/gemma-4-E4B-it-GGUF', filename: 'gemma-4-E4B-it-Q4_K_M.gguf', sizeBytes: 4_977_171_584, sha256: '85a896a047553e842f25297ee5b031d64ff30147d9c4af17b1e4b394cd1fab87',
     mmproj: { repo: 'unsloth/gemma-4-E4B-it-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 990_372_672, sha256: 'ddf46c21d7078e95338cfc22306b19b276a29a5ad089023449dd54d4b6170a51' },
@@ -306,6 +344,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-7b', name: 'Qwen2.5 7B', family: 'Qwen', paramsB: 7.62, role: 'All-rounder', priority: 10,
+    uniqueTag: '#SolidGeneralist', bestFor: 'Good general writing and chat at 7B.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5',
     repo: 'bartowski/Qwen2.5-7B-Instruct-GGUF', filename: 'Qwen2.5-7B-Instruct-Q4_K_M.gguf', sizeBytes: 4_683_074_240, sha256: '65b8fcd92af6b4fefa935c625d1ac27ea29dcb6ee14589c55a8f115ceaaa1423',
     kvBytesPerToken: 57_344, contextLength: 32_768, published: '2024-09-16',
@@ -313,6 +352,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-7b-q4_0', name: 'Qwen2.5 7B Compact', family: 'Qwen', paramsB: 7.62, role: 'All-rounder', priority: 5,
+    uniqueTag: '#CompactSeven', bestFor: 'Same model as Qwen2.5 7B in a slightly smaller, faster quantization.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_0', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5',
     repo: 'bartowski/Qwen2.5-7B-Instruct-GGUF', filename: 'Qwen2.5-7B-Instruct-Q4_0.gguf', sizeBytes: 4_444_121_792, sha256: 'b878c7e0729b96b9cb0c9f1a8e944a8b20d5d09df811540537f09c85a065b5c2',
     kvBytesPerToken: 57_344, contextLength: 32_768, published: '2024-09-16',
@@ -320,6 +360,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-coder-7b', name: 'Qwen2.5-Coder 7B', family: 'Qwen', paramsB: 7.62, role: 'Coding', priority: 15,
+    uniqueTag: '#CodeWorkhorse', bestFor: 'Writing and explaining code offline.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5',
     repo: 'bartowski/Qwen2.5-Coder-7B-Instruct-GGUF', filename: 'Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf', sizeBytes: 4_683_074_336, sha256: '1664fccab734674a50763490a8c6931b70e3f2f8ec10031b54806d30e5f956b6',
     kvBytesPerToken: 57_344, contextLength: 32_768, published: '2024-09-17',
@@ -327,6 +368,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-vl-7b', name: 'Qwen2.5-VL 7B', family: 'Qwen', paramsB: 8.29, role: 'Vision', priority: 10,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Documents, charts and screenshots in photos.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5-vl',
     repo: 'ggml-org/Qwen2.5-VL-7B-Instruct-GGUF', filename: 'Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf', sizeBytes: 4_683_072_032, sha256: '9258bf05b12686d097ff3b6b18d968ab393649780aa2b3cd67fec43d50554392',
     mmproj: { repo: 'ggml-org/Qwen2.5-VL-7B-Instruct-GGUF', filename: 'mmproj-Qwen2.5-VL-7B-Instruct-Q8_0.gguf', sizeBytes: 853_119_712, sha256: '2ddb555391bae966e412deab9e07b58afa18bcc06930ba0f1c78a3695ab9e506' },
@@ -335,6 +377,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen2.5-vl-7b-abliterated', name: 'Qwen2.5-VL 7B Abliterated', family: 'Qwen', paramsB: 8.29, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelEyes', bestFor: 'Photo questions without refusals at 7B.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5-vl',
     repo: 'mradermacher/Qwen2.5-VL-7B-Instruct-abliterated-GGUF', filename: 'Qwen2.5-VL-7B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 4_683_073_952, sha256: 'adc8b3a0478606fc1a5dd3b61bff9756f9f66ca9affd92e91ff4135e553621c9',
     mmproj: { repo: 'mradermacher/Qwen2.5-VL-7B-Instruct-abliterated-GGUF', filename: 'Qwen2.5-VL-7B-Instruct-abliterated.mmproj-Q8_0.gguf', sizeBytes: 853_119_712, sha256: 'fa7c77569880ff337d33b31e70379544195ead350cc30d672eb6cacd11a0d1af' },
@@ -343,6 +386,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'minicpm-v-2.6-8b', name: 'MiniCPM-V 2.6', family: 'MiniCPM', paramsB: 8.1, role: 'Vision', priority: 5,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Detailed photo understanding and OCR.',
     capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'minicpm-model-license', chatTemplate: 'chatml', draftKey: 'minicpm-v',
     repo: 'openbmb/MiniCPM-V-2_6-gguf', filename: 'ggml-model-Q4_K_M.gguf', sizeBytes: 4_681_089_344, sha256: '3a4078d53b46f22989adbf998ce5a3fd090b6541f112d7e936eb4204a04100b1',
     mmproj: { repo: 'openbmb/MiniCPM-V-2_6-gguf', filename: 'mmproj-model-f16.gguf', sizeBytes: 1_044_425_152, sha256: '4485f68a0f1aa404c391e788ea88ea653c100d8e98fe572698f701e5809711fd' },
@@ -351,6 +395,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'deepseek-r1-7b', name: 'DeepSeek-R1 Distill 7B', family: 'DeepSeek', paramsB: 7.62, role: 'Reasoning', priority: 10,
+    uniqueTag: '#DeepThinker', bestFor: 'Long step-by-step reasoning on maths and logic.',
     capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'always', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'mit', chatTemplate: 'deepseek-r1', draftKey: 'deepseek-r1-qwen',
     repo: 'bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF', filename: 'DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf', sizeBytes: 4_683_073_504, sha256: '731ece8d06dc7eda6f6572997feb9ee1258db0784827e642909d9b565641937b',
     kvBytesPerToken: 57_344, contextLength: 131_072, published: '2025-01-20',
@@ -358,6 +403,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'llama-3.1-8b', name: 'Llama 3.1 8B', family: 'Llama', paramsB: 8.03, role: 'All-rounder', priority: 10,
+    uniqueTag: '#BigLlama', bestFor: 'Strong general chat and long context at 8B.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'llama3.1', chatTemplate: 'llama3', draftKey: 'llama3',
     repo: 'bartowski/Meta-Llama-3.1-8B-Instruct-GGUF', filename: 'Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf', sizeBytes: 4_920_739_232, sha256: '7b064f5842bf9532c91456deda288a1b672397a54fa729aa665952863033557c',
     kvBytesPerToken: 131_072, contextLength: 131_072, published: '2024-07-23',
@@ -365,6 +411,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'dolphin-3.0-8b', name: 'Dolphin 3.0 8B', family: 'Dolphin', paramsB: 8.03, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'Steerable, low-refusal chat at 8B.',
     capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'llama3.1', chatTemplate: 'chatml', draftKey: 'dolphin3',
     repo: 'dphn/Dolphin3.0-Llama3.1-8B-GGUF', filename: 'Dolphin3.0-Llama3.1-8B-Q4_K_M.gguf', sizeBytes: 4_920_745_856, sha256: '4c001f29d4edbd9327a6df8e16e2b7907a64e0e31b0a7abe9c779a96773f304e',
     kvBytesPerToken: 131_072, contextLength: 131_072, published: '2025-01-02',
@@ -372,6 +419,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3-8b', name: 'Qwen3 8B', family: 'Qwen', paramsB: 8.19, role: 'Reasoning', priority: 20,
+    uniqueTag: '#DeepThinker', bestFor: 'High-quality reasoning with thinking on or off.',
     capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
     repo: 'Qwen/Qwen3-8B-GGUF', filename: 'Qwen3-8B-Q4_K_M.gguf', sizeBytes: 5_027_783_488, sha256: 'd98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785',
     kvBytesPerToken: 147_456, contextLength: 40_960, published: '2025-05-03',
@@ -379,6 +427,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'huihui-qwen3-8b-abliterated', name: 'Huihui Qwen3 8B Abliterated', family: 'Qwen', paramsB: 8.19, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'Qwen3 8B reasoning without refusals.',
     capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
     repo: 'mradermacher/Huihui-Qwen3-8B-abliterated-v2-GGUF', filename: 'Huihui-Qwen3-8B-abliterated-v2.Q4_K_M.gguf', sizeBytes: 5_027_780_352, sha256: '0bdba3b32d450374b3c404d9ad531703db139b33798149efc84e2bce45eedbb5',
     kvBytesPerToken: 147_456, contextLength: 40_960, published: '2025-06-18',
@@ -386,6 +435,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'gemma-2-9b', name: 'Gemma 2 9B', family: 'Gemma', paramsB: 9.24, role: 'All-rounder', priority: 5,
+    uniqueTag: '#SmoothTalker', bestFor: 'Natural prose and summaries from Gemma 2.',
     capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma', draftKey: 'gemma2',
     repo: 'bartowski/gemma-2-9b-it-GGUF', filename: 'gemma-2-9b-it-Q4_K_M.gguf', sizeBytes: 5_761_057_728, sha256: '13b2a7b4115bbd0900162edcebe476da1ba1fc24e718e8b40d32f6e300f56dfe',
     kvBytesPerToken: 344_064, contextLength: 8_192, published: '2024-06-27',
@@ -393,6 +443,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'qwen3.5-9b', name: 'Qwen3.5 9B', family: 'Qwen', paramsB: 9.0, role: 'Max quality (needs 12 GB+)', priority: 30,
+    uniqueTag: '#MaxQuality', bestFor: 'The best answers and photo input for 12 GB phones, with a small context.',
     capabilities: ['Text', 'Image', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
     repo: 'unsloth/Qwen3.5-9B-GGUF', filename: 'Qwen3.5-9B-Q4_K_M.gguf', sizeBytes: 5_680_522_464, sha256: '03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8',
     mmproj: { repo: 'unsloth/Qwen3.5-9B-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 918_166_080, sha256: 'f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f' },
@@ -401,6 +452,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'huihui-qwen3.5-9b-abliterated', name: 'Huihui Qwen3.5 9B Abliterated', family: 'Qwen', paramsB: 9.0, role: 'Uncensored', priority: 0,
+    uniqueTag: '#MaxRebel', bestFor: 'Qwen3.5 9B quality without refusals, with photo input.',
     capabilities: ['Text', 'Image', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
     repo: 'mradermacher/Huihui-Qwen3.5-9B-abliterated-GGUF', filename: 'Huihui-Qwen3.5-9B-abliterated.Q4_K_M.gguf', sizeBytes: 5_627_045_248, sha256: 'ea1858ef4dc4b648b8dbb44612962a0333e945060dd0545ac0f28d7c4416e4b3',
     mmproj: { repo: 'mradermacher/Huihui-Qwen3.5-9B-abliterated-GGUF', filename: 'Huihui-Qwen3.5-9B-abliterated.mmproj-Q8_0.gguf', sizeBytes: 624_229_760, sha256: 'cf54897b6bbfa89c809fdc2b8236e0977bed70760b39ee8f11d87296e1d0e046' },
@@ -409,6 +461,7 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'gemma-4-12b', name: 'Gemma 4 12B', family: 'Gemma', paramsB: 12, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#HeavyHitter', bestFor: 'Top Gemma 4 quality; realistically 16 GB phones.',
     capabilities: ['Text', 'Image', 'Voice', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'gemma4', draftKey: 'gemma4',
     repo: 'unsloth/gemma-4-12b-it-GGUF', filename: 'gemma-4-12b-it-Q4_K_M.gguf', sizeBytes: 7_121_861_440, sha256: '0a270ec9fe6b34f4a0d33992b6135117b484ebc4766ab76b51d4ae8c457e4c42',
     mmproj: { repo: 'unsloth/gemma-4-12b-it-GGUF', filename: 'mmproj-F16.gguf', sizeBytes: 175_115_840, sha256: '91f086971e56d7a7d8d39e271873fccdb49541bd259d6e02c401a4f1cb7a219e' },
@@ -418,10 +471,344 @@ export const MODEL_DATA: ModelData[] = [
   },
   {
     id: 'gemma-4-12b-abliterated', name: 'Huihui Gemma 4 12B Abliterated', family: 'Gemma', paramsB: 12, role: 'Uncensored', priority: 0,
+    uniqueTag: '#HeavyRebel', bestFor: 'Gemma 4 12B without refusals, with photo and speech input.',
     capabilities: ['Text', 'Image', 'Voice', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'gemma4', draftKey: 'gemma4',
     repo: 'mradermacher/Huihui-gemma-4-12B-it-abliterated-GGUF', filename: 'Huihui-gemma-4-12B-it-abliterated.Q4_K_M.gguf', sizeBytes: 7_381_382_720, sha256: '46fce9e43ba9d625317e95513c6a47d126196a300536b54391c88e6d1ad9573a',
     mmproj: { repo: 'mradermacher/Huihui-gemma-4-12B-it-abliterated-GGUF', filename: 'Huihui-gemma-4-12B-it-abliterated.mmproj-Q8_0.gguf', sizeBytes: 158_987_776, sha256: 'f6630235e89e2e9ba38c9534dcc3d77c33920c29de15bc2a80fd1e0af5dba2ea' },
     kvBytesPerToken: 344_064, contextLength: 131_072, published: '2026-06-08',
     description: 'Gemma 4 12B with refusals removed (huihui-ai). Photos and recorded speech with its add-on. Realistically only for 16 GB phones. (The old card with this id was the standard Gemma 2 9B, not abliterated.)',
+  },
+  // ------------------------------------------------------------------ v2.1 expansion (uncensored / abliterated / roleplay)
+  {
+    id: 'gemma-4-e2b-hauhau-aggressive', name: 'Gemma 4 E2B Uncensored (HauhauCS Aggressive)', family: 'Gemma', paramsB: 4.65, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'Unfiltered chat with photo and speech input on any recent phone.',
+    capabilities: ['Text', 'Image', 'Voice', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_P', license: 'gemma', chatTemplate: 'gemma4', draftKey: 'gemma4',
+    repo: 'HauhauCS/Gemma-4-E2B-Uncensored-HauhauCS-Aggressive', filename: 'Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-Q4_K_P.gguf', sizeBytes: 3_450_277_824, sha256: 'aa866c1e514468f3d0f33971679d63c11b7c9c47acddd1cc5785fc467e52c21d',
+    mmproj: { repo: 'HauhauCS/Gemma-4-E2B-Uncensored-HauhauCS-Aggressive', filename: 'mmproj-Gemma-4-E2B-Uncensored-HauhauCS-Aggressive-f16.gguf', sizeBytes: 985_570_240, sha256: '628b7e999f89beef70b32396ae84f59c096e867747d7901f0134064ff672e290' },
+    kvBytesPerToken: 18_432, contextLength: 131_072, published: '2026-04-02',
+    description: 'Gemma 4 E2B tuned by HauhauCS to answer without refusals (Aggressive build). Q4_K_P is the uploader\'s own 4-bit mix. Photos and recorded speech with its add-on.',
+  },
+  {
+    id: 'gemma-4-e4b-hauhau-aggressive', name: 'Gemma 4 E4B Uncensored (HauhauCS Aggressive)', family: 'Gemma', paramsB: 7.5, role: 'Uncensored', priority: 0,
+    uniqueTag: '#NativeMultimodal', bestFor: 'The strongest unfiltered phone-sized model with photo and speech input.',
+    capabilities: ['Text', 'Image', 'Voice', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma4', draftKey: 'gemma4',
+    repo: 'HauhauCS/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive', filename: 'Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf', sizeBytes: 5_335_285_728, sha256: 'd0027dd3a9128d9323e9f282c8bf010a8526c46477584535991dc1a869b56e96',
+    mmproj: { repo: 'HauhauCS/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive', filename: 'mmproj-Gemma-4-E4B-Uncensored-HauhauCS-Aggressive-f16.gguf', sizeBytes: 990_288_832, sha256: 'debad39ab9c1152ab67695a674fb35e8375b2320c57bfd5075835d3ccb16c7db' },
+    kvBytesPerToken: 57_344, contextLength: 131_072, published: '2026-04-02',
+    description: 'Gemma 4 E4B without refusals (HauhauCS Aggressive). Photos and recorded speech with its add-on. Large download (5.3 GB).',
+  },
+  {
+    id: 'gemma-4-12b-hauhau-balanced', name: 'Gemma 4 12B QAT Uncensored (HauhauCS Balanced)', family: 'Gemma', paramsB: 12, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#HeavyRebel', bestFor: 'Top-end unfiltered Gemma 4 for 16 GB phones; Balanced keeps more of the original behaviour.',
+    capabilities: ['Text', 'Image', 'Voice', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma4', draftKey: 'gemma4',
+    repo: 'HauhauCS/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced', filename: 'Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-Q4_K_M.gguf', sizeBytes: 7_381_381_760, sha256: '59656d7494d6376ca97e9e20b64ea2e16cd97f12ec6d47bfccba91cb785b5134',
+    mmproj: { repo: 'HauhauCS/Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced', filename: 'mmproj-Gemma4-12B-QAT-Uncensored-HauhauCS-Balanced-BF16.gguf', sizeBytes: 175_115_264, sha256: 'b59e815479b7e5f0665bd29e6784c104a368092bcbc63120148c606f9276ab8e' },
+    kvBytesPerToken: 344_064, contextLength: 262_144, published: '2026-06-22',
+    description: 'Gemma 4 12B (QAT base) with refusals removed, Balanced build (less aggressive than the Aggressive series). Photos and speech with its add-on. Realistically only for 16 GB phones.',
+  },
+  {
+    id: 'qwen3.5-2b-hauhau-aggressive', name: 'Qwen3.5 2B Uncensored (HauhauCS Aggressive)', family: 'Qwen', paramsB: 2, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SpeedDemon', bestFor: 'Fast unfiltered chat with photo input in about 2 GB.',
+    capabilities: ['Text', 'Image', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
+    repo: 'HauhauCS/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive', filename: 'Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf', sizeBytes: 1_270_808_032, sha256: 'be3ccca13a9d1bc8b67165ea80bd103cd6151a37ad131183cc7ca388f78d9517',
+    mmproj: { repo: 'HauhauCS/Qwen3.5-2B-Uncensored-HauhauCS-Aggressive', filename: 'mmproj-Qwen3.5-2B-Uncensored-HauhauCS-Aggressive-f16.gguf', sizeBytes: 668_226_688, sha256: 'a86ac75fbd9a11d1883c688969d88a11d3d24a729cc7e181833fd2e1b3865c9d' },
+    kvBytesPerToken: 12_288, contextLength: 262_144, published: '2026-03-05',
+    description: 'Qwen3.5 2B without refusals (HauhauCS Aggressive), thinking on or off, photos with its add-on.',
+  },
+  {
+    id: 'qwen3.5-4b-hauhau-aggressive', name: 'Qwen3.5 4B Uncensored (HauhauCS Aggressive)', family: 'Qwen', paramsB: 4, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'The unfiltered all-rounder: thinking, photos and speed balanced for 8-12 GB phones.',
+    capabilities: ['Text', 'Image', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
+    repo: 'HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive', filename: 'Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf', sizeBytes: 2_707_513_696, sha256: '79e28ecacf84e75b6056cf4059636d435aa9eb67795780f7b7dbc7d32a962741',
+    mmproj: { repo: 'HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive', filename: 'mmproj-Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-BF16.gguf', sizeBytes: 675_568_768, sha256: 'a1e32e86ea99aa7a56f3dcfe7e63c1d0be9439d31fd07087099f15bc0fda0f22' },
+    kvBytesPerToken: 32_768, contextLength: 262_144, published: '2026-03-03',
+    description: 'Qwen3.5 4B without refusals (HauhauCS Aggressive), the unfiltered counterpart of the default model. Thinking toggle and photos with its add-on.',
+  },
+  {
+    id: 'qwen3.5-9b-hauhau-aggressive', name: 'Qwen3.5 9B Uncensored (HauhauCS Aggressive)', family: 'Qwen', paramsB: 9, role: 'Uncensored', priority: 0,
+    uniqueTag: '#MaxRebel', bestFor: 'The most capable unfiltered model that still fits a 12 GB phone with a small context.',
+    capabilities: ['Text', 'Image', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
+    repo: 'HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive', filename: 'Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf', sizeBytes: 5_627_044_224, sha256: '2ca636d9e81d3d23ca9b60c234fe185d30ec082eeba69ce770fdb0c76559a4f5',
+    mmproj: { repo: 'HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive', filename: 'mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf', sizeBytes: 921_704_448, sha256: '05f662501f8bd45607b079723a3e238a4e888fd085a10a53f4057a0e250f6934' },
+    kvBytesPerToken: 32_768, contextLength: 262_144, published: '2026-03-04',
+    description: 'Qwen3.5 9B without refusals (HauhauCS Aggressive). Heavy (5.6 GB): close other apps. Photos and thinking toggle.',
+  },
+  {
+    id: 'qwen3-4b-2507-hauhau-aggressive', name: 'Qwen3 4B Instruct 2507 Uncensored (HauhauCS Aggressive)', family: 'Qwen', paramsB: 4.02, role: 'Uncensored', priority: 0,
+    uniqueTag: '#NoThinkFast', bestFor: 'Quick direct answers without refusals and without a thinking phase.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'HauhauCS/Qwen3-4B-2507-Instruct-Uncensored-HauhauCS-Aggressive', filename: 'Qwen3-4B-2507-Instruct-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf', sizeBytes: 2_497_278_912, sha256: '6615b7b5184931e4df9c6d0ae9cd29ca9319b73908d4423283d4cc401a12a1cd',
+    kvBytesPerToken: 147_456, contextLength: 262_144, published: '2026-01-25',
+    description: 'Qwen3 4B Instruct 2507 without refusals (HauhauCS Aggressive). Text only, no thinking phase.',
+  },
+  {
+    id: 'qwen3-vl-8b-hauhau-aggressive', name: 'Qwen3-VL 8B Uncensored (HauhauCS Aggressive)', family: 'Qwen', paramsB: 8.77, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelEyes', bestFor: 'Photo, screenshot and document questions without refusals at 8B.',
+    capabilities: ['Text', 'Image', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'HauhauCS/Qwen3VL-8B-Uncensored-HauhauCS-Aggressive', filename: 'Qwen3VL-8B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf', sizeBytes: 5_027_784_800, sha256: '56ffae5a3741a9d46ee88520c4511fbc610d7ff67d0f8e7e4dd98b102fe5f016',
+    mmproj: { repo: 'HauhauCS/Qwen3VL-8B-Uncensored-HauhauCS-Aggressive', filename: 'Qwen3VL-8B-Uncensored-HauhauCS-Aggressive-mmproj-f16.gguf', sizeBytes: 1_162_568_832, sha256: 'a36cc092c85e262bc7339a81c4940bd8866e27a1eb004a8ceb2f03a3d9b8a2b8' },
+    kvBytesPerToken: 147_456, contextLength: 262_144, published: '2026-01-31',
+    description: 'Qwen3-VL 8B without refusals (HauhauCS Aggressive). Heavy (5 GB + 1.2 GB add-on).',
+  },
+  {
+    id: 'nemotron3-nano-4b-hauhau-aggressive', name: 'Nemotron 3 Nano 4B Uncensored (HauhauCS Aggressive)', family: 'Nemotron', paramsB: 3.97, role: 'Uncensored', priority: 0,
+    uniqueTag: '#HybridSpeed', bestFor: 'Fast unfiltered chat from NVIDIA\'s hybrid Mamba design.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'other', chatTemplate: 'chatml', draftKey: 'nemotron3',
+    repo: 'HauhauCS/Nemotron3-Nano-4B-Uncensored-HauhauCS-Aggressive', filename: 'Nemotron3-Nano-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf', sizeBytes: 2_837_073_312, sha256: 'a7ef3fb12b7d5b7589b169cf0699d529c318a5b2e2fb9712d0a3818e528e83f2',
+    kvBytesPerToken: 16_384, contextLength: 1_048_576, published: '2026-03-24',
+    description: 'NVIDIA Nemotron 3 Nano 4B without refusals (HauhauCS Aggressive). NVIDIA open-model license.',
+  },
+  {
+    id: 'deepseek-r1-llama-8b', name: 'DeepSeek-R1 Distill Llama 8B', family: 'DeepSeek', paramsB: 8.03, role: 'Reasoning', priority: 0,
+    uniqueTag: '#DeepThinker', bestFor: 'Long chain-of-thought on maths and logic with a Llama base.',
+    capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'always', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'llama3.1', chatTemplate: 'deepseek-r1', draftKey: 'llama3',
+    repo: 'bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF', filename: 'DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf', sizeBytes: 4_920_736_608, sha256: '87bcba20b4846d8dadf753d3ff48f9285d131fc95e3e0e7e934d4f20bc896f5d',
+    kvBytesPerToken: 131_072, contextLength: 131_072, published: '2025-01-20',
+    description: 'DeepSeek-R1 reasoning distilled into Llama 3.1 8B. Always thinks first (visible in a collapsible block). Heavy (4.9 GB).',
+  },
+  {
+    id: 'deepseek-r1-llama-8b-abliterated', name: 'DeepSeek-R1 Distill Llama 8B Abliterated', family: 'DeepSeek', paramsB: 8.03, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelThinker', bestFor: 'Step-by-step reasoning without refusals.',
+    capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'always', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'llama3.1', chatTemplate: 'deepseek-r1', draftKey: 'llama3',
+    repo: 'mradermacher/DeepSeek-R1-Distill-Llama-8B-Abliterated-GGUF', filename: 'DeepSeek-R1-Distill-Llama-8B-Abliterated.Q4_K_M.gguf', sizeBytes: 4_920_737_344, sha256: '4c3a2c94fed318e085484bfc13142f0c8d5822a2a86e1515aad264972efba0e2',
+    kvBytesPerToken: 131_072, contextLength: 131_072, published: '2025-01-21',
+    description: 'R1 Distill Llama 8B with the refusal direction removed (abliterated). Always thinks first.',
+  },
+  {
+    id: 'deepseek-r1-qwen-7b-abliterated', name: 'DeepSeek-R1 Distill Qwen 7B Abliterated v2', family: 'DeepSeek', paramsB: 7.62, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelThinker', bestFor: 'Reasoning chains on maths and code without refusals.',
+    capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'always', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'deepseek-r1', draftKey: 'qwen2.5',
+    repo: 'mradermacher/DeepSeek-R1-Distill-Qwen-7B-abliterated-v2-GGUF', filename: 'DeepSeek-R1-Distill-Qwen-7B-abliterated-v2.Q4_K_M.gguf', sizeBytes: 4_683_074_176, sha256: '0a8577adae8180a505bdcc8adb468ed7a5d227a4990d38c040689ea485f3aa39',
+    kvBytesPerToken: 57_344, contextLength: 131_072, published: '2025-01-31',
+    description: 'huihui-ai abliterated v2 of R1 Distill Qwen 7B. Always thinks first.',
+  },
+  {
+    id: 'deepseek-r1-qwen-14b-abliterated', name: 'DeepSeek-R1 Distill Qwen 14B Abliterated v2', family: 'DeepSeek', paramsB: 14.77, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#HeavyRebel', bestFor: 'The deepest unfiltered reasoning here; 16 GB phones only.',
+    capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'always', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'deepseek-r1', draftKey: 'qwen2.5',
+    repo: 'mradermacher/DeepSeek-R1-Distill-Qwen-14B-abliterated-v2-GGUF', filename: 'DeepSeek-R1-Distill-Qwen-14B-abliterated-v2.Q4_K_M.gguf', sizeBytes: 8_988_110_912, sha256: '5bc6f9ce7fbc305c4eeb06253c251e69d9920a5fbac352d73654b63ea8d17e70',
+    kvBytesPerToken: 196_608, contextLength: 131_072, published: '2025-01-24',
+    description: 'R1 Distill Qwen 14B, abliterated v2. 9 GB file: only for 16 GB phones with a short context.',
+  },
+  {
+    id: 'llama-3.1-8b-abliterated', name: 'Llama 3.1 8B Instruct Abliterated', family: 'Llama', paramsB: 8.03, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'General chat and long context with Meta\'s base and no refusals.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'llama3.1', chatTemplate: 'llama3', draftKey: 'llama3',
+    repo: 'mlabonne/Meta-Llama-3.1-8B-Instruct-abliterated-GGUF', filename: 'meta-llama-3.1-8b-instruct-abliterated.Q4_K_M.gguf', sizeBytes: 4_920_734_784, sha256: 'c4735f9efaba8eb2c30113291652e3ffe13bf940b675ed61f6be749608b4f266',
+    kvBytesPerToken: 131_072, contextLength: 131_072, published: '2024-07-24',
+    description: 'mlabonne abliteration of Llama 3.1 8B Instruct. Heavy (4.9 GB).',
+  },
+  {
+    id: 'rocinante-12b-v1.1', name: 'Rocinante 12B v1.1', family: 'Rocinante', paramsB: 12.25, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#RoleplayKing', bestFor: 'Long-form creative writing and roleplay on a Mistral-Nemo base.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'other', chatTemplate: 'mistral', draftKey: 'mistral-nemo',
+    repo: 'TheDrummer/Rocinante-12B-v1.1-GGUF', filename: 'Rocinante-12B-v1.1-Q4_K_M.gguf', sizeBytes: 7_477_203_392, sha256: 'bdeaeefac79cff944ae673e6924c9f82f7eed789669a32a09997db398790b0b5',
+    kvBytesPerToken: 163_840, contextLength: 1_024_000, published: '2024-08-15',
+    description: 'TheDrummer fine-tune of Mistral Nemo 12B for roleplay and storytelling; low refusals. 7.5 GB: 16 GB phones.',
+  },
+  {
+    id: 'stheno-l3-8b-v3.2', name: 'L3-8B Stheno v3.2', family: 'Stheno', paramsB: 8.03, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RoleplayKing', bestFor: 'Character roleplay and fiction at 8B. Non-commercial license.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'cc-by-nc-4.0', chatTemplate: 'llama3', draftKey: 'llama3',
+    repo: 'bartowski/L3-8B-Stheno-v3.2-GGUF', filename: 'L3-8B-Stheno-v3.2-Q4_K_M.gguf', sizeBytes: 4_920_734_240, sha256: '8e98c1953f9c04e060fd9640bbe866685c844363a2360f09099b79c6c9195fc4',
+    kvBytesPerToken: 131_072, contextLength: 8_192, published: '2024-06-12',
+    description: 'Sao10K Llama 3 8B fine-tune for roleplay and creative writing. CC BY-NC 4.0 (non-commercial).',
+  },
+  {
+    id: 'lunaris-l3-8b-v1', name: 'L3-8B Lunaris v1', family: 'Lunaris', paramsB: 8.03, role: 'Uncensored', priority: 0,
+    uniqueTag: '#HumanVoice', bestFor: 'Natural-sounding prose and conversation with fewer refusals.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'llama3', chatTemplate: 'llama3', draftKey: 'llama3',
+    repo: 'bartowski/L3-8B-Lunaris-v1-GGUF', filename: 'L3-8B-Lunaris-v1-Q4_K_M.gguf', sizeBytes: 4_920_734_240, sha256: 'ef1d393f125be8c608859eeb4f26185ad90c7fc9cba41c96e847e77cdbcada18',
+    kvBytesPerToken: 131_072, contextLength: 8_192, published: '2024-06-29',
+    description: 'Sao10K Llama 3 8B merge aimed at more natural writing and roleplay.',
+  },
+  {
+    id: 'gemmasutra-mini-2b', name: 'Gemmasutra Mini 2B v1', family: 'Gemmasutra', paramsB: 2.61, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'Roleplay-style chat on very small phones.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'other', chatTemplate: 'gemma', draftKey: 'gemma2',
+    repo: 'TheDrummer/Gemmasutra-Mini-2B-v1-GGUF', filename: 'Gemmasutra-Mini-2B-v1-Q4_K_M.gguf', sizeBytes: 1_708_582_784, sha256: '29ba3db911fbadef4452ba757ddd9ce58fb892b7a872f19eefd0743c961797fb',
+    kvBytesPerToken: 106_496, contextLength: 8_192, published: '2024-08-03',
+    description: 'TheDrummer fine-tune of Gemma 2 2B for roleplay; small and fast, simple answers.',
+  },
+  {
+    id: 'gemmasutra-small-4b', name: 'Gemmasutra Small 4B v1a', family: 'Gemmasutra', paramsB: 4.3, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RoleplayKing', bestFor: 'Compact roleplay and creative writing for 8 GB phones.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'other', chatTemplate: 'gemma', draftKey: 'gemma3',
+    repo: 'TheDrummer/Gemmasutra-Small-4B-v1-GGUF', filename: 'Gemmasutra-Small-4B-v1a-Q4_K_M.gguf', sizeBytes: 2_458_554_240, sha256: 'e9b90dc6d51b6b3fc4a8c15638fb3f064598c51c464f776fc5ca3052b47efbd6',
+    kvBytesPerToken: 172_032, contextLength: 8_192, published: '2025-03-11',
+    description: 'TheDrummer fine-tune of Gemma 3 4B for roleplay and stories; text only.',
+  },
+  {
+    id: 'hermes-3-llama-3.1-8b', name: 'Hermes 3 Llama 3.1 8B', family: 'Hermes', paramsB: 8.03, role: 'All-rounder', priority: 0,
+    uniqueTag: '#SteerableAgent', bestFor: 'Following system prompts, roles and function-call formats.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'llama3', chatTemplate: 'chatml', draftKey: 'llama3',
+    repo: 'bartowski/Hermes-3-Llama-3.1-8B-GGUF', filename: 'Hermes-3-Llama-3.1-8B-Q4_K_M.gguf', sizeBytes: 4_920_734_624, sha256: '44b5c529dffaf34657a4c44a7919e5958b4270fbd365eed3b87d3444b45a378a',
+    kvBytesPerToken: 131_072, contextLength: 131_072, published: '2024-08-15',
+    description: 'Nous Research Hermes 3: neutrally aligned, strong at obeying the system prompt. Not abliterated.',
+  },
+  {
+    id: 'dolphin-3.0-qwen2.5-3b', name: 'Dolphin 3.0 Qwen2.5 3B', family: 'Dolphin', paramsB: 3.09, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'Steerable, low-refusal chat on a Qwen base. Qwen research license.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'other', chatTemplate: 'chatml', draftKey: 'qwen2.5',
+    repo: 'bartowski/Dolphin3.0-Qwen2.5-3b-GGUF', filename: 'Dolphin3.0-Qwen2.5-3b-Q4_K_M.gguf', sizeBytes: 1_929_906_144, sha256: '0cb1908c5f444e1dc2c5b5619d62ac4957a22ad39cd42f2d0b48e2d8b1c358ab',
+    kvBytesPerToken: 36_864, contextLength: 32_768, published: '2025-01-05',
+    description: 'Dolphin 3.0 on Qwen2.5 3B: follows your system prompt, few refusals.',
+  },
+  {
+    id: 'dolphin-3.0-qwen2.5-1.5b', name: 'Dolphin 3.0 Qwen2.5 1.5B', family: 'Dolphin', paramsB: 1.54, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'Low-refusal chat in about 1 GB.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5',
+    repo: 'bartowski/Dolphin3.0-Qwen2.5-1.5B-GGUF', filename: 'Dolphin3.0-Qwen2.5-1.5B-Q4_K_M.gguf', sizeBytes: 986_051_648, sha256: '7caa630a60c8831a509e2663e1761355fa24bcf6ccc03e3cc767e5b5747a3be5',
+    kvBytesPerToken: 28_672, contextLength: 131_072, published: '2025-01-05',
+    description: 'Dolphin 3.0 on Qwen2.5 1.5B: tiny, steerable, basic answers.',
+  },
+  {
+    id: 'josiefied-qwen3-8b-abliterated', name: 'Josiefied Qwen3 8B Abliterated v1', family: 'Qwen', paramsB: 8.19, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'Qwen3 8B with a friendlier persona and no refusals.',
+    capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'bartowski/Goekdeniz-Guelmez_Josiefied-Qwen3-8B-abliterated-v1-GGUF', filename: 'Goekdeniz-Guelmez_Josiefied-Qwen3-8B-abliterated-v1-Q4_K_M.gguf', sizeBytes: 5_027_784_160, sha256: '0bfa61f0f94aa06a58b7e631fe6a51bedef6395135569d049b3c3f96867427be',
+    kvBytesPerToken: 147_456, contextLength: 40_960, published: '2025-05-05',
+    description: 'Fine-tuned and abliterated Qwen3 8B (J.O.S.I.E.), thinking toggle.',
+  },
+  {
+    id: 'phi-4-mini-abliterated', name: 'Phi-4 Mini 3.8B Abliterated', family: 'Phi', paramsB: 3.84, role: 'Uncensored', priority: 0,
+    uniqueTag: '#LogicBrain', bestFor: 'Maths and logic help without refusals in about 2.5 GB.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'mit', chatTemplate: 'phi4', draftKey: 'phi4',
+    repo: 'Melvin56/Phi-4-mini-instruct-abliterated-GGUF', filename: 'phi-4-mini-instruct-abliterated-Q4_K_M.gguf', sizeBytes: 2_491_875_264, sha256: '9333aeeee1b129b60504ed1f18d10fab6e7e67708f6ca72bee2a8b95a6707cf7',
+    kvBytesPerToken: 131_072, contextLength: 131_072, published: '2025-03-02',
+    description: 'Phi-4 mini with refusals removed (abliterated). MIT license.',
+  },
+  {
+    id: 'gemma-3-1b-abliterated', name: 'Gemma 3 1B Abliterated', family: 'Gemma', paramsB: 1, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'Unfiltered chat under 1 GB.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma', draftKey: 'gemma3',
+    repo: 'bartowski/huihui-ai_gemma-3-1b-it-abliterated-GGUF', filename: 'huihui-ai_gemma-3-1b-it-abliterated-Q4_K_M.gguf', sizeBytes: 806_058_592, sha256: '0760a54504d7529daf65f2a5de0692e773313685f50dd7f7eece2dae0dc28338',
+    kvBytesPerToken: 26_624, contextLength: 32_768, published: '2025-03-22',
+    description: 'huihui-ai abliterated Gemma 3 1B.',
+  },
+  {
+    id: 'gemma-3-4b-abliterated', name: 'Gemma 3 4B Abliterated', family: 'Gemma', paramsB: 4.3, role: 'Uncensored', priority: 0,
+    uniqueTag: '#NativeMultimodal', bestFor: 'Unfiltered photo chat from Gemma 3 at 4B.',
+    capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma', draftKey: 'gemma3',
+    repo: 'bartowski/mlabonne_gemma-3-4b-it-abliterated-GGUF', filename: 'mlabonne_gemma-3-4b-it-abliterated-Q4_K_M.gguf', sizeBytes: 2_489_894_304, sha256: '1b18347ba3e998aa2fd4e21172369daa2f772aa0a228e3ed9136378346ccf3b7',
+    mmproj: { repo: 'bartowski/mlabonne_gemma-3-4b-it-abliterated-GGUF', filename: 'mmproj-mlabonne_gemma-3-4b-it-abliterated-f16.gguf', sizeBytes: 851_251_104, sha256: '8c0fb064b019a6972856aaae2c7e4792858af3ca4561be2dbf649123ba6c40cb' },
+    kvBytesPerToken: 139_264, contextLength: 131_072, published: '2025-03-18',
+    description: 'mlabonne abliterated Gemma 3 4B with its image add-on.',
+  },
+  {
+    id: 'gemma-3-12b-abliterated', name: 'Gemma 3 12B Abliterated', family: 'Gemma', paramsB: 12.2, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#HeavyRebel', bestFor: 'High-quality unfiltered writing and photo chat; 16 GB phones.',
+    capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'gemma', chatTemplate: 'gemma', draftKey: 'gemma3',
+    repo: 'bartowski/mlabonne_gemma-3-12b-it-abliterated-GGUF', filename: 'mlabonne_gemma-3-12b-it-abliterated-Q4_K_M.gguf', sizeBytes: 7_300_778_656, sha256: 'd1702ca02f33f97c4763cc23041e90b1586c6b8ee33fedc1c62e62045a845d2b',
+    mmproj: { repo: 'bartowski/mlabonne_gemma-3-12b-it-abliterated-GGUF', filename: 'mmproj-mlabonne_gemma-3-12b-it-abliterated-f16.gguf', sizeBytes: 854_200_224, sha256: '30c02d056410848227001830866e0a269fcc28aaf8ca971bded494003de9f5a5' },
+    kvBytesPerToken: 393_216, contextLength: 131_072, published: '2025-03-18',
+    description: 'mlabonne abliterated Gemma 3 12B with image add-on. 7.3 GB.',
+  },
+  {
+    id: 'llama-3.2-1b-abliterated', name: 'Llama 3.2 1B Abliterated', family: 'Llama', paramsB: 1.24, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'Quick unfiltered chat when memory is tight.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'llama3.2', chatTemplate: 'llama3', draftKey: 'llama3',
+    repo: 'mradermacher/Llama-3.2-1B-Instruct-abliterated-GGUF', filename: 'Llama-3.2-1B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 955_445_792, sha256: '68336c25367576f49b29f01ee9034658b51bbded6a7f215e934d997de96301e0',
+    kvBytesPerToken: 32_768, contextLength: 131_072, published: '2024-10-02',
+    description: 'Llama 3.2 1B Instruct with refusals removed.',
+  },
+  {
+    id: 'qwen3-0.6b-abliterated', name: 'Qwen3 0.6B Abliterated', family: 'Qwen', paramsB: 0.6, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'The smallest unfiltered model here (0.4 GB); very basic answers.',
+    capabilities: ['Text', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'bartowski/mlabonne_Qwen3-0.6B-abliterated-GGUF', filename: 'mlabonne_Qwen3-0.6B-abliterated-Q4_K_M.gguf', sizeBytes: 396_704_704, sha256: 'cacbf2f07c675bee319a210a22244ad4a8ba86f79daf67b7ede1da14ce8e6b99',
+    kvBytesPerToken: 114_688, contextLength: 40_960, published: '2025-04-30',
+    description: 'mlabonne abliterated Qwen3 0.6B.',
+  },
+  {
+    id: 'qwen3-1.7b-abliterated', name: 'Qwen3 1.7B Abliterated', family: 'Qwen', paramsB: 1.72, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelThinker', bestFor: 'Small unfiltered model with an optional thinking mode.',
+    capabilities: ['Text', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'bartowski/mlabonne_Qwen3-1.7B-abliterated-GGUF', filename: 'mlabonne_Qwen3-1.7B-abliterated-Q4_K_M.gguf', sizeBytes: 1_107_408_832, sha256: 'bea197fd05bad4126cdfe3198b53e6458b731ba554d9bc33548d0259788a7ba8',
+    kvBytesPerToken: 114_688, contextLength: 40_960, published: '2025-04-30',
+    description: 'mlabonne abliterated Qwen3 1.7B.',
+  },
+  {
+    id: 'qwen3-14b-abliterated', name: 'Qwen3 14B Abliterated', family: 'Qwen', paramsB: 14.8, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#HeavyRebel', bestFor: 'Strongest unfiltered reasoning and code here; 16 GB phones only.',
+    capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'bartowski/huihui-ai_Qwen3-14B-abliterated-GGUF', filename: 'huihui-ai_Qwen3-14B-abliterated-Q4_K_M.gguf', sizeBytes: 9_001_749_568, sha256: 'd76889059a3bfab30bc565012a0184827ff2bdc10197f6babc24541b98451dbe',
+    kvBytesPerToken: 163_840, contextLength: 40_960, published: '2025-05-06',
+    description: 'huihui-ai abliterated Qwen3 14B. 9 GB file: short context on 16 GB phones.',
+  },
+  {
+    id: 'mistral-nemo-12b-abliterated', name: 'Mistral Nemo 12B Abliterated', family: 'Mistral', paramsB: 12.25, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#HumanVoice', bestFor: 'Natural multilingual prose and long context without refusals.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'mistral', draftKey: 'mistral-nemo',
+    repo: 'QuantFactory/Mistral-Nemo-Instruct-2407-abliterated-GGUF', filename: 'Mistral-Nemo-Instruct-2407-abliterated.Q4_K_M.gguf', sizeBytes: 7_477_207_488, sha256: '783365f118bc0985294ea9aff8b4491dee82b527282347bd1be6670b9f47cff7',
+    kvBytesPerToken: 163_840, contextLength: 1_024_000, published: '2024-09-09',
+    description: 'Mistral Nemo Instruct 2407 with refusals removed. 7.5 GB: 16 GB phones.',
+  },
+  {
+    id: 'smollm3-3b-uncensored', name: 'SmolLM3 3B Uncensored (fine-tune)', family: 'SmolLM3', paramsB: 3.08, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'Unfiltered chat from a fully open 3B model; community fine-tune, lightly tested.',
+    capabilities: ['Text', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'smollm3', draftKey: 'smollm3',
+    repo: 'mradermacher/SmolLM3-3B-FineTuned-uncensored-GGUF', filename: 'SmolLM3-3B-FineTuned-uncensored.Q4_K_M.gguf', sizeBytes: 1_915_305_984, sha256: 'a4ccb678d7c260d778e589283ba9d31f7d8abf1533891c5795e86cfdc1171b63',
+    kvBytesPerToken: 73_728, contextLength: 65_536, published: '2026-09-16',
+    description: 'Community uncensoring fine-tune of SmolLM3 3B (not abliteration). Small uploader, so treat quality as unproven.',
+  },
+  {
+    id: 'huihui-qwen3.5-4b-abliterated', name: 'Huihui Qwen3.5 4B Abliterated', family: 'Qwen', paramsB: 4, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'Qwen3.5 4B abliterated by huihui-ai, an alternative to the HauhauCS build.',
+    capabilities: ['Text', 'Image', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'qwen3.5', draftKey: 'qwen3.5',
+    repo: 'mradermacher/Huihui-Qwen3.5-4B-abliterated-GGUF', filename: 'Huihui-Qwen3.5-4B-abliterated.Q4_K_M.gguf', sizeBytes: 2_707_514_688, sha256: '423f10b6ec2d99c3378143d7cd3b80eb4887b3ed92103103ac59173b404f4f7c',
+    mmproj: { repo: 'mradermacher/Huihui-Qwen3.5-4B-abliterated-GGUF', filename: 'Huihui-Qwen3.5-4B-abliterated.mmproj-f16.gguf', sizeBytes: 672_423_552, sha256: 'f14643c11f1e8244c59bca670e2a4c843be4234aa6bb88d0647dae7297798686' },
+    kvBytesPerToken: 32_768, contextLength: 262_144, published: '2026-03-08',
+    description: 'huihui-ai abliterated Qwen3.5 4B, thinking toggle, photos with its add-on.',
+  },
+  {
+    id: 'huihui-qwen3-4b-instruct-2507-abliterated', name: 'Huihui Qwen3 4B Instruct 2507 Abliterated', family: 'Qwen', paramsB: 4.02, role: 'Uncensored', priority: 0,
+    uniqueTag: '#NoThinkFast', bestFor: 'Direct unfiltered answers without a thinking phase.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'mradermacher/Huihui-Qwen3-4B-Instruct-2507-abliterated-GGUF', filename: 'Huihui-Qwen3-4B-Instruct-2507-abliterated.Q4_K_M.gguf', sizeBytes: 2_497_281_312, sha256: 'b1324e2f1bd2e0610d591f54f93e38d90b187f69d1f215f4cace349eade678d7',
+    kvBytesPerToken: 147_456, contextLength: 262_144, published: '2025-08-08',
+    description: 'huihui-ai abliterated Qwen3 4B Instruct 2507.',
+  },
+  {
+    id: 'huihui-qwen3-vl-8b-abliterated', name: 'Huihui Qwen3-VL 8B Abliterated', family: 'Qwen', paramsB: 8.77, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelEyes', bestFor: 'Unfiltered photo and document questions at 8B.',
+    capabilities: ['Text', 'Image', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'mradermacher/Huihui-Qwen3-VL-8B-Instruct-abliterated-GGUF', filename: 'Huihui-Qwen3-VL-8B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 5_027_785_728, sha256: 'c9592053aab8874021ecd3f80e45cc12dd167454bebfb215a36bdf690f22dc52',
+    mmproj: { repo: 'mradermacher/Huihui-Qwen3-VL-8B-Instruct-abliterated-GGUF', filename: 'Huihui-Qwen3-VL-8B-Instruct-abliterated.mmproj-f16.gguf', sizeBytes: 1_159_030_272, sha256: '88b7d61987b89b820e9acbe4cb75233d063e5847aaeddc87783fee1f1b6782ef' },
+    kvBytesPerToken: 147_456, contextLength: 262_144, published: '2025-11-03',
+    description: 'huihui-ai abliterated Qwen3-VL 8B. Heavy (5 GB + 1.2 GB add-on).',
+  },
+  {
+    id: 'huihui-qwen3-vl-4b-abliterated', name: 'Huihui Qwen3-VL 4B Abliterated', family: 'Qwen', paramsB: 4.44, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelEyes', bestFor: 'Unfiltered photo questions in a 3.3 GB install.',
+    capabilities: ['Text', 'Image', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'mradermacher/Huihui-Qwen3-VL-4B-Instruct-abliterated-GGUF', filename: 'Huihui-Qwen3-VL-4B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 2_497_282_496, sha256: '20d58872549c13f5476622d2385027e1b346298558822eca8aa33cb8846d5765',
+    mmproj: { repo: 'mradermacher/Huihui-Qwen3-VL-4B-Instruct-abliterated-GGUF', filename: 'Huihui-Qwen3-VL-4B-Instruct-abliterated.mmproj-f16.gguf', sizeBytes: 836_180_576, sha256: '3aedbce332390ff9c4bac496d76490d8c27e4c86b57bed9039d584853a7bfa78' },
+    kvBytesPerToken: 147_456, contextLength: 262_144, published: '2025-11-03',
+    description: 'huihui-ai abliterated Qwen3-VL 4B.',
+  },
+  {
+    id: 'qwen2.5-0.5b-abliterated', name: 'Qwen2.5 0.5B Abliterated', family: 'Qwen', paramsB: 0.49, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'The fastest unfiltered chat here (0.4 GB); only simple answers.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen2.5',
+    repo: 'mradermacher/Qwen2.5-0.5B-Instruct-abliterated-GGUF', filename: 'Qwen2.5-0.5B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 397_808_512, sha256: 'eddb18fbeee320a9eca35cefc88efdb938d9ebe106922f3d91e261f3cbc1c9f6',
+    kvBytesPerToken: 12_288, contextLength: 32_768, published: '2025-03-08',
+    description: 'Qwen2.5 0.5B Instruct with refusals removed.',
+  },
+  {
+    id: 'qwen2.5-3b-abliterated', name: 'Qwen2.5 3B Abliterated', family: 'Qwen', paramsB: 3.09, role: 'Uncensored', priority: 0,
+    uniqueTag: '#SmoothRebel', bestFor: 'Steady unfiltered chat and light coding at 3B. Qwen research license (non-commercial).',
+    capabilities: ['Text','Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'qwen-research', chatTemplate: 'chatml', draftKey: 'qwen2.5',
+    repo: 'mradermacher/Qwen2.5-3B-Instruct-abliterated-GGUF', filename: 'Qwen2.5-3B-Instruct-abliterated.Q4_K_M.gguf', sizeBytes: 1_929_903_520, sha256: 'c771d34ef5ad81f3a2ffb44a747c61de35b7ea2cc1fa522d9613e872a6dfe9eb',
+    kvBytesPerToken: 36_864, contextLength: 32_768, published: '2024-11-04',
+    description: 'Qwen2.5 3B Instruct with refusals removed.',
+  },
+  {
+    id: 'qwen3-4b-abliterated', name: 'Qwen3 4B Abliterated', family: 'Qwen', paramsB: 4.02, role: 'Uncensored', priority: 0,
+    uniqueTag: '#RebelThinker', bestFor: 'Unfiltered step-by-step reasoning at 4B with thinking on or off.',
+    capabilities: ['Text','Code','Reasoning'], thinking: 'toggle', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'bartowski/mlabonne_Qwen3-4B-abliterated-GGUF', filename: 'mlabonne_Qwen3-4B-abliterated-Q4_K_M.gguf', sizeBytes: 2_497_280_544, sha256: '004f7b8f59ccd5fa42258c52aa2087b89524cced84e955b9c8b115035ca073b2',
+    kvBytesPerToken: 147_456, contextLength: 40_960, published: '2025-04-29',
+    description: 'mlabonne abliterated Qwen3 4B.',
   },
 ];

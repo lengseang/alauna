@@ -194,3 +194,15 @@ test('labels for facts', () => {
   assert.equal(paramsLabel(4), '4B');
   assert.equal(paramsLabel(1.7), '1.7B');
 });
+
+test('vault: parameter grouping and the small-uncensored chip', () => {
+  const env = { ramBytes: 12e9, nCtx: 4096, installedIds: [] as string[] };
+  const small = runVaultQuery({ ...DEFAULT_FILTERS, smallUncensored: true }, env);
+  assert.ok(small.length >= 15 && small.every((m) => m.contentPolicy === 'Uncensored' && m.paramsB <= 4.7));
+  const bands = runVaultQuery({ ...DEFAULT_FILTERS, bands: ['xl'] }, env);
+  assert.ok(bands.length > 0 && bands.every((m) => m.paramsB > 10));
+  const secs = sectionsFor(runVaultQuery(DEFAULT_FILTERS, env), 'recommended', env, 'params');
+  assert.deepEqual(secs.map((x) => x.key), ['p-xs', 'p-s', 'p-m', 'p-l', 'p-xl']);
+  assert.equal(secs.reduce((n, x) => n + x.data.length, 0), MODEL_CATALOG.length);
+  assert.equal(activeFilterCount({ ...DEFAULT_FILTERS, bands: ['xs', 's'], smallUncensored: true }), 3);
+});

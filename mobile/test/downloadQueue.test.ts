@@ -19,7 +19,7 @@ function spec(id: string, size: number, extra: Partial<ModelSpec> = {}): ModelSp
   return {
     id, name: id, family: id, paramsB: 1, grade: 'C', role: 'Fast', priority: 1, kvBytesPerToken: 1000, repo: `o/${id}`, filename: `${id}.gguf`,
     sizeBytes: size, sha256: 'ab'.repeat(32), quantization: 'Q4_K_M', capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard',
-    description: '', license: 'apache-2.0', contextLength: 4096, chatTemplate: 'chatml', draftKey: id, published: '2025-01-01', ...extra,
+    description: '', uniqueTag: '#T', bestFor: 't', license: 'apache-2.0', contextLength: 4096, chatTemplate: 'chatml', draftKey: id, published: '2025-01-01', ...extra,
   };
 }
 const MM = { repo: 'o/shared', filename: 'mmproj-F16.gguf', sizeBytes: 400, sha256: 'cd'.repeat(32) };
@@ -89,7 +89,7 @@ function world(opts: { free?: number | null; badSha?: string[]; intent?: string[
     now: (() => { let t = 1e6; return () => (t += 300); })(),
     sleep: async () => undefined,
   };
-  const manager = new DownloadManager(platform, { stallTimeoutMs: 0, stopGraceMs: 40, spaceMarginBytes: 0, maxConcurrent: opts.concurrency });
+  const manager = new DownloadManager(platform, { stallTimeoutMs: 0, stopGraceMs: 40, spaceMarginBytes: 0, verifyMode: 'always', maxConcurrent: opts.concurrency });
   return { manager, d, log, holds, release: (id: string) => gates.get(id)?.(), intent: () => [...intent] };
 }
 

@@ -10,7 +10,7 @@ const HTML = new TextEncoder().encode('<!DO');
 const specA: ModelSpec = {
   id: 'a', name: 'A', family: 'A', paramsB: 1, grade: 'C', role: 'Fast', priority: 1, kvBytesPerToken: 1000, repo: 'o/a', filename: 'a.gguf', sizeBytes: 1000,
   sha256: '', quantization: 'Q4_K_M', capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', description: '',
-  license: 'apache-2.0', contextLength: 4096, chatTemplate: 'chatml', draftKey: 'a', published: '2025-01-01',
+  uniqueTag: '#T', bestFor: 't', license: 'apache-2.0', contextLength: 4096, chatTemplate: 'chatml', draftKey: 'a', published: '2025-01-01',
 };
 const specB: ModelSpec = { ...specA, id: 'b', name: 'B', repo: 'o/b', filename: 'b.gguf' };
 const HASH = 'ab'.repeat(32);
@@ -35,7 +35,7 @@ interface VerifyOpts {
   holdAt?: number;
 }
 
-function makeWorld(opts: { total?: number; free?: number | null; storageReady?: boolean; behaviors?: Behavior[]; fetchError?: Error; manager?: DownloadManagerOptions; verify?: VerifyOpts; noVerify?: boolean; intent?: string[] } = {}) {
+function makeWorld(opts: { total?: number; free?: number | null; storageReady?: boolean; behaviors?: Behavior[]; fetchError?: Error; manager?: DownloadManagerOptions; verify?: VerifyOpts; noVerify?: boolean; intent?: string[]; pending?: string[] } = {}) {
   const total = opts.total ?? 1000;
   const disks = new Map<string, Disk>();
   const diskOf = (id: string): Disk => {
@@ -43,8 +43,9 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
     return disks.get(id)!;
   };
   const behaviors = [...(opts.behaviors ?? [{ kind: 'complete' } as Behavior])];
-  const log = { awake: [] as boolean[], sleeps: [] as number[], tasksCreated: 0, runs: 0, resumeOffsets: [] as number[], verifies: [] as string[], intents: [] as string[][] };
+  const log = { awake: [] as boolean[], sleeps: [] as number[], tasksCreated: 0, runs: 0, resumeOffsets: [] as number[], verifies: [] as string[], gated: 0, intents: [] as string[][] };
   let intent: string[] = [...(opts.intent ?? [])];
+  let pending: string[] = [...(opts.pending ?? [])];
   let releaseVerify: () => void = () => undefined;
   const verifyGate = new Promise<void>((r) => { releaseVerify = r; });
   let clock = 1_000_000;
@@ -115,17 +116,21 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
     },
     verifySha256: opts.noVerify
       ? undefined
-      : async (_spec, expected, onProgress, shouldStop) => {
-          log.verifies.push(expected);
+      : async (_spec, expected, onProgress, shouldStop, vo) => {
+          log.verifies.push(`${vo?.which ?? 'part'}:${expected}`);
           const steps = opts.verify?.steps ?? 4;
           for (let i = 1; i <= steps; i++) {
             if (shouldStop()) return { ok: false, actual: '', stopped: true };
+            const g = vo?.gate?.();
+            if (g) { log.gated++; await g; }
             onProgress(i / steps);
             await new Promise<void>((r) => setTimeout(r, 0));
             if (opts.verify?.holdAt === i) await verifyGate;
           }
           return { ok: opts.verify?.ok ?? true, actual: 'computed', stopped: false };
         },
+    savePendingVerify: (e) => { pending = [...e]; },
+    loadPendingVerify: () => [...pending],
     saveIntent: (ids) => { log.intents.push([...ids]); intent = [...ids]; },
     loadIntent: () => [...intent],
     keepAwake: (on) => { log.awake.push(on); },
@@ -137,7 +142,7 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
     },
   };
 
-  const manager = new DownloadManager(platform, { maxRetries: 3, backoffMs: [10, 20, 30], spaceMarginBytes: 0, stallTimeoutMs: 0, stopGraceMs: 40, ...opts.manager });
+  const manager = new DownloadManager(platform, { maxRetries: 3, backoffMs: [10, 20, 30], spaceMarginBytes: 0, stallTimeoutMs: 0, stopGraceMs: 40, verifyMode: 'always', ...opts.manager });
   return {
     manager, log, diskOf, platform,
     setMeta: (m: Partial<RemoteFileInfo>) => { meta = { ...meta, ...m }; },
@@ -146,6 +151,7 @@ function makeWorld(opts: { total?: number; free?: number | null; storageReady?: 
     pushBehaviors: (...b: Behavior[]) => behaviors.push(...b),
     releaseVerify: () => releaseVerify(),
     intentNow: () => [...intent],
+    pendingNow: () => [...pending],
   };
 }
 
@@ -492,7 +498,7 @@ test('a hash that matches is required BEFORE the file is installed; progress and
   const done = await waitFor(w.manager, 'a', terminal);
   assert.equal(done.status, 'completed');
   assert.equal(done.verified, true, 'the finished state says the checksum was verified');
-  assert.deepEqual(w.log.verifies, [HUB_HASH]);
+  assert.deepEqual(w.log.verifies, [`part:${HUB_HASH}`]);
   assert.ok(seen.some((s) => s.verifyFraction !== undefined && s.verifyFraction > 0 && s.verifyFraction < 1), 'fractions published');
   assert.ok(seen.some((s) => /Verifying the download/.test(s.note ?? '')), 'note says what is happening');
   assert.ok(seen.some((s) => s.etaSec > 0), 'an ETA is shown for the check');
@@ -505,12 +511,12 @@ test('the Hub hash wins over the catalog hash; the catalog hash is used when the
   w.setMeta({ sha256: HUB_HASH });
   await w.manager.start({ ...specA, sha256: HASH });
   await waitFor(w.manager, 'a', terminal);
-  assert.deepEqual(w.log.verifies, [HUB_HASH]);
+  assert.deepEqual(w.log.verifies, [`part:${HUB_HASH}`]);
 
   const w2 = makeWorld();
   await w2.manager.start({ ...specA, sha256: HASH });
   await waitFor(w2.manager, 'a', terminal);
-  assert.deepEqual(w2.log.verifies, [HASH]);
+  assert.deepEqual(w2.log.verifies, [`part:${HASH}`]);
 });
 
 test('a checksum MISMATCH is never installed: partial deleted, retryable error, a fresh Try again redownloads from zero', async () => {
@@ -670,4 +676,89 @@ test('pause mid-download is "paused", never "completed 100%" (the old app marked
   assert.equal(s.status, 'paused');
   assert.equal(s.bytesWritten, 500);
   assert.equal(w.diskOf('a').dest, null);
+});
+
+// ---------------------------------------------------------------- background verification
+
+const bgOpts = (verify: VerifyOpts = {}) => ({ manager: { verifyMode: 'background' as const }, verify });
+
+test('background: installed + usable at once, queue slot freed, check runs on the installed file and then flags verified', async () => {
+  const w = makeWorld({ ...bgOpts({ steps: 3, holdAt: 2 }) });
+  w.setMeta({ sha256: HUB_HASH });
+  await w.manager.start(specA);
+  await w.manager.start(specB);
+  const a = await waitFor(w.manager, 'a', (s) => s.status === 'completed');
+  assert.equal(a.verifyPending, true);
+  assert.ok(w.diskOf('a').dest, 'promoted before the check finished');
+  // b is not stuck behind a's check
+  await waitFor(w.manager, 'b', (s) => s.status === 'completed');
+  await w.manager.settled();
+  assert.equal(w.manager.stateOf('a').verifyPending, true, 'still checking while b finished');
+  assert.deepEqual(w.manager.verifyingIds().sort(), ['a', 'b']);
+  assert.ok(w.pendingNow().length > 0, 'pending record persisted');
+  w.releaseVerify();
+  await w.manager.verifySettled();
+  const done = w.manager.stateOf('a');
+  assert.equal(done.verifyPending, false);
+  assert.equal(done.verified, true);
+  assert.ok(w.log.verifies.every((v) => v.startsWith('dest:')));
+  assert.deepEqual(w.pendingNow(), []);
+});
+
+test('background: a mismatch unloads (callback), deletes the file and reports the checksum error', async () => {
+  const failed: string[] = [];
+  const w = makeWorld({ manager: { verifyMode: 'background', onVerifyFailed: (id, _k, m) => failed.push(`${id}:${m}`) }, verify: { ok: false } });
+  w.setMeta({ sha256: HUB_HASH });
+  await w.manager.start(specA);
+  await w.manager.settled();
+  await w.manager.verifySettled();
+  const s = w.manager.stateOf('a');
+  assert.equal(s.status, 'error');
+  assert.match(s.error ?? '', /does not match the official checksum/);
+  assert.equal(w.diskOf('a').dest, null, 'file deleted, so it can never be loaded');
+  assert.equal(failed.length, 1);
+  assert.deepEqual(w.pendingNow(), []);
+});
+
+test('background: a pending check survives an app kill and is resumed after refresh()', async () => {
+  const w1 = makeWorld({ ...bgOpts({ steps: 4, holdAt: 1 }) });
+  w1.setMeta({ sha256: HUB_HASH });
+  await w1.manager.start(specA);
+  await waitFor(w1.manager, 'a', (s) => s.status === 'completed');
+  await w1.manager.settled();
+  const record = w1.pendingNow();
+  assert.equal(record.length, 1);
+  const w2 = makeWorld({ ...bgOpts({ steps: 2 }), pending: record });
+  w2.diskOf('a').dest = { size: 1000, head: GGUF };
+  w2.manager.refresh([specA]);
+  assert.equal(w2.manager.stateOf('a').status, 'completed', 'loadable while the check is pending');
+  w2.manager.resumeInterrupted([specA]);
+  assert.equal(w2.manager.stateOf('a').verifyPending, true);
+  await w2.manager.verifySettled();
+  assert.equal(w2.manager.stateOf('a').verified, true);
+  assert.deepEqual(w2.pendingNow(), []);
+});
+
+test('background: hashing waits while the app is in the background and continues (never fails) on return', async () => {
+  const w = makeWorld({ ...bgOpts({ steps: 3 }) });
+  w.setMeta({ sha256: HUB_HASH });
+  w.manager.setAppActive(false);
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.status === 'completed');
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(w.manager.stateOf('a').verifyPending, true, 'parked, not failed');
+  assert.ok(w.log.gated > 0);
+  w.manager.setAppActive(true);
+  await w.manager.verifySettled();
+  assert.equal(w.manager.stateOf('a').verified, true);
+});
+
+test('background: cancel/remove stops the check', async () => {
+  const w = makeWorld({ ...bgOpts({ steps: 50, holdAt: 1 }) });
+  w.setMeta({ sha256: HUB_HASH });
+  await w.manager.start(specA);
+  await waitFor(w.manager, 'a', (s) => s.status === 'completed');
+  w.releaseVerify();
+  await w.manager.remove(specA);
+  assert.equal(w.manager.verifyingIds().length, 0);
 });
