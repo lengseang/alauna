@@ -1,7 +1,7 @@
 # GEMINI.md — read this first (also valid as AGENTS.md for any AI agent)
 
 Project: CHIWIWI, an offline on-device LLM chat app. Expo SDK 57, React Native 0.86, llama.rn 0.12.9, target Galaxy S23 Ultra.
-App code is in `mobile/`. Full task list: `docs/HANDOFF.md`. Design: `docs/DESIGN.md`. APIs: `docs/api/*.md`. Plan: `docs/PLAN-v2.md`.
+App code is in `mobile/`. Full task list: `docs/HANDOFF.md`. Current queue + loop: `docs/GEMINI-TASKS.md`. Run `node scripts/gate.mjs` before every commit. Design: `docs/DESIGN.md`. APIs: `docs/api/*.md`. Plan: `docs/PLAN-v2.md`.
 
 ## The owner's hard rules (broken before, do not repeat)
 1. **Never remove a feature, setting, model, tag or screen to "simplify" or "fix".** Make it work, or keep it visible with an honest status

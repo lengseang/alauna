@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ALL_CAPABILITIES,
@@ -117,7 +117,7 @@ test('library: every entry is well-formed and verified data (never hand-typed ze
     assert.match(m.uniqueTag, /^#[A-Za-z0-9]+$/, `${m.id}: uniqueTag`);
     assert.ok(m.bestFor.length > 15 && m.bestFor.length < 160, `${m.id}: bestFor`);
     // "Uncensored" only for builds that really are abliterated / refusal-free upstream.
-    if (m.contentPolicy === 'Uncensored') assert.match(`${m.repo} ${m.name}`, /abliterated|dolphin|uncensored|heretic|stheno|lunaris|rocinante|gemmasutra/i, `${m.id}: uncensored claim`);
+    if (m.contentPolicy === 'Uncensored') assert.match(`${m.repo} ${m.name}`, /abliterated|dolphin|uncensored|heretic|stheno|toppy|lunaris|rocinante|gemmasutra/i, `${m.id}: uncensored claim`);
     else assert.doesNotMatch(`${m.repo}/${m.filename}`, /abliterated/i, `${m.id}: abliterated file labelled Standard`);
     assert.equal(m.grade, gradeFor(m), `${m.id}: grade is computed`);
     if (m.draft) assert.ok(m.draftKey === 'gemma4', `${m.id}: only Gemma 4 ships MTP draft heads here`);

@@ -173,3 +173,8 @@ huihui-qwen3.5-9b-abliterated. Re-verify any time: `node scripts/verify-catalog.
 - `speedHint(spec)`: "Fast on phone" class derived from file size only (not a measurement).
 - `IMAGE_TOOLS` (SD-Turbo, Real-ESRGAN): `kind: 'image-tool'`, `status: 'engine-unavailable'`, never downloadable; shown in a separate "Image tools" section.
 - Needs owner decision: Q4_K_P (HauhauCS E2B) is a custom quant; RP finetunes (Stheno, Rocinante, Lunaris, Gemmasutra) are tagged Uncensored as marketed, not abliterated; non-commercial licenses (cc-by-nc, qwen-research, other) now warn; owner's own tag/best-for wording and image-tool RAM figures were not supplied, so wording is mine and RAM is "not measured yet".
+
+### 7.1 Heretic and requested uncensored builds (110 entries, +16)
+- Added: MiniCPM5 2B Heretic, DeepSeek-R1-0528 Qwen3 8B Heretic, Dolphin 2.8 Mistral 7B, Toppy-M 7B, Qwen2.5 1.5B Instruct Uncensored, Gemma 2 2B Abliterated, Qwen2.5 3B Instruct Heretic, Llama 3.2 3B Instruct Uncensored, plus Heretic builds: Qwen3 4B Instruct 2507 and Llama 3.1 8B (p-e-w), Qwen3 8B, Qwen3 1.7B, Phi-4 mini, Llama 3.2 3B, Gemma 4 E2B and E4B (llmfan46).
+- Not added: Spark-X2.5 4B Heretic (1M context). Its GGUF architecture `spark2_5` is not in the llama.cpp bundled with llama.rn 0.12.9, so it could not load. Add it after a llama.rn upgrade (`ItsOkayNow/Spark-X2.5-4B-Heretic-GGUF`, Q4_K_M, 2.6 GB).
+- Toppy-M uses the `mistral` template as the closest fit (the model expects Alpaca prompts). Toppy and Stheno are non-commercial.
