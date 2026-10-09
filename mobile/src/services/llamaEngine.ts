@@ -209,7 +209,12 @@ export class LlamaEngine implements InferenceEngine {
     let multimodalError: string | undefined;
     if (params.mmprojPath) {
       try {
-        const ok = await ctx.initMultimodal({ path: params.mmprojPath, use_gpu: params.useGpu });
+        const ok = await ctx.initMultimodal({
+          path: params.mmprojPath,
+          use_gpu: params.useGpu,
+          image_max_tokens: params.imageMaxTokens ?? 512,
+          image_min_tokens: params.imageMinTokens ?? 64,
+        });
         if (ok) multimodal = await ctx.getMultimodalSupport();
         else multimodalError = 'the projector file did not initialise';
       } catch (e) {

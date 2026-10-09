@@ -21,8 +21,8 @@ export interface HistoryMessage {
   images?: string[];
 }
 
-/** Prompt-size allowance per image until the engine reports the real count (most projectors use 64-1024 tokens). */
-export const IMAGE_TOKEN_ESTIMATE = 768;
+/** Prompt-size allowance per image (aligned with the default 512 vision token budget). */
+export const IMAGE_TOKEN_ESTIMATE = 512;
 const imageCost = (images?: string[]) => (images?.length ?? 0) * IMAGE_TOKEN_ESTIMATE;
 
 /**

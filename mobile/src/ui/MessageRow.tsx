@@ -183,7 +183,7 @@ export const MessageRow = React.memo(function MessageRow({ message: m, isLast, b
     <FadeIn enabled={fresh} style={s.ai}>
       <Pressable onLongPress={actions} delayLongPress={350} accessibilityHint="Hold for copy, regenerate, read aloud, delete" style={s.aiBody}>
         {live && m.phase === 'loading' ? <LoadingLine modelName={modelName} /> : null}
-        {live && m.phase === 'reading' ? <LiveLine text={`Reading your message${m.promptTokensEst ? ` (~${m.promptTokensEst} tokens)` : ''}`} /> : null}
+        {live && m.phase === 'reading' ? <LiveLine text={m.notice ?? `Reading your message${m.promptTokensEst ? ` (~${m.promptTokensEst} tokens)` : ''}`} /> : null}
         {hasReasoning || (live && m.phase === 'thinking') ? <Reasoning message={m} live={live} /> : null}
         {m.text ? <Markdown text={m.text} /> : null}
         {live && m.phase === 'answering' ? <PulseDot size={10} /> : null}

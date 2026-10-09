@@ -53,6 +53,8 @@ export interface ComputeSettings {
   useMlock: boolean;
   /** Save the persona/system-prompt prefix to disk after it is evaluated and restore it on the next load (TTFT). */
   kvSessionCache: boolean;
+  /** Max vision tokens per image (e.g. 256, 384, 512, 1024). Default: 512. */
+  imageMaxTokens: number;
 }
 
 export interface SamplingSettings {
@@ -185,6 +187,7 @@ export const DEFAULT_COMPUTE: ComputeSettings = {
   useMmap: true,
   useMlock: false,
   kvSessionCache: true,
+  imageMaxTokens: 512,
 };
 
 /** The values the engine used before v2 (llamaEngine.ts constants), so v1 users see no behaviour change. */
@@ -276,6 +279,7 @@ function sanitizeCompute(raw: unknown, base: ComputeSettings): ComputeSettings {
     useMmap: bool(r.useMmap, base.useMmap),
     useMlock: bool(r.useMlock, base.useMlock),
     kvSessionCache: bool(r.kvSessionCache, base.kvSessionCache),
+    imageMaxTokens: int(r.imageMaxTokens, 128, 4096, base.imageMaxTokens ?? 512),
   };
 }
 

@@ -72,7 +72,7 @@ test('contract: vision projector + image messages + draft counters + sampling', 
   hooks.llamaGetMultimodalSupport = async () => ({ vision: true, audio: false });
   const e = new LlamaEngine();
   const info = await e.load({ ...load, mmprojPath: '/v/models/mm.gguf' });
-  assert.deepEqual(g.__mm, [{ path: '/v/models/mm.gguf', use_gpu: false, image_min_tokens: undefined, image_max_tokens: undefined }]);
+  assert.deepEqual(g.__mm, [{ path: '/v/models/mm.gguf', use_gpu: false, image_min_tokens: 64, image_max_tokens: 512 }]);
   assert.deepEqual(info.multimodal, { vision: true, audio: false });
 
   behavior.result = { draft_tokens: 12, draft_tokens_accepted: 9, tokens_cached: 30 };

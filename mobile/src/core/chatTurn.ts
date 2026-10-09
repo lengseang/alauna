@@ -68,6 +68,7 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
       tokenScale,
     });
   let built = build(1);
+  let countedPromptTokens: number | null = null;
   if (input.countPromptTokens) {
     const allowance = Math.max(256, input.nCtx - replyBudget);
     let scale = 1;
@@ -78,6 +79,7 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
       } catch {
         real = null;
       }
+      if (real !== null) countedPromptTokens = real;
       if (real === null || real <= allowance) break;
       // The estimate was too low for this text: scale it by the error we just observed (+5%) and trim again.
       scale *= Math.max(1.1, (real / Math.max(1, built.estimatedPromptTokens)) * 1.05);
@@ -100,7 +102,9 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
     promptTokensEst: built.estimatedPromptTokens,
     text: '',
     reasoning: '',
-    notice: notes.join(' ') || undefined,
+    notice: userImages.length > 0
+      ? `Analyzing ${userImages.length === 1 ? 'image' : `${userImages.length} images`}${built.estimatedPromptTokens ? ` (~${built.estimatedPromptTokens} tokens)` : ''}`
+      : notes.join(' ') || undefined,
   });
 
   const track = (raw: string): { answer: string; reasoning: string; phase: OutputPhase } => {
@@ -114,9 +118,11 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
   };
 
   try {
+    const promptCost = countedPromptTokens ?? built.estimatedPromptTokens;
+    const safeMaxTokens = Math.max(64, Math.min(replyBudget, input.nCtx - promptCost - 16));
     const result = await input.generate({
       messages: built.messages,
-      maxTokens: replyBudget,
+      maxTokens: safeMaxTokens,
       temperature: input.sampling?.temperature ?? input.temperature ?? 0.7,
       ...(input.sampling
         ? { sampling: { topP: input.sampling.topP, topK: input.sampling.topK, minP: input.sampling.minP, repeatPenalty: input.sampling.repeatPenalty } }

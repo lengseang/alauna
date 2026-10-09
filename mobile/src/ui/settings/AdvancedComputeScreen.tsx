@@ -16,7 +16,7 @@ import { Segmented } from '../Segmented';
 import { Slider } from '../Slider';
 import { Stat } from '../Stat';
 import { Text } from '../Text';
-import { BATCH_CHOICES, CTX_CHOICES, labelThreads, labelTokens, oneDecimal, THREAD_CHOICES, wholeMs } from './logic';
+import { BATCH_CHOICES, CTX_CHOICES, labelThreads, labelTokens, labelVisionTokens, oneDecimal, THREAD_CHOICES, VISION_TOKEN_CHOICES, wholeMs } from './logic';
 import { ChoiceRow, Group, ResetButton, Rows, StatRow } from './parts';
 
 const KV_LABEL = (t: string): string => (t === 'f16' ? 'f16 (default, full quality)' : t === 'f32' ? 'f32 (largest, no benefit)' : t.startsWith('q') || t.startsWith('iq') ? `${t} (smaller, slightly less exact)` : t);
@@ -125,6 +125,7 @@ export function AdvancedComputeScreen() {
           <ChoiceRow title="CPU threads" subtitle="Worker threads for the maths. Auto pins the fast cores." options={THREAD_CHOICES} value={c.threads} onChange={(threads) => updateSection('compute', { threads })} label={labelThreads} />
           <ChoiceRow title="Context length" subtitle="How much of the chat the model can see at once." options={CTX_CHOICES} value={c.nCtx} onChange={(v) => updateSection('compute', { nCtx: v })} label={(v) => labelTokens(v, auto)} />
           <ChoiceRow title="Prompt batch" subtitle="Tokens read per step. Larger is faster to start, needs more memory." options={BATCH_CHOICES} value={c.nBatch} onChange={(nBatch) => updateSection('compute', { nBatch })} label={(v) => String(v)} />
+          <ChoiceRow title="Vision token budget" subtitle="Limits tokens per photo so image analysis stays fast and does not freeze memory." options={VISION_TOKEN_CHOICES} value={c.imageMaxTokens ?? 512} onChange={(imageMaxTokens) => updateSection('compute', { imageMaxTokens })} label={labelVisionTokens} />
         </Rows>
         {active && fit ? <Text variant="small">{`${active.name} at ${nCtx} tokens needs about ${formatBytes(estimateRamBytes(active, nCtx))} of memory: ${FIT_LABEL[fit]}.`}</Text> : null}
         <Text variant="label">Flash attention</Text>

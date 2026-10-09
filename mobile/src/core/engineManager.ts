@@ -384,6 +384,7 @@ export class EngineManager {
         useMlock: c?.useMlock,
         speculative: a.speculative,
         mmprojPath,
+        imageMaxTokens: c?.imageMaxTokens ?? 512,
         onProgress: (p) => this.store.setState({ loadProgress: Math.max(0, Math.min(1, p)) }),
       });
     } catch (e) {

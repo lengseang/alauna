@@ -43,6 +43,7 @@ test('settings v2: every field is validated and clamped on its own', () => {
   assert.deepEqual(s.compute, {
     backend: 'cpu', nGpuLayers: 0, threads: null, nCtx: 32768, nBatch: 2048, flashAttn: 'auto',
     cacheTypeK: 'q8_0', cacheTypeV: 'f16', useMmap: true, useMlock: true, kvSessionCache: true,
+    imageMaxTokens: 512,
   });
   assert.deepEqual(s.sampling, { temperature: 0, topP: 1, topK: 200, minP: DEFAULT_SAMPLING.minP, repeatPenalty: 1 });
   assert.deepEqual(s.speculative, { enabled: true, draftModelId: null, nDraft: 16, pMin: 1 });
@@ -217,7 +218,7 @@ test('threads: search, auto-purge rule, image attachments travel as images (not 
   assert.deepEqual(hist, [{ role: 'user', content: 'what is this?', images: ['/data/vault/media/cat.jpg'] }]);
   const built = buildPrompt({ system: 'sys', history: hist, userMessage: 'and this?', userImages: ['/x/dog.png'], nCtx: 4096, replyBudget: 1000 });
   assert.deepEqual(built.messages.at(-1), { role: 'user', content: 'what is this?\n\nand this?', images: ['/data/vault/media/cat.jpg', '/x/dog.png'] });
-  assert.ok(built.estimatedPromptTokens >= 2 * 768, 'images are counted in the prompt budget');
+  assert.ok(built.estimatedPromptTokens >= 2 * 512, 'images are counted in the prompt budget');
 });
 
 test('model card: a queued download says Queued (not "Not downloaded") and can be cancelled', async () => {

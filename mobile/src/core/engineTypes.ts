@@ -27,6 +27,10 @@ export interface LoadParams {
   speculative?: SpeculativeLoad;
   /** Vision projector (mmproj GGUF) path: initMultimodal is called after the model loads. */
   mmprojPath?: string;
+  /** Max vision tokens per image (default: 512). Caps dynamic patch resolution to prevent prefill freeze/OOM. */
+  imageMaxTokens?: number;
+  /** Min vision tokens per image (default: 64). */
+  imageMinTokens?: number;
   /** 0..1 */
   onProgress?: (fraction: number) => void;
 }

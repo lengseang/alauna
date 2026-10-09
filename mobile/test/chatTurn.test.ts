@@ -274,3 +274,21 @@ test('turn: a counting failure or an engine that cannot count never blocks the r
   const { inp: inp2 } = input(plain, s2.generate, { countPromptTokens: async () => null });
   assert.equal((await runAssistantTurn(inp2)).text, 'fine');
 });
+
+test('turn: vision attachment emits analyzing image notice and clamps maxTokens to protect nCtx', async () => {
+  const s = streamer(['I see a photo']);
+  const imgAttachment = { kind: 'image' as const, name: 'photo.jpg', content: '', truncated: false, path: '/vault/photo.jpg' };
+  const { inp, updates } = input(plain, s.generate, {
+    attachments: [imgAttachment],
+    nCtx: 1024,
+    userText: 'describe this',
+  });
+  const out = await runAssistantTurn(inp);
+  assert.equal(out.status, 'done');
+  assert.equal(out.text, 'I see a photo');
+  assert.match(updates[0].notice ?? '', /Analyzing image/);
+  const calledParams = s.seen[0];
+  assert.ok(calledParams.maxTokens <= 1024);
+  assert.ok(calledParams.maxTokens >= 64);
+});
+
