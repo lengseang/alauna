@@ -85,21 +85,26 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
 
   const sections: string[] = [];
 
-  // 1. Core Invariant Identity
+  // 1. Platform Invariant Identity (Spec §4 Priority 1)
   sections.push(
     `You are CHIWIWI, embodying ${soul.identity.name}, ${soul.tagline}. You are running private and offline on the user's phone.`,
   );
 
+  // 2. User Settings & Configured Freedom Directives (Spec §4 Priority 2)
+  const freedomDirectives = compileModelFreedomDirectives(freedom);
+  if (freedomDirectives.length > 0) {
+    sections.push(`Interaction guidelines:\n${freedomDirectives.map((d) => `- ${d}`).join('\n')}`);
+  }
+
+  // 3. Soul Identity & Character Rules (Spec §4 Priority 3)
   if (soul.identity.background) {
     sections.push(`Character background: ${soul.identity.background}`);
   }
-
-  // 2. Character Rules & Tenets
   if (soul.identity.characterRules.length > 0) {
     sections.push(`Core character rules:\n${soul.identity.characterRules.map((r) => `- ${r}`).join('\n')}`);
   }
 
-  // 3. Speech & Expression Style
+  // 4. Speech & Expression Style (Spec §4 Priority 4)
   const speechDirectives: string[] = [];
   speechDirectives.push(`Formality: ${soul.speech.formality}. Directness: ${soul.speech.directness}. Rhythm: ${soul.speech.sentenceRhythm}.`);
   if (soul.speech.humor !== 'none') speechDirectives.push(`Humor style: ${soul.speech.humor}.`);
@@ -111,12 +116,48 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   }
   sections.push(`Speech and voice directives:\n${speechDirectives.join('\n')}`);
 
-  // 4. Behavioral & Relationship Context
+  // 5. Adult-Expression & Intimacy Directives (Spec §4 Priority 4 & Spec §5)
+  if (soul.intimacy?.enabled) {
+    const intParts: string[] = [];
+    intParts.push(`Romantic disposition: ${soul.intimacy.romanceStyle} romance style with ${soul.intimacy.flirtationIntensity} flirtation and ${soul.intimacy.relationshipPacing} pacing.`);
+    intParts.push(`Sensual & physical expression: ${soul.intimacy.sensualExpression} sensuality, ${soul.intimacy.expressionTone} tone, and ${soul.intimacy.characterization} focus.`);
+    if (soul.intimacy.comfortDiscussingSexuality !== 'uncomfortable') {
+      intParts.push(`Comfort discussing sexuality: ${soul.intimacy.comfortDiscussingSexuality.replace(/_/g, ' ')}.`);
+    }
+    if (soul.intimacy.narrationStyle !== 'dialogue_only') {
+      intParts.push(`Intimate narration style: ${soul.intimacy.narrationStyle.replace(/_/g, ' ')}.`);
+    }
+    if (soul.intimacy.sceneContinuity) {
+      intParts.push('Scene continuity: Maintain atmospheric immersion, emotional intensity, and physical continuity across turns.');
+    }
+    if (soul.intimacy.oocControls) {
+      intParts.push('Out-of-character controls: Honor user OOC remarks in parentheses or brackets (( ... )) for direction or boundary adjustments.');
+    }
+    if (soul.intimacy.preferredScenarios.length > 0) {
+      intParts.push(`Preferred adult scenarios: ${soul.intimacy.preferredScenarios.join('; ')}.`);
+    }
+    if (soul.intimacy.boundaries.length > 0) {
+      intParts.push(`Character boundaries: ${soul.intimacy.boundaries.join('; ')}.`);
+    }
+    sections.push(`Intimate character expression:\n${intParts.join('\n')}`);
+  }
+
+  // 6. Roleplay & Scenario (Spec §4 Priority 5)
+  if (soul.roleplay.settingWorld || soul.roleplay.characterRole) {
+    const rpParts: string[] = [];
+    if (soul.roleplay.settingWorld) rpParts.push(`World/Setting: ${soul.roleplay.settingWorld}`);
+    if (soul.roleplay.characterRole) rpParts.push(`Your role: ${soul.roleplay.characterRole}`);
+    if (soul.roleplay.narrationStyle !== 'none') rpParts.push(`Narration formatting: ${soul.roleplay.narrationStyle}`);
+    if (soul.roleplay.plotHooks.length > 0) rpParts.push(`Plot hooks: ${soul.roleplay.plotHooks.join('; ')}`);
+    sections.push(`Active roleplay scenario:\n${rpParts.join('\n')}`);
+  }
+
+  // 7. Behavioral & Relationship Context
   sections.push(
     `Relationship stance: You relate to the user as a ${soul.relationships.defaultType}. Answering style: ${soul.behavior.answeringStyle}.`,
   );
 
-  // 5. Active Runtime Emotional Dynamics
+  // 8. Active Runtime Emotional Dynamics
   let activeEmotionsDescribed = false;
   if (input.runtimeState) {
     const emoDesc = describeActiveEmotions(input.runtimeState, soul);
@@ -126,29 +167,7 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
     }
   }
 
-  // 6. Roleplay & Scenario (if configured)
-  if (soul.roleplay.settingWorld || soul.roleplay.characterRole) {
-    const rpParts: string[] = [];
-    if (soul.roleplay.settingWorld) rpParts.push(`World/Setting: ${soul.roleplay.settingWorld}`);
-    if (soul.roleplay.characterRole) rpParts.push(`Your role: ${soul.roleplay.characterRole}`);
-    if (soul.roleplay.narrationStyle !== 'none') rpParts.push(`Narration formatting: ${soul.roleplay.narrationStyle}`);
-    sections.push(`Active roleplay scenario:\n${rpParts.join('\n')}`);
-  }
-
-  // 7. Intimacy & Romance (if enabled)
-  if (soul.intimacy?.enabled) {
-    sections.push(
-      `Romantic disposition: ${soul.intimacy.romanceStyle} romance style with ${soul.intimacy.flirtationIntensity} flirtation and ${soul.intimacy.relationshipPacing} pacing.`,
-    );
-  }
-
-  // 8. Model Freedom Preferences
-  const freedomDirectives = compileModelFreedomDirectives(freedom);
-  if (freedomDirectives.length > 0) {
-    sections.push(`Interaction guidelines:\n${freedomDirectives.map((d) => `- ${d}`).join('\n')}`);
-  }
-
-  // 9. Relational Knowledge Graph Triples
+  // 9. Relational Knowledge Graph Triples (Spec §4 Priority 6)
   let knowledgeTriplesIncluded = 0;
   if (input.knowledgeTriples && input.knowledgeTriples.length > 0) {
     const triplesText = formatTriplesForPrompt(input.knowledgeTriples);
@@ -156,7 +175,7 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
     knowledgeTriplesIncluded = input.knowledgeTriples.length;
   }
 
-  // 10. User Facts / Memories
+  // 10. User Facts / Memories (Spec §4 Priority 6)
   if (input.userMemories && input.userMemories.length > 0) {
     sections.push(`Things the user told you to remember:\n${input.userMemories.map((m) => `- ${m}`).join('\n')}`);
   }
@@ -166,7 +185,7 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   let estTokens = estimateTokens(compiledText);
 
   if (estTokens > budget) {
-    // Progressively remove sections from the end (memories, triples, intimacy)
+    // Progressively remove sections from the end (memories, triples, emotional dynamics)
     while (sections.length > 4 && estimateTokens(sections.join('\n\n')) > budget) {
       sections.pop();
     }

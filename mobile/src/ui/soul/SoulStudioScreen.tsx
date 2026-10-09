@@ -455,6 +455,12 @@ export function SoulStudioScreen() {
                         comfortDiscussingSexuality:
                           prev.intimacy?.comfortDiscussingSexuality ?? 'open_if_prompted',
                         relationshipPacing: prev.intimacy?.relationshipPacing ?? 'natural',
+                        narrationStyle: prev.intimacy?.narrationStyle ?? 'mixed',
+                        expressionTone: prev.intimacy?.expressionTone ?? 'sensual',
+                        preferredScenarios: prev.intimacy?.preferredScenarios ?? [],
+                        characterization: prev.intimacy?.characterization ?? 'balanced',
+                        sceneContinuity: prev.intimacy?.sceneContinuity ?? true,
+                        oocControls: prev.intimacy?.oocControls ?? true,
                         boundaries: prev.intimacy?.boundaries ?? [],
                       },
                     }))

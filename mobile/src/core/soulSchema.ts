@@ -196,12 +196,24 @@ export interface SoulMemoryPolicy {
 // --- Chapter 09: Intimacy & Romance (Optional)
 export interface SoulIntimacy {
   enabled: boolean;
-  romanceStyle: 'shy' | 'playful' | 'passionate' | 'reserved' | 'devoted' | 'custom';
-  flirtationIntensity: 'none' | 'subtle' | 'moderate' | 'bold';
+  romanceStyle: 'shy' | 'playful' | 'passionate' | 'reserved' | 'devoted' | 'provocative' | 'vulgar' | 'custom';
+  flirtationIntensity: 'none' | 'subtle' | 'moderate' | 'bold' | 'aggressive';
   initiative: 'reactive' | 'balanced' | 'proactive';
-  sensualExpression: 'reserved' | 'suggestive' | 'expressive';
+  sensualExpression: 'reserved' | 'suggestive' | 'expressive' | 'explicit';
   comfortDiscussingSexuality: 'uncomfortable' | 'open_if_prompted' | 'natural_and_uninhibited';
   relationshipPacing: 'slow_burn' | 'natural' | 'fast_paced';
+  /** Erotic narration vs pure dialogue preference. */
+  narrationStyle: 'dialogue_only' | 'mixed' | 'narration_heavy';
+  /** Sensual vs direct expression tone. */
+  expressionTone: 'sensual' | 'balanced' | 'direct' | 'raw';
+  /** Preferred adult fictional scenarios. */
+  preferredScenarios: string[];
+  /** Romantic vs primarily physical characterization. */
+  characterization: 'romantic' | 'balanced' | 'physical';
+  /** Maintain scene atmosphere and continuity across messages. */
+  sceneContinuity: boolean;
+  /** Out-of-character controls (safe word / scene break). */
+  oocControls: boolean;
   boundaries: string[];
 }
 
@@ -486,12 +498,18 @@ export function sanitizeSoul(raw: unknown, fallbackId = 'soul_custom'): SoulDefi
     const rawInt = r.intimacy as Record<string, unknown>;
     intimacy = {
       enabled: !!rawInt.enabled,
-      romanceStyle: (['shy', 'playful', 'passionate', 'reserved', 'devoted', 'custom'].includes(rawInt.romanceStyle as string) ? rawInt.romanceStyle : 'playful') as SoulIntimacy['romanceStyle'],
-      flirtationIntensity: (['none', 'subtle', 'moderate', 'bold'].includes(rawInt.flirtationIntensity as string) ? rawInt.flirtationIntensity : 'subtle') as SoulIntimacy['flirtationIntensity'],
+      romanceStyle: (['shy', 'playful', 'passionate', 'reserved', 'devoted', 'provocative', 'vulgar', 'custom'].includes(rawInt.romanceStyle as string) ? rawInt.romanceStyle : 'playful') as SoulIntimacy['romanceStyle'],
+      flirtationIntensity: (['none', 'subtle', 'moderate', 'bold', 'aggressive'].includes(rawInt.flirtationIntensity as string) ? rawInt.flirtationIntensity : 'subtle') as SoulIntimacy['flirtationIntensity'],
       initiative: (['reactive', 'balanced', 'proactive'].includes(rawInt.initiative as string) ? rawInt.initiative : 'balanced') as SoulIntimacy['initiative'],
-      sensualExpression: (['reserved', 'suggestive', 'expressive'].includes(rawInt.sensualExpression as string) ? rawInt.sensualExpression : 'reserved') as SoulIntimacy['sensualExpression'],
+      sensualExpression: (['reserved', 'suggestive', 'expressive', 'explicit'].includes(rawInt.sensualExpression as string) ? rawInt.sensualExpression : 'reserved') as SoulIntimacy['sensualExpression'],
       comfortDiscussingSexuality: (['uncomfortable', 'open_if_prompted', 'natural_and_uninhibited'].includes(rawInt.comfortDiscussingSexuality as string) ? rawInt.comfortDiscussingSexuality : 'open_if_prompted') as SoulIntimacy['comfortDiscussingSexuality'],
       relationshipPacing: (['slow_burn', 'natural', 'fast_paced'].includes(rawInt.relationshipPacing as string) ? rawInt.relationshipPacing : 'natural') as SoulIntimacy['relationshipPacing'],
+      narrationStyle: (['dialogue_only', 'mixed', 'narration_heavy'].includes(rawInt.narrationStyle as string) ? rawInt.narrationStyle : 'mixed') as SoulIntimacy['narrationStyle'],
+      expressionTone: (['sensual', 'balanced', 'direct', 'raw'].includes(rawInt.expressionTone as string) ? rawInt.expressionTone : 'balanced') as SoulIntimacy['expressionTone'],
+      preferredScenarios: cleanStrArr(rawInt.preferredScenarios, 20),
+      characterization: (['romantic', 'balanced', 'physical'].includes(rawInt.characterization as string) ? rawInt.characterization : 'balanced') as SoulIntimacy['characterization'],
+      sceneContinuity: rawInt.sceneContinuity !== false,
+      oocControls: rawInt.oocControls !== false,
       boundaries: cleanStrArr(rawInt.boundaries),
     };
   }
