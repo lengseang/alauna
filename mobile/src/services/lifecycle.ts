@@ -76,11 +76,13 @@ export function bootstrap(): Promise<void> {
     installMemoryGuard();
     settingsStore.subscribe(() => {
       downloads.setConcurrency(settingsStore.getState().downloads.parallel);
+      downloads.setVerifyMode(settingsStore.getState().verifyMode);
     });
     started = (async () => {
       bootStore.setState({ stage: 'settings' });
       await initSettings();
       downloads.setConcurrency(settingsStore.getState().downloads.parallel);
+      downloads.setVerifyMode(settingsStore.getState().verifyMode);
       bootStore.setState({ stage: 'storage' });
       await initStorage();
       await engine.noteStartup();

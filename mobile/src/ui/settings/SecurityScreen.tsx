@@ -14,7 +14,7 @@ import { ListRow } from '../Row';
 import { Screen } from '../Screen';
 import { Stat } from '../Stat';
 import { Text } from '../Text';
-import { labelDays, labelMinutes, PURGE_DAYS_CHOICES } from './logic';
+import { describeVerifyMode, labelDays, labelMinutes, labelVerifyMode, PURGE_DAYS_CHOICES, VERIFY_MODE_CHOICES } from './logic';
 import { ChoiceRow, galleryHidden, Group, PurgeActions, Rows, StatRow } from './parts';
 
 const KIND: Record<string, string> = { fingerprint: 'Fingerprint', face: 'Face', iris: 'Iris' };
@@ -108,6 +108,16 @@ export function SecurityScreen() {
       </Group>
 
       <Group index={4} title="Integrity check" hint="Reads your chats, memory and settings files and reports damage. The model check compares each file with its official SHA-256 and takes minutes per gigabyte.">
+        <Rows>
+          <ChoiceRow
+            title="Download verification"
+            subtitle={describeVerifyMode(settings.verifyMode)}
+            options={VERIFY_MODE_CHOICES}
+            value={settings.verifyMode}
+            label={labelVerifyMode}
+            onChange={(m) => updateSettings({ verifyMode: m })}
+          />
+        </Rows>
         {integrity.running ? (
           <>
             <Text>{`Checking ${stepName}...`}</Text>

@@ -102,6 +102,8 @@ export interface StoragePrefs {
   modelSlotId: string | null;
 }
 
+export type VerifyMode = 'background' | 'always' | 'off';
+
 export interface DownloadSettings {
   /** How many installs download at the same time (1..4). */
   parallel: number;
@@ -153,6 +155,8 @@ export interface Settings {
   security: SecurityPrefs;
   /** Mirror of security.appLock */
   biometricLock: boolean;
+  /** SHA-256 download check mode ('background' | 'always' | 'off'). */
+  verifyMode: VerifyMode;
   /** Delete chats not updated for this many days at launch (pinned chats are kept). 0 = off. */
   autoPurgeDays: number;
   // ---- look & storage
@@ -209,6 +213,7 @@ function defaults(): Settings {
     incognitoDefault: false,
     security: { ...DEFAULT_SECURITY_PREFS },
     biometricLock: DEFAULT_SECURITY_PREFS.appLock,
+    verifyMode: 'background',
     autoPurgeDays: 0,
     appearance: { theme: 'system', textScale: 1, haptics: true, reducedMotion: false },
     storage: { modelSlotId: null },
@@ -357,6 +362,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   } else {
     out.security = sanitizeSecurityPrefs(d.security);
   }
+  out.verifyMode = oneOf(r.verifyMode, ['background', 'always', 'off'] as const, d.verifyMode);
   out.autoPurgeDays = int(r.autoPurgeDays, 0, MAX_AUTO_PURGE_DAYS, d.autoPurgeDays);
 
   const ap = obj(r.appearance);

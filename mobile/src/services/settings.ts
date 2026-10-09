@@ -23,6 +23,7 @@ export type {
   SttSettings,
   TtsSettings,
   VerifiedInfo,
+  VerifyMode,
   VoicePrefs,
 } from '../core/settingsModel.ts';
 export { importLegacyDownloads } from '../core/settingsModel.ts';

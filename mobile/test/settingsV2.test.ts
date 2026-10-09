@@ -21,6 +21,7 @@ test('settings v2: a v1 file migrates (threads / GPU / context move into compute
   assert.equal(s.autoPurgeDays, 0, 'auto-delete of chats is never on by default');
   assert.equal(s.compute.kvSessionCache, true);
   assert.deepEqual(s.downloads, { parallel: 1 });
+  assert.equal(s.verifyMode, 'background');
 });
 
 test('settings v2: every field is validated and clamped on its own', () => {
@@ -34,6 +35,7 @@ test('settings v2: every field is validated and clamped on its own', () => {
     appearance: { theme: 'neon', textScale: 9, haptics: false, reducedMotion: true },
     storage: { modelSlotId: 42 },
     downloads: { parallel: 99 },
+    verifyMode: 'unknown',
     pad: { pleasure: 5, arousal: -1, dominance: 0.5 },
     toneIntensity: 0,
     activePresetIndex: -3,
@@ -50,6 +52,9 @@ test('settings v2: every field is validated and clamped on its own', () => {
   assert.deepEqual(s.appearance, { theme: 'system', textScale: 1.5, haptics: false, reducedMotion: true });
   assert.deepEqual(s.storage, { modelSlotId: null });
   assert.deepEqual(s.downloads, { parallel: 4 });
+  assert.equal(s.verifyMode, 'background');
+  assert.equal(sanitizeSettings({ verifyMode: 'always' }).verifyMode, 'always');
+  assert.equal(sanitizeSettings({ verifyMode: 'off' }).verifyMode, 'off');
   assert.deepEqual(s.pad, { pleasure: 1, arousal: 0, dominance: 0.5 }, 'PAD clamped to its ranges');
   assert.equal(s.toneIntensity, 0.1);
   assert.equal(s.activePresetIndex, 0);
@@ -66,6 +71,7 @@ test('settings v2: full round-trip is lossless; defaults are fresh objects', () 
     appearance: { theme: 'nyx', textScale: 1.15, haptics: false, reducedMotion: true },
     storage: { modelSlotId: 'folder-x' },
     downloads: { parallel: 3 },
+    verifyMode: 'always',
     customBackstory: 'Call me Leng.',
   });
   assert.deepEqual(sanitizeSettings(JSON.parse(JSON.stringify(custom))), custom);

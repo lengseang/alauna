@@ -368,7 +368,7 @@ export class DownloadManager {
   private readonly stallMs: number;
   private readonly stallCheckMs: number;
   private readonly retryResetBytes: number;
-  private readonly verifyMode: 'background' | 'always' | 'off';
+  private verifyMode: 'background' | 'always' | 'off';
   private readonly onVerifyFailed?: DownloadManagerOptions['onVerifyFailed'];
   private readonly bg = new Map<string, BgJob>();
   private appActive = true;
@@ -644,6 +644,14 @@ export class DownloadManager {
     this.concurrency = clampConcurrency(n);
     this.store.setState({ concurrency: this.concurrency });
     this.pump();
+  }
+
+  setVerifyMode(mode: 'background' | 'always' | 'off'): void {
+    this.verifyMode = mode;
+  }
+
+  getVerifyMode(): 'background' | 'always' | 'off' {
+    return this.verifyMode;
   }
 
   // ---------------------------------------------------------------- internals

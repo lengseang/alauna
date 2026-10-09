@@ -38,6 +38,31 @@ export const labelTokens = (n: number | null, auto: number): string => (n === nu
 export const labelThreads = (n: number | null): string => (n === null ? 'Auto' : String(n));
 export const onOff = (v: boolean): string => (v ? 'On' : 'Off');
 
+export const VERIFY_MODE_CHOICES = ['background', 'always', 'off'] as const;
+export type VerifyModeChoice = (typeof VERIFY_MODE_CHOICES)[number];
+
+export const labelVerifyMode = (m: VerifyModeChoice): string => {
+  switch (m) {
+    case 'background':
+      return 'Background check';
+    case 'always':
+      return 'Block until verified';
+    case 'off':
+      return 'Off';
+  }
+};
+
+export const describeVerifyMode = (m: VerifyModeChoice): string => {
+  switch (m) {
+    case 'background':
+      return 'Usable right away; SHA-256 runs in background. If corrupt, it is deleted and unloaded.';
+    case 'always':
+      return 'Blocks until SHA-256 matches. Safest, but takes minutes per gigabyte on phone CPU.';
+    case 'off':
+      return 'Skips verification after download. Fastest, but damaged or incomplete files will not be caught.';
+  }
+};
+
 /** Whole milliseconds for a Stat, or null when nothing was measured. */
 export const wholeMs = (v: number | null | undefined): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
 /** One decimal for tok/s, or null. */

@@ -1,12 +1,13 @@
 /** Settings screens: the pure helpers behind them (labels, choice lists, speech-model lines, diagnostics). */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BATCH_CHOICES, CTX_CHOICES, buildDiagnostics, labelDays, labelMinutes, languageName, oneDecimal, slotLine, speechFraction, speechLine, vadPresetFor, wholeMs } from '../src/ui/settings/logic.ts';
+import { BATCH_CHOICES, CTX_CHOICES, buildDiagnostics, describeVerifyMode, labelDays, labelMinutes, labelVerifyMode, languageName, oneDecimal, slotLine, speechFraction, speechLine, vadPresetFor, VERIFY_MODE_CHOICES, wholeMs } from '../src/ui/settings/logic.ts';
 
 test('choice lists match the ranges the settings model accepts', () => {
   assert.equal(CTX_CHOICES[0], null);
   assert.ok(CTX_CHOICES.slice(1).every((n) => n !== null && n >= 512 && n <= 32768));
   assert.ok(BATCH_CHOICES.every((n) => n >= 32 && n <= 2048));
+  assert.deepEqual(VERIFY_MODE_CHOICES, ['background', 'always', 'off']);
 });
 
 test('labels', () => {
@@ -18,6 +19,12 @@ test('labels', () => {
   assert.equal(labelMinutes(15), 'After 15 minutes');
   assert.equal(languageName('km'), 'Khmer');
   assert.equal(languageName('xx'), 'xx');
+  assert.equal(labelVerifyMode('background'), 'Background check');
+  assert.equal(labelVerifyMode('always'), 'Block until verified');
+  assert.equal(labelVerifyMode('off'), 'Off');
+  assert.match(describeVerifyMode('background'), /background/i);
+  assert.match(describeVerifyMode('always'), /blocks until/i);
+  assert.match(describeVerifyMode('off'), /skips verification/i);
 });
 
 test('numbers: nothing measured stays null', () => {
