@@ -967,4 +967,20 @@ export const MODEL_DATA: ModelData[] = [
     kvBytesPerToken: 47_104, contextLength: 1_048_576, published: '2026-10-07',
     description: 'Massive 94 GB uncensored mixed-quant MoE model with native 1M context and vision projector. Built from orcarouter/GLM-5.3-Flash-Uncensored-FP8 with IQ2_XS and Q2_K.',
   },
+  {
+    id: 'llama-3.2-1b-instruct-uncensored', name: 'Llama 3.2 1B Instruct Uncensored', family: 'Llama', paramsB: 1.23, role: 'Uncensored', priority: 0,
+    uniqueTag: '#PocketRebel', bestFor: 'Ultra-fast sub-1GB unfiltered chat and prompt generation on any device.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Q4_K_M', license: 'llama3.2', chatTemplate: 'llama3', draftKey: 'llama3',
+    repo: 'mradermacher/Llama-3.2-1B-Instruct-Uncensored-GGUF', filename: 'Llama-3.2-1B-Instruct-Uncensored.Q4_K_M.gguf', sizeBytes: 807_691_520, sha256: 'd886cf5e4af6f9130902a52e29e8085b3ca03e47f380360fbd1d7c72f454eb95',
+    kvBytesPerToken: 32_768, contextLength: 131_072, published: '2024-10-05',
+    description: 'Llama 3.2 1B Instruct fine-tuned to answer without refusals. Weighs only 808 MB with blistering 60+ tok/s mobile speed.',
+  },
+  {
+    id: 'llama-3.2-3b-promptist-mini', name: 'Llama 3.2 3B Promptist Mini', family: 'Llama', paramsB: 3.21, role: 'Small & quick', priority: 0,
+    uniqueTag: '#PromptAlchemist', bestFor: 'Crafting rich photorealistic and stylized prompts for Stable Diffusion, SDXL & Pony XL.',
+    capabilities: ['Text'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'llama3.2', chatTemplate: 'llama3', draftKey: 'llama3',
+    repo: 'prithivMLmods/Llama-3.2-3B-Promptist-Mini-GGUF', filename: 'Llama-3.2-3B-Promptist-Mini.Q4_K_M.gguf', sizeBytes: 2_019_377_984, sha256: '57264c60385ea44e38266bcf6b477c49c2b5d36edc04ff4a72f248a381427297',
+    kvBytesPerToken: 114_688, contextLength: 131_072, published: '2024-12-04',
+    description: 'Fine-tuned specifically on artistic prompt synthesis. Expands raw thoughts into detailed negative, camera, lighting, and Danbooru tag prompts.',
+  },
 ];
