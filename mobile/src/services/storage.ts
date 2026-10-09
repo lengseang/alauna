@@ -161,7 +161,7 @@ export async function probeWritable(rootPath: string): Promise<{ ok: true } | { 
   }
 }
 
-function ensureLayout(rootPath: string, subs: string[] = ['models', 'chats', 'media']): void {
+function ensureLayout(rootPath: string, subs: string[] = ['models', 'chats', 'media', 'gallery']): void {
   const root = dirAt(rootPath);
   if (!root.exists) root.create({ intermediates: true, idempotent: true });
   for (const sub of subs) {
@@ -318,6 +318,7 @@ export const vaultRoot = (): Directory => dirAt(requireConfig().rootPath);
 export const modelsDir = (): Directory => new Directory(vaultRoot(), 'models');
 export const chatsDir = (): Directory => new Directory(vaultRoot(), 'chats');
 export const mediaDir = (): Directory => new Directory(vaultRoot(), 'media');
+export const galleryDir = (): Directory => new Directory(vaultRoot(), 'gallery');
 
 /**
  * Is this path on the phone's internal data volume? App storage and /storage/emulated/* (emulated shared storage is
