@@ -942,4 +942,20 @@ export const MODEL_DATA: ModelData[] = [
     kvBytesPerToken: 57_344, contextLength: 131_072, published: '2026-04-05',
     description: 'Gemma 4 E4B decensored with Heretic (llmfan46). Photos and recorded speech with its add-on. Heavy (6.3 GB).',
   },
+  {
+    id: 'hermes-4-14b', name: 'Hermes 4 14B', family: 'Hermes', paramsB: 14.77, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#Hermes4Steerable', bestFor: 'Nous Research agentic steerability, tool use, and reasoning. Heavy on 12 GB RAM.',
+    capabilities: ['Text', 'Code', 'Reasoning'], thinking: 'toggle', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'chatml', draftKey: 'qwen3',
+    repo: 'bartowski/NousResearch_Hermes-4-14B-GGUF', filename: 'NousResearch_Hermes-4-14B-Q4_K_M.gguf', sizeBytes: 9_001_753_536, sha256: '7ad9be1e446e3da0c149fdf55284c90be666d3e13c6e2581587853f4f9538073',
+    kvBytesPerToken: 163_840, contextLength: 40_960, published: '2025-09-03',
+    description: 'Nous Research Hermes 4 based on Qwen 3 14B. Steerable agent with function calling, structured output, and optional thinking.',
+  },
+  {
+    id: 'mistral-nemo-instruct-12b', name: 'Mistral NeMo Instruct 12B', family: 'Mistral', paramsB: 12.25, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#MistralNeMo128k', bestFor: 'Official Mistral AI 128k context multilingual reasoning and precise code instructions on 12 GB RAM.',
+    capabilities: ['Text', 'Code'], thinking: 'none', contentPolicy: 'Standard', quantization: 'Q4_K_M', license: 'apache-2.0', chatTemplate: 'mistral', draftKey: 'mistral-nemo',
+    repo: 'bartowski/Mistral-Nemo-Instruct-2407-GGUF', filename: 'Mistral-Nemo-Instruct-2407-Q4_K_M.gguf', sizeBytes: 7_477_208_192, sha256: '7c1a10d202d8788dbe5628dc962254d10654c853cae6aaeca0618f05490d4a46',
+    kvBytesPerToken: 163_840, contextLength: 1_024_000, published: '2024-07-18',
+    description: 'Official 12B parameter model built by Mistral AI and NVIDIA. Features 128k context window, state-of-the-art multilingual reasoning, and Apache 2.0 license.',
+  },
 ];

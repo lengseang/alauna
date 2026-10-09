@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ALL_CAPABILITIES,
@@ -309,4 +309,23 @@ test('library v2.1: parameter bands, small-uncensored set, speed class and hones
   assert.equal(speedHint({ sizeBytes: 6e9 }).fast, false);
   for (const t of IMAGE_TOOLS) assert.ok(t.status === 'engine-unavailable' && /not in this build/.test(t.note), t.id);
   assert.ok(IMAGE_TOOLS.length >= 2 && !MODEL_CATALOG.some((m) => IMAGE_TOOLS.some((t) => t.id === m.id)));
+});
+
+test('task T8: verified Hermes 4 14B and Mistral NeMo Instruct 12B exist in catalog', () => {
+  const h4 = getModel('hermes-4-14b');
+  assert.ok(h4, 'hermes-4-14b must resolve');
+  assert.equal(h4.family, 'Hermes');
+  assert.equal(h4.quantization, 'Q4_K_M');
+  assert.equal(h4.uniqueTag, '#Hermes4Steerable');
+  assert.equal(h4.chatTemplate, 'chatml');
+  assert.equal(h4.role, 'Heavy (16 GB phones)');
+  assert.ok(h4.capabilities.includes('Reasoning'));
+
+  const nemo = getModel('mistral-nemo-instruct-12b');
+  assert.ok(nemo, 'mistral-nemo-instruct-12b must resolve');
+  assert.equal(nemo.family, 'Mistral');
+  assert.equal(nemo.quantization, 'Q4_K_M');
+  assert.equal(nemo.uniqueTag, '#MistralNeMo128k');
+  assert.equal(nemo.chatTemplate, 'mistral');
+  assert.equal(nemo.role, 'Heavy (16 GB phones)');
 });

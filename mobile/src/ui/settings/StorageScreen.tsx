@@ -21,10 +21,13 @@ import {
   type SlotInfo,
 } from '../../services/storage.ts';
 import { showToast } from '../../services/toast.ts';
+import { installedBytes } from '../../services/modelLibrary.ts';
 import { makeStyles } from '../../theme';
 import { Button } from '../Button';
 import { confirm } from '../confirm';
-import { goBack } from '../nav';
+import { IconButton } from '../IconButton';
+import { deleteModel } from '../modelActions';
+import { goBack, push } from '../nav';
 import { Notice } from '../Notice';
 import { ProgressBar } from '../ProgressBar';
 import { ListRow } from '../Row';
@@ -211,37 +214,99 @@ export function StorageScreen() {
         {full ? <Text variant="small">The limit is five locations. Remove one to add another.</Text> : null}
       </Group>
 
-      <Group index={4} title="Move models" hint={slots.length < 2 ? 'Add a second location above to move models between locations.' : 'Tap a model to choose where it should live.'}>
+      <Group index={4} title={`Installed models (${models.length})`} hint="Manage downloaded models: delete to free space, view details, or move between locations.">
         {moving ? (
           <View style={s.slot}>
             <Text variant="strong">{moving.name}</Text>
             <ProgressBar fraction={moving.fraction} label={`${moving.stage} ${moving.name}`} />
             <Text variant="small">{`${moving.stage === 'copying' ? 'Copying' : moving.stage === 'verifying' ? 'Checking the copy' : 'Cleaning up'} · ${Math.round(moving.fraction * 100)}%`}</Text>
-            <Button label="Cancel" variant="quiet" onPress={() => {
+            <Button
+              label="Cancel"
+              variant="quiet"
+              onPress={() => {
                 token.current.cancelled = true;
-              }} />
+              }}
+            />
           </View>
         ) : null}
         <Rows>
           {models.map((m) => {
             const where = locateModelFile(m.filename);
-            return <ListRow key={m.id} title={m.name} subtitle={formatBytes(m.sizeBytes)} value={slots.find((x) => x.id === where?.slotId)?.label ?? '...'} onPress={slots.length >= 2 && !moving ? () => setPick(m) : undefined} />;
+            const mBytes = installedBytes([m]) || m.sizeBytes;
+            const slotName = slots.find((x) => x.id === where?.slotId)?.label ?? 'Main storage';
+            return (
+              <ListRow
+                key={m.id}
+                title={m.name}
+                subtitle={`${formatBytes(mBytes)} · ${slotName}`}
+                onPress={!moving ? () => setPick(m) : undefined}
+                right={
+                  <IconButton
+                    icon="trash"
+                    label={`Delete ${m.name}`}
+                    accessibilityHint={`Frees ${formatBytes(mBytes)}`}
+                    onPress={async () => {
+                      await deleteModel(m);
+                      refresh();
+                    }}
+                  />
+                }
+              />
+            );
           })}
         </Rows>
         {models.length === 0 ? <Text variant="small">No models downloaded yet.</Text> : null}
       </Group>
 
-      <Group index={5} title="Erase" hint="Each action asks first. Models and settings are never touched here; delete models in the Model Vault.">
+      <Group index={5} title="Erase" hint="Each action asks first. Delete models in the Installed models section above or in the Model Vault.">
         <PurgeActions kinds={['chats', 'memory', 'kv', 'media', 'all']} onDone={refresh} />
       </Group>
 
-      <Sheet visible={!!pick} onClose={() => setPick(null)} title={pick ? `Move ${pick.name}` : 'Move'}>
-        <ListRow title="Quick check only" subtitle="Compare size and file header instead of the full SHA-256 (much faster, a little less safe)." switchValue={quick} onSwitch={setQuick} />
-        {pick
-          ? slots
-              .filter((x) => x.id !== locateModelFile(pick.filename)?.slotId)
-              .map((x) => <ListRow key={x.id} title={x.label} subtitle={x.freeBytes !== null ? `${formatBytes(x.freeBytes)} free` : 'free space unknown'} onPress={() => move(pick, x)} />)
-          : null}
+      <Sheet visible={!!pick} onClose={() => setPick(null)} title={pick ? pick.name : 'Model'}>
+        {pick ? (
+          <>
+            <ListRow
+              title="View model details"
+              subtitle="Full parameters, context length, license, and test."
+              onPress={() => {
+                const id = pick.id;
+                setPick(null);
+                push('models/detail', { id });
+              }}
+            />
+            <ListRow
+              title="Delete from this phone"
+              subtitle={`Frees ${formatBytes(installedBytes([pick]) || pick.sizeBytes)} from disk.`}
+              destructive
+              onPress={async () => {
+                const target = pick;
+                setPick(null);
+                await deleteModel(target);
+                refresh();
+              }}
+            />
+            {slots.length >= 2 ? (
+              <>
+                <ListRow
+                  title="Quick check only"
+                  subtitle="Compare size and file header instead of the full SHA-256 (much faster, a little less safe)."
+                  switchValue={quick}
+                  onSwitch={setQuick}
+                />
+                {slots
+                  .filter((x) => x.id !== locateModelFile(pick.filename)?.slotId)
+                  .map((x) => (
+                    <ListRow
+                      key={x.id}
+                      title={`Move to ${x.label}`}
+                      subtitle={x.freeBytes !== null ? `${formatBytes(x.freeBytes)} free there` : 'free space unknown'}
+                      onPress={() => move(pick, x)}
+                    />
+                  ))}
+              </>
+            ) : null}
+          </>
+        ) : null}
       </Sheet>
     </Screen>
   );

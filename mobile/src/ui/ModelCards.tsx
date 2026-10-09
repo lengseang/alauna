@@ -8,11 +8,12 @@ import { installedBytes } from '../services/modelLibrary.ts';
 import { makeStyles } from '../theme';
 import { Button } from './Button';
 import { Card } from './Card';
+import { IconButton } from './IconButton';
 import { Notice } from './Notice';
 import { ProgressBar } from './ProgressBar';
 import { Tag } from './Tag';
 import { Text } from './Text';
-import { pauseDownload, runModelAction } from './modelActions';
+import { deleteModel, pauseDownload, runModelAction } from './modelActions';
 import { ACTION_LABEL, fitVerdict, paramsLabel, partsLine, rowState, type EngineLike } from './vaultLogic';
 
 // ===================================================================== Model Vault row
@@ -141,12 +142,13 @@ export function QueueCard({ spec, queueIndex, queueLength, onOpen }: QueueProps)
 interface InstalledProps {
   spec: ModelSpec;
   active: boolean;
-  slotLabel: string | null;
+  slotLabel?: string | null;
   onOpen: (id: string) => void;
+  onDelete?: (spec: ModelSpec) => void;
 }
 
-/** A model on the phone: its real disk use (model plus add-ons), where it lives, and Load / Chat. */
-export function InstalledRow({ spec, active, slotLabel, onOpen }: InstalledProps) {
+/** A model on the phone: its real disk use (model plus add-ons), where it lives, Load / Chat, and delete. */
+export function InstalledRow({ spec, active, slotLabel, onOpen, onDelete }: InstalledProps) {
   const s = useStyles();
   const dl = useDownloadState(spec.id);
   const bytes = useMemo(() => installedBytes([spec]), [spec, dl.status]);
@@ -158,23 +160,32 @@ export function InstalledRow({ spec, active, slotLabel, onOpen }: InstalledProps
         <Text variant="small">{`${formatBytes(bytes)} on disk${where ? ` · ${where}` : ''}${active ? ' · loaded' : ''}`}</Text>
         {dl.missing && dl.missing.length > 0 ? <Text variant="small">{`Not on the phone: ${dl.missing.map((m) => (m === 'mmproj' ? 'image add-on' : m === 'draft' ? 'speed-up head' : m)).join(', ')}`}</Text> : null}
       </Pressable>
-      <Button
-        label={active ? 'Chat' : 'Load'}
-        variant="quiet"
-        onPress={() => runModelAction(spec, active ? 'start_chat' : 'load')}
-        accessibilityLabel={`${active ? 'Chat with' : 'Load'} ${spec.name}`}
-        style={s.action}
-      />
+      <View style={s.actions}>
+        <Button
+          label={active ? 'Chat' : 'Load'}
+          variant="quiet"
+          onPress={() => runModelAction(spec, active ? 'start_chat' : 'load')}
+          accessibilityLabel={`${active ? 'Chat with' : 'Load'} ${spec.name}`}
+          style={s.action}
+        />
+        <IconButton
+          icon="trash"
+          label={`Delete ${spec.name}`}
+          accessibilityHint="Frees disk space"
+          onPress={() => (onDelete ? onDelete(spec) : deleteModel(spec))}
+        />
+      </View>
     </View>
   );
 }
 
 const useStyles = makeStyles(({ colors, space }) => ({
-  row: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm, paddingVertical: space.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.md },
   info: { flex: 1, gap: space.xs, minHeight: 56 },
   head: { gap: space.xs, minHeight: 48 },
   pressed: { backgroundColor: colors.accentSoft },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, paddingTop: space.xs },
-  action: { minWidth: 96 },
+  action: { minWidth: 84 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   buttons: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, alignItems: 'center' },
 }));
