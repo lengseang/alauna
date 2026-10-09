@@ -1,7 +1,7 @@
 /** v2 settings schema, Soul (PAD -> prompt + sampling), memory vault budget. Pure core, no phone. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applySettingsPatch, DEFAULT_SAMPLING, DEFAULT_SETTINGS, MAX_AUTO_PURGE_DAYS, sanitizeSettings } from '../src/core/settingsModel.ts';
+import { applySettingsPatch, DEFAULT_SAMPLING, DEFAULT_SETTINGS, importLegacyDownloads, MAX_AUTO_PURGE_DAYS, sanitizeSettings } from '../src/core/settingsModel.ts';
 import { ARCHETYPE_KEYS, ARCHETYPES, buildSystemPrompt, padToSampling } from '../src/core/persona.ts';
 import { addFact, editFact, MAX_MEMORY_CHARS, memoryBudget, sanitizeFacts, setFactPaused, activeFactTexts, type MemoryFact } from '../src/core/memory.ts';
 import { effectiveSoul, newThread, sanitizeThread, staleThreadIds, threadMatch, toHistory, makeImageAttachment, withAttachments } from '../src/core/chatTypes.ts';
@@ -20,6 +20,7 @@ test('settings v2: a v1 file migrates (threads / GPU / context move into compute
   assert.equal(s.offlineStrict, true);
   assert.equal(s.autoPurgeDays, 0, 'auto-delete of chats is never on by default');
   assert.equal(s.compute.kvSessionCache, true);
+  assert.deepEqual(s.downloads, { parallel: 1 });
 });
 
 test('settings v2: every field is validated and clamped on its own', () => {
@@ -32,6 +33,7 @@ test('settings v2: every field is validated and clamped on its own', () => {
     autoPurgeDays: 1e9,
     appearance: { theme: 'neon', textScale: 9, haptics: false, reducedMotion: true },
     storage: { modelSlotId: 42 },
+    downloads: { parallel: 99 },
     pad: { pleasure: 5, arousal: -1, dominance: 0.5 },
     toneIntensity: 0,
     activePresetIndex: -3,
@@ -47,9 +49,11 @@ test('settings v2: every field is validated and clamped on its own', () => {
   assert.equal(s.autoPurgeDays, MAX_AUTO_PURGE_DAYS);
   assert.deepEqual(s.appearance, { theme: 'system', textScale: 1.5, haptics: false, reducedMotion: true });
   assert.deepEqual(s.storage, { modelSlotId: null });
+  assert.deepEqual(s.downloads, { parallel: 4 });
   assert.deepEqual(s.pad, { pleasure: 1, arousal: 0, dominance: 0.5 }, 'PAD clamped to its ranges');
   assert.equal(s.toneIntensity, 0.1);
   assert.equal(s.activePresetIndex, 0);
+  assert.deepEqual(sanitizeSettings({ downloads: { parallel: -5 } }).downloads, { parallel: 1 });
 });
 
 test('settings v2: full round-trip is lossless; defaults are fresh objects', () => {
@@ -61,6 +65,7 @@ test('settings v2: full round-trip is lossless; defaults are fresh objects', () 
     offlineStrict: false, incognitoDefault: true, biometricLock: true, autoPurgeDays: 30,
     appearance: { theme: 'nyx', textScale: 1.15, haptics: false, reducedMotion: true },
     storage: { modelSlotId: 'folder-x' },
+    downloads: { parallel: 3 },
     customBackstory: 'Call me Leng.',
   });
   assert.deepEqual(sanitizeSettings(JSON.parse(JSON.stringify(custom))), custom);
@@ -69,6 +74,15 @@ test('settings v2: full round-trip is lossless; defaults are fresh objects', () 
   a.sampling.temperature = 2;
   assert.equal(DEFAULT_SETTINGS.compute.threads, null);
   assert.equal(DEFAULT_SETTINGS.sampling.temperature, 0.7);
+});
+
+test('settings v2: legacy chiwiwi_downloads.json migrates into downloads.parallel', () => {
+  assert.deepEqual(importLegacyDownloads({ concurrency: 3 }), { parallel: 3 });
+  assert.deepEqual(importLegacyDownloads({ concurrency: 1 }), { parallel: 1 });
+  assert.equal(importLegacyDownloads({ concurrency: 0 }), null);
+  assert.equal(importLegacyDownloads({ concurrency: 5 }), null);
+  assert.equal(importLegacyDownloads(null), null);
+  assert.equal(importLegacyDownloads('garbage'), null);
 });
 
 test('settings v2: v1 setters write through to compute; compute writes update the v1 mirrors', () => {

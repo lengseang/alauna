@@ -97,6 +97,11 @@ export interface StoragePrefs {
   modelSlotId: string | null;
 }
 
+export interface DownloadSettings {
+  /** How many installs download at the same time (1..4). */
+  parallel: number;
+}
+
 export interface Settings {
   version: number;
   // ---- Soul (global; a chat can override it, see core/chatTypes.ts ThreadSoul)
@@ -143,6 +148,7 @@ export interface Settings {
   // ---- look & storage
   appearance: AppearanceSettings;
   storage: StoragePrefs;
+  downloads: DownloadSettings;
 }
 
 /** Upper bound for a user-chosen context size (tokens). */
@@ -194,6 +200,7 @@ function defaults(): Settings {
     autoPurgeDays: 0,
     appearance: { theme: 'system', textScale: 1, haptics: true, reducedMotion: false },
     storage: { modelSlotId: null },
+    downloads: { parallel: 1 },
   };
 }
 
@@ -212,6 +219,14 @@ const strOrNull = (v: unknown, max: number, fallback: string | null): string | n
   v === null ? null : typeof v === 'string' && v.trim() ? v.slice(0, max) : fallback;
 const oneOf = <T extends string>(v: unknown, options: readonly T[], fallback: T): T =>
   typeof v === 'string' && (options as readonly string[]).includes(v) ? (v as T) : fallback;
+
+/** chiwiwi_downloads.json ({ concurrency: 1..4 }) -> v2 downloads. */
+export function importLegacyDownloads(raw: unknown): DownloadSettings | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Obj;
+  const n = Number(r.concurrency);
+  return Number.isInteger(n) && n >= 1 && n <= 4 ? { parallel: n } : null;
+}
 
 /** null (automatic) or a sane context size. A corrupt `1e9` must never make llama.cpp allocate gigabytes of KV cache. */
 function ctxOrNull(v: unknown, fallback: number | null): number | null {
@@ -329,6 +344,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   };
   const st = obj(r.storage);
   out.storage = { modelSlotId: strOrNull(st.modelSlotId, 100, d.storage.modelSlotId) };
+  const dl = obj(r.downloads);
+  out.downloads = { parallel: int(dl.parallel, 1, 4, d.downloads.parallel) };
 
   return withMirrors(out);
 }

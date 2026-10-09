@@ -14,7 +14,7 @@ import { chatStore, initChat } from './chat.ts';
 import { downloads, refreshDownloads } from './downloads.ts';
 import { loadMemory } from './memory.ts';
 import { autoPurgeOldChats } from './privacy.ts';
-import { initSettings, updateSettings } from './settings.ts';
+import { initSettings, settingsStore, updateSettings } from './settings.ts';
 import { initStorage, isStorageReady } from './storage.ts';
 
 /** Load everything that lives inside the vault. Call whenever storage becomes (or changes to) ready. */
@@ -74,9 +74,13 @@ let started: Promise<void> | null = null;
 export function bootstrap(): Promise<void> {
   if (!started) {
     installMemoryGuard();
+    settingsStore.subscribe(() => {
+      downloads.setConcurrency(settingsStore.getState().downloads.parallel);
+    });
     started = (async () => {
       bootStore.setState({ stage: 'settings' });
       await initSettings();
+      downloads.setConcurrency(settingsStore.getState().downloads.parallel);
       bootStore.setState({ stage: 'storage' });
       await initStorage();
       await engine.noteStartup();

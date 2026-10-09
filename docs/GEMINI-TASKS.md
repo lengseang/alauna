@@ -22,7 +22,7 @@ Read `GEMINI.md` first (hard rules). Foundation and backbone are done; you build
 ## Task queue (do in order; tick when the gate passes AND the owner confirms on the phone where marked)
 ### Fix-ups already known
 - [x] T1 `chat.ts`: add real `deleteMessage(threadId, id)` and `truncateFrom(threadId, id)`; switch `ChatScreen` delete/edit-resend to them (currently a workaround via `renameThread`). Tests.
-- [ ] T2 Parallel-downloads setting: move `chiwiwi_downloads.json` pref into Settings v2 (`downloads.parallel`), apply at app start (boot stage), not only when the Vault opens. Tests.
+- [x] T2 Parallel-downloads setting: move `chiwiwi_downloads.json` pref into Settings v2 (`downloads.parallel`), apply at app start (boot stage), not only when the Vault opens. Tests.
 - [ ] T3 Remove duplicate settings `settings.stt`, `settings.tts`, `settings.biometricLock` OR make them the single source for the voice/security prefs (pick one, migrate old files). Tests.
 - [ ] T4 Expose `verifyMode` ('background' | 'always' | 'off') in Settings → Security & privacy with an honest description.
 - [ ] T5 Accessibility pass: `accessibilityLabel` on every icon-only button, text scale 1.3 does not clip, reduced motion respected, 48dp targets. Add a test that greps for `IconButton` without `label`.

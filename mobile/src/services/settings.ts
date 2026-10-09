@@ -10,11 +10,12 @@ import { File, Paths } from 'expo-file-system';
 import { readWithFallback, writeAtomic } from '../core/atomicFile.ts';
 import { directoryIO } from './atomicIo.ts';
 import { createStore } from '../core/store.ts';
-import { applySettingsPatch, DEFAULT_SETTINGS, sanitizeSettings, type AppearanceSettings, type Settings } from '../core/settingsModel.ts';
+import { applySettingsPatch, DEFAULT_SETTINGS, importLegacyDownloads, sanitizeSettings, type AppearanceSettings, type Settings } from '../core/settingsModel.ts';
 
 export type {
   AppearanceSettings,
   ComputeSettings,
+  DownloadSettings,
   SamplingSettings,
   Settings,
   SpeculativeSettings,
@@ -22,6 +23,7 @@ export type {
   TtsSettings,
   VerifiedInfo,
 } from '../core/settingsModel.ts';
+export { importLegacyDownloads } from '../core/settingsModel.ts';
 
 export interface SettingsState extends Settings {
   loaded: boolean;
@@ -30,6 +32,8 @@ export interface SettingsState extends Settings {
 export const SETTINGS_FILE = 'chiwiwi_settings.json';
 /** Written by the v1 theme code (src/theme/prefs.ts); imported once into `appearance`. */
 const LEGACY_THEME_FILE = 'chiwiwi_theme.json';
+/** Written by downloadPrefs.ts; imported once into `downloads`. */
+const LEGACY_DOWNLOADS_FILE = 'chiwiwi_downloads.json';
 
 export const settingsStore = createStore<SettingsState>({ ...sanitizeSettings(DEFAULT_SETTINGS), loaded: false });
 
@@ -49,10 +53,12 @@ export function initSettings(): Promise<void> {
     loadPromise = (async () => {
       let next: Settings | null = null;
       let hadAppearance = false;
+      let hadDownloads = false;
       try {
         next = await readWithFallback(io(), SETTINGS_FILE, (text) => {
           const raw = JSON.parse(text) as Record<string, unknown>;
           hadAppearance = !!raw && typeof raw === 'object' && 'appearance' in raw;
+          hadDownloads = !!raw && typeof raw === 'object' && 'downloads' in raw;
           return sanitizeSettings(raw);
         });
       } catch {
@@ -64,6 +70,15 @@ export function initSettings(): Promise<void> {
           const f = new File(Paths.document, LEGACY_THEME_FILE);
           const imported = f.exists ? importLegacyAppearance(JSON.parse(await f.text())) : null;
           if (imported) next = { ...next, appearance: imported };
+        } catch {
+          // nothing to import
+        }
+      }
+      if (!hadDownloads) {
+        try {
+          const f = new File(Paths.document, LEGACY_DOWNLOADS_FILE);
+          const imported = f.exists ? importLegacyDownloads(JSON.parse(await f.text())) : null;
+          if (imported) next = { ...next, downloads: imported };
         } catch {
           // nothing to import
         }
@@ -110,7 +125,7 @@ export async function updateSettingsNow(patch: Partial<Settings>): Promise<void>
   await flushSettings();
 }
 
-type Section = 'compute' | 'sampling' | 'speculative' | 'stt' | 'tts' | 'appearance' | 'storage';
+type Section = 'compute' | 'sampling' | 'speculative' | 'stt' | 'tts' | 'appearance' | 'storage' | 'downloads';
 /** Patch one nested section: `updateSection('compute', { threads: 6 })`. */
 export function updateSection<K extends Section>(key: K, partial: Partial<Settings[K]>): void {
   updateSettings({ [key]: { ...settingsStore.getState()[key], ...partial } } as Partial<Settings>);
