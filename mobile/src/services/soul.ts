@@ -6,6 +6,7 @@ import type { ThreadSoul } from '../core/chatTypes.ts';
 import { ARCHETYPES, clampPad, describePad, padToSampling, type PADVector, type SoulArchetypeKey } from '../core/persona.ts';
 import type { SamplingSettings, Settings } from '../core/settingsModel.ts';
 import { runSoulPreview, type SoulPreviewResult } from '../core/soulPreview.ts';
+import { LEGACY_ARCHETYPE_TO_SOUL_ID } from '../core/builtInSouls.ts';
 import { engine } from './engine.ts';
 import { settingsStore, updateSettings } from './settings.ts';
 
@@ -28,7 +29,8 @@ export function setGlobalSoul(patch: Partial<ThreadSoul>): void {
 
 /** Pick an archetype and reset PAD to its defaults (the old app's behaviour). */
 export function applyArchetype(key: SoulArchetypeKey): void {
-  updateSettings({ archetype: key, pad: { ...ARCHETYPES[key].defaultPAD } });
+  const soulId = LEGACY_ARCHETYPE_TO_SOUL_ID[key] || 'soul_sage';
+  updateSettings({ archetype: key, activeSoulId: soulId, pad: { ...ARCHETYPES[key].defaultPAD } });
 }
 
 /** What a soul does to the model: the prompt descriptors and the sampling values (Settings sampling as the base). */

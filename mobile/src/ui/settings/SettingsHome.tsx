@@ -35,6 +35,9 @@ export function SettingsHome() {
       <Group index={1} title="Soul and memory" hint="Who answers, and what it remembers about you.">
         <Rows>
           <ListRow icon="persona" title="Soul" value={ARCHETYPES[settings.archetype].name} subtitle={describePad(settings.pad).join(' ')} onPress={() => push('settings/soul')} />
+          <ListRow icon="persona" title="Soul Library & Studio" subtitle="10 archetypes, custom personalities, and 9-chapter studio." onPress={() => push('soul/library')} />
+          <ListRow icon="shield" title="Model Freedom" subtitle="Unfiltered expression, anti-sycophancy, and anti-disclaimer." onPress={() => push('soul/freedom')} />
+          <ListRow icon="chip" title="Knowledge Brain" subtitle="On-device semantic knowledge graph ('Graphify')." onPress={() => push('soul/graph')} />
           <ListRow icon="memory" title="Memory" value={`${facts.length}`} subtitle={`${budget.included.length} of ${facts.length} facts reach the model`} onPress={() => push('settings/memory')} />
         </Rows>
       </Group>

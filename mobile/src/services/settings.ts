@@ -156,7 +156,7 @@ export async function updateSettingsNow(patch: Partial<Settings>): Promise<void>
   await flushSettings();
 }
 
-type Section = 'compute' | 'sampling' | 'speculative' | 'stt' | 'tts' | 'appearance' | 'storage' | 'downloads' | 'voice' | 'security';
+type Section = 'compute' | 'sampling' | 'speculative' | 'stt' | 'tts' | 'appearance' | 'storage' | 'downloads' | 'voice' | 'security' | 'freedom';
 /** Patch one nested section: `updateSection('compute', { threads: 6 })`. */
 export function updateSection<K extends Section>(key: K, partial: Partial<Settings[K]>): void {
   updateSettings({ [key]: { ...settingsStore.getState()[key], ...partial } } as Partial<Settings>);

@@ -23,6 +23,12 @@ export function SoulScreen() {
   return (
     <Screen title="Soul" onBack={goBack} scroll>
       <Text tone="muted">How CHIWIWI talks. New chats follow this soul; a chat can have its own from the chat menu.</Text>
+      <Button
+        label="Open Soul Library & Studio"
+        variant="primary"
+        icon="persona"
+        onPress={() => push('soul/library')}
+      />
       {thread.soulOverride ? (
         <Notice title="This chat has its own soul" action={<Button label="Follow the global soul" variant="quiet" onPress={clearThreadSoul} />}>
           Changes here do not reach it until it follows the global soul again.

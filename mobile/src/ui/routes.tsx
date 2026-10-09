@@ -4,6 +4,10 @@ import { ModelDetailScreen } from './ModelDetailScreen';
 import { ModelsScreen } from './ModelsScreen';
 import { SpeculativeScreen } from './SpeculativeScreen';
 import { AboutScreen, AdvancedComputeScreen, AppearanceScreen, AudioVoiceScreen, MemoryScreen, SecurityScreen, SettingsHome, SoulScreen, StorageScreen, ThreadSoulSheet } from './SettingsScreens';
+import { SoulLibraryScreen } from './soul/SoulLibraryScreen';
+import { SoulStudioScreen } from './soul/SoulStudioScreen';
+import { ModelFreedomScreen } from './soul/ModelFreedomScreen';
+import { KnowledgeGraphScreen } from './soul/KnowledgeGraphScreen';
 
 /**
  * Route registry: name -> screen. Add ONE line per screen (wave 2: S1 chat extras, S2 vault/downloads/speculative,
@@ -27,6 +31,10 @@ export const SCREENS = {
   'settings/appearance': AppearanceScreen,
   'settings/about': AboutScreen,
   threadSoul: ThreadSoulSheet,
+  'soul/library': SoulLibraryScreen,
+  'soul/studio': SoulStudioScreen,
+  'soul/freedom': ModelFreedomScreen,
+  'soul/graph': KnowledgeGraphScreen,
 } satisfies Record<string, React.ComponentType>;
 
 export type RouteName = keyof typeof SCREENS;

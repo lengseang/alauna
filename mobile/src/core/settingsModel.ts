@@ -11,9 +11,11 @@
 import { ARCHETYPES, clampPad, type PADVector, type SoulArchetypeKey } from './persona.ts';
 import { DEFAULT_SECURITY_PREFS, sanitizeSecurityPrefs, type SecurityPrefs } from './appLock.ts';
 import { DEFAULT_VOICE_PREFS, sanitizeVoicePrefs, type VoicePrefs } from './voiceModels.ts';
+import { DEFAULT_MODEL_FREEDOM, sanitizeModelFreedom, type ModelFreedomSettings } from './modelFreedom.ts';
 
 export type { SecurityPrefs } from './appLock.ts';
 export type { VoicePrefs } from './voiceModels.ts';
+export type { ModelFreedomSettings } from './modelFreedom.ts';
 
 export const SETTINGS_VERSION = 2;
 
@@ -113,11 +115,13 @@ export interface Settings {
   version: number;
   // ---- Soul (global; a chat can override it, see core/chatTypes.ts ThreadSoul)
   archetype: SoulArchetypeKey;
+  activeSoulId: string;
   pad: PADVector;
   /** 0.1 (subtle) .. 1 (strong). */
   toneIntensity: number;
   /** Extra instructions added to the system prompt (max 600 chars reach the model). */
   customBackstory: string;
+  freedom: ModelFreedomSettings;
   // ---- engine
   activeModelId: string | null;
   /** Models that loaded AND produced a test reply on this phone. */
@@ -190,9 +194,11 @@ function defaults(): Settings {
   return {
     version: SETTINGS_VERSION,
     archetype: 'empath',
+    activeSoulId: 'soul_caregiver',
     pad: { ...ARCHETYPES.empath.defaultPAD },
     toneIntensity: 0.8,
     customBackstory: '',
+    freedom: { ...DEFAULT_MODEL_FREEDOM },
     activeModelId: null,
     verified: {},
     contextOverride: null,
@@ -291,13 +297,25 @@ export function sanitizeSettings(raw: unknown): Settings {
   const r = raw as Obj;
   const d = out;
 
-  if (typeof r.archetype === 'string' && r.archetype in ARCHETYPES) out.archetype = r.archetype as SoulArchetypeKey;
+  if (typeof r.archetype === 'string' && r.archetype in ARCHETYPES) {
+    out.archetype = r.archetype as SoulArchetypeKey;
+    if (!r.activeSoulId && LEGACY_ARCH_TO_SOUL[out.archetype]) {
+      out.activeSoulId = LEGACY_ARCH_TO_SOUL[out.archetype];
+    }
+  }
+  if (typeof r.activeSoulId === 'string' && r.activeSoulId.trim()) {
+    out.activeSoulId = r.activeSoulId.trim();
+    if (!r.archetype && SOUL_TO_LEGACY_ARCH[out.activeSoulId]) {
+      out.archetype = SOUL_TO_LEGACY_ARCH[out.activeSoulId];
+    }
+  }
   const p = obj(r.pad);
   if (typeof p.pleasure === 'number' && typeof p.arousal === 'number' && typeof p.dominance === 'number') {
     out.pad = clampPad({ pleasure: p.pleasure, arousal: p.arousal, dominance: p.dominance });
   }
   out.toneIntensity = num(r.toneIntensity, 0.1, 1, d.toneIntensity);
   out.customBackstory = str(r.customBackstory, 2000, d.customBackstory);
+  out.freedom = sanitizeModelFreedom(r.freedom);
 
   if (typeof r.activeModelId === 'string') out.activeModelId = r.activeModelId;
   for (const [k, v] of Object.entries(obj(r.verified))) {
@@ -380,6 +398,24 @@ export function sanitizeSettings(raw: unknown): Settings {
   return withMirrors(out);
 }
 
+const LEGACY_ARCH_TO_SOUL: Record<string, string> = {
+  empath: 'soul_caregiver',
+  mentor: 'soul_sage',
+  tactical: 'soul_analyst',
+  spark: 'soul_trickster',
+  cynic: 'soul_rebel',
+  visionary: 'soul_strategist',
+};
+
+const SOUL_TO_LEGACY_ARCH: Record<string, SoulArchetypeKey> = {
+  soul_caregiver: 'empath',
+  soul_sage: 'mentor',
+  soul_analyst: 'tactical',
+  soul_trickster: 'spark',
+  soul_rebel: 'cynic',
+  soul_strategist: 'visionary',
+};
+
 /** Recompute the v1 mirror fields from `compute`, `voice`, and `security` (the sources of truth). */
 function withMirrors(s: Settings): Settings {
   s.threads = s.compute.threads;
@@ -408,6 +444,14 @@ export function applySettingsPatch(prev: Settings, patch: Partial<Settings>): Se
   }
   if (!('security' in patch) && 'biometricLock' in patch && typeof patch.biometricLock === 'boolean') {
     next.security = { ...prev.security, appLock: patch.biometricLock };
+  }
+  if ('archetype' in patch && !('activeSoulId' in patch)) {
+    const mapped = LEGACY_ARCH_TO_SOUL[patch.archetype as string];
+    if (mapped) next.activeSoulId = mapped;
+  }
+  if ('activeSoulId' in patch && !('archetype' in patch)) {
+    const mapped = SOUL_TO_LEGACY_ARCH[patch.activeSoulId as string];
+    if (mapped) next.archetype = mapped;
   }
   if (!('voice' in patch)) {
     let vChanged = false;

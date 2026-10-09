@@ -16,6 +16,8 @@ import { loadMemory } from './memory.ts';
 import { autoPurgeOldChats } from './privacy.ts';
 import { initSettings, settingsStore, updateSettings } from './settings.ts';
 import { initStorage, isStorageReady } from './storage.ts';
+import { initSoulStore } from './soulStore.ts';
+import { initGraphStore } from './graphStore.ts';
 
 /** Load everything that lives inside the vault. Call whenever storage becomes (or changes to) ready. */
 export async function onStorageReady(): Promise<void> {
@@ -81,6 +83,8 @@ export function bootstrap(): Promise<void> {
     started = (async () => {
       bootStore.setState({ stage: 'settings' });
       await initSettings();
+      await initSoulStore();
+      await initGraphStore();
       downloads.setConcurrency(settingsStore.getState().downloads.parallel);
       downloads.setVerifyMode(settingsStore.getState().verifyMode);
       bootStore.setState({ stage: 'storage' });

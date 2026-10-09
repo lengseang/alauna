@@ -45,6 +45,10 @@ import { settingsStore } from './settings.ts';
 import { globalSoul } from './soul.ts';
 import { isStorageReady } from './storage.ts';
 import { showToast } from './toast.ts';
+import { compileSoulPrompt } from '../core/soulCompiler.ts';
+import { getBuiltInSoul } from '../core/builtInSouls.ts';
+import { getActiveSoul, updateThreadRuntimeOnTurn } from './soulStore.ts';
+import { queryGraphContext } from './graphStore.ts';
 
 export type { ThreadMeta } from './chatStore.ts';
 
@@ -364,15 +368,34 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
 
     const { thread } = chatStore.getState();
     const settings = settingsStore.getState();
-    const soul = effectiveSoul(thread, globalSoul(settings));
-    const system = buildSystemPrompt({
-      archetype: soul.archetype,
-      pad: soul.pad,
-      toneIntensity: soul.toneIntensity,
-      backstory: soul.customBackstory,
-      memories: activeFactTexts(memoryStore.getState().facts),
+    const threadSoul = effectiveSoul(thread, globalSoul(settings));
+    const activeDefinition = thread.soulOverride && thread.soul.archetype
+      ? (getBuiltInSoul(thread.soul.archetype) ?? getActiveSoul())
+      : getActiveSoul();
+
+    const { state: runtimeState, behavioralPrompts } = updateThreadRuntimeOnTurn(thread.id, activeDefinition, userMessage.text);
+    const graphTriples = queryGraphContext(userMessage.text, { maxTriples: 4, maxHops: 1 });
+
+    const compiled = compileSoulPrompt({
+      soul: activeDefinition,
+      threadOverrides: thread.soulOverride
+        ? {
+            identity: {
+              ...activeDefinition.identity,
+              characterRules: threadSoul.customBackstory ? [threadSoul.customBackstory] : activeDefinition.identity.characterRules,
+            },
+          }
+        : undefined,
+      freedom: settings.freedom,
+      runtimeState,
+      knowledgeTriples: graphTriples,
+      userMemories: activeFactTexts(memoryStore.getState().facts),
     });
-    const sampling = padToSampling(soul.pad, soul.toneIntensity, settings.sampling);
+
+    const system = behavioralPrompts.length > 0
+      ? `${compiled.systemPrompt}\n\nImmediate turn behavioral directives:\n${behavioralPrompts.map((b) => `- ${b}`).join('\n')}`
+      : compiled.systemPrompt;
+    const sampling = padToSampling(threadSoul.pad, threadSoul.toneIntensity, settings.sampling);
     // KV session cache: restore (or evaluate + save) the system-prompt prefix before the reply. Never throws.
     await engine.preparePrefix(system, settings.thinkingEnabled && spec.thinking !== 'none');
 
