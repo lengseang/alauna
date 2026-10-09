@@ -159,14 +159,22 @@ test('imageGen coordinator: handles cancellation gracefully', async () => {
 
 test('imageGen modelRegistry: registers verified uncensored on-device diffusion models', () => {
   const uncensored = getUncensoredImageModels();
-  assert.ok(uncensored.length >= 5, 'Must provide at least 5 verified uncensored diffusion models');
+  assert.ok(uncensored.length >= 10, 'Must provide at least 10 verified uncensored diffusion models');
 
   const modelIds = uncensored.map((m) => m.modelId);
+  // Medium-tier
   assert.ok(modelIds.includes('cyberrealistic-pony-v12-q4'));
   assert.ok(modelIds.includes('realvisxl-v5-q4'));
   assert.ok(modelIds.includes('pony-diffusion-v6-xl-q8'));
-  assert.ok(modelIds.includes('dreamshaper-7-lcm-f16'));
   assert.ok(modelIds.includes('cyberrealistic-xl-v4-q4'));
+  assert.ok(modelIds.includes('illustrious-xl-q4'));
+  assert.ok(modelIds.includes('flux1-schnell-q2'));
+
+  // Low-tier & fast LCM
+  assert.ok(modelIds.includes('dreamshaper-7-lcm-f16'));
+  assert.ok(modelIds.includes('dreamshaper-v8'));
+  assert.ok(modelIds.includes('absolutereality-v1.8'));
+  assert.ok(modelIds.includes('cyberrealistic-v5-sd15'));
 
   for (const m of uncensored) {
     assert.equal(m.contentPolicy, 'uncensored');
