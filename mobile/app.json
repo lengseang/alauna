@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.chiwiwi.sovereign",
-      "versionCode": 2,
+      "versionCode": 3,
       "backgroundColor": "#080A17",
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
