@@ -216,15 +216,10 @@ export function ImageStudioScreen() {
           {/* Active Model Indicator Banner */}
           <Card style={s.modelBanner}>
             <View style={s.modelBannerHeader}>
-              <View style={s.modelBannerTitleRow}>
-                <Text variant="strong" numberOfLines={1}>
+              <View style={s.modelBannerTitleContainer}>
+                <Text variant="strong" numberOfLines={1} style={s.modelBannerTitle}>
                   {selectedManifest.displayName}
                 </Text>
-                {selectedManifest.contentPolicy === 'uncensored' ? (
-                  <Tag label="UNCENSORED" selected tone="accent" />
-                ) : (
-                  <Tag label="STANDARD" />
-                )}
               </View>
               <Button
                 label="Change"
@@ -234,6 +229,16 @@ export function ImageStudioScreen() {
               />
             </View>
 
+            <View style={s.modelBannerBadgeRow}>
+              {selectedManifest.contentPolicy === 'uncensored' || selectedManifest.contentPolicy === 'heretic' ? (
+                <Tag label="UNCENSORED" selected tone="accent" />
+              ) : (
+                <Tag label="STANDARD" />
+              )}
+              <Tag label={selectedManifest.modelFamily.toUpperCase()} />
+              <Tag label={selectedManifest.precision.toUpperCase()} />
+            </View>
+
             <View style={s.modelBannerSub}>
               <Text variant="small" tone={isSelectedModelInstalled ? undefined : 'accent'}>
                 {isSelectedModelInstalled
@@ -241,8 +246,7 @@ export function ImageStudioScreen() {
                   : 'Weights not installed (tap to download)'}
               </Text>
               <Text variant="small" tone="muted">
-                {selectedManifest.modelFamily.toUpperCase()} · {selectedManifest.precision.toUpperCase()} ·{' '}
-                {aspectRatio}
+                Aspect ratio: {aspectRatio}
               </Text>
             </View>
           </Card>
@@ -724,12 +728,19 @@ const useStyles = makeStyles(({ space, colors, line }) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  modelBannerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: space.sm,
+  },
+  modelBannerTitleContainer: {
     flex: 1,
+    marginRight: space.xs,
+  },
+  modelBannerTitle: {
+    flexShrink: 1,
+  },
+  modelBannerBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.xs,
   },
   modelBannerSub: {
     gap: 2,

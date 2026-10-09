@@ -55,37 +55,33 @@ export function getModelFileName(manifest: ImageModelManifest): string {
   return manifest.hfFile || `${manifest.modelId}.gguf`;
 }
 
-/** Check if an image model's weights exist on disk in the vault. */
-export function isImageModelInstalled(manifest: ImageModelManifest): boolean {
-  if (!isStorageReady()) return false;
-  const fileName = getModelFileName(manifest);
-  try {
-    const hit = locateModelFile(fileName);
-    if (hit && hit.file.exists && hit.file.size > 0) return true;
-    const directFile = new File(modelsDir(), fileName);
-    return directFile.exists && directFile.size > 0;
-  } catch {
-    return false;
-  }
-}
-
-/** Get the local path of an installed model file. */
-export function getInstalledModelPath(manifest: ImageModelManifest): string | null {
+/** Find an installed model file in the vault or registered slots. */
+export function findInstalledImageModelFile(manifest: ImageModelManifest): File | null {
   if (!isStorageReady()) return null;
   const fileName = getModelFileName(manifest);
   try {
     const hit = locateModelFile(fileName);
-    if (hit && hit.file.exists) return hit.file.uri;
-    const directFile = new File(modelsDir(), fileName);
-    if (directFile.exists) return directFile.uri;
+    if (hit) return hit.file;
     return null;
   } catch {
     return null;
   }
 }
 
+/** Check if an image model's weights exist on disk in the vault. */
+export function isImageModelInstalled(manifest: ImageModelManifest): boolean {
+  return findInstalledImageModelFile(manifest) !== null;
+}
+
+/** Get the local path of an installed model file. */
+export function getInstalledModelPath(manifest: ImageModelManifest): string | null {
+  const f = findInstalledImageModelFile(manifest);
+  return f ? f.uri : null;
+}
+
 /** Refresh the on-disk status of all image models. */
 export function refreshImageModelStatuses(): void {
+  if (!isStorageReady()) return;
   const current = managerStore.getState().models;
   const updated: Record<string, ImageModelDownloadState> = { ...current };
 
@@ -93,8 +89,8 @@ export function refreshImageModelStatuses(): void {
     const existing = updated[manifest.modelId];
     if (existing?.status === 'downloading') continue; // Don't overwrite active downloads
 
-    const installed = isImageModelInstalled(manifest);
-    const localPath = installed ? getInstalledModelPath(manifest) ?? undefined : undefined;
+    const file = findInstalledImageModelFile(manifest);
+    const installed = file !== null;
 
     updated[manifest.modelId] = {
       modelId: manifest.modelId,
@@ -103,7 +99,7 @@ export function refreshImageModelStatuses(): void {
       totalBytes: manifest.downloadSizeBytes,
       progressPercent: installed ? 100 : 0,
       speedBps: 0,
-      localPath,
+      localPath: file ? file.uri : undefined,
     };
   }
 

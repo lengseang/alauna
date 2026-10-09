@@ -31,8 +31,9 @@ const galleryStore = createStore<GalleryState>({
 
 const galleryIO = () => directoryIO(galleryDir);
 
-export async function initGallery(): Promise<void> {
+export async function initGallery(force = false): Promise<void> {
   if (!isStorageReady()) return;
+  if (!force && galleryStore.getState().loaded) return;
   try {
     const images = await readWithFallback(
       galleryIO(),
