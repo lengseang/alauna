@@ -8,6 +8,8 @@
  *    dropping empty ones.
  */
 
+import { buildContextContinuityAnchor } from './conversationContinuity.ts';
+
 export type Role = 'system' | 'user' | 'assistant';
 export interface PromptMessage {
   role: Role;
@@ -78,6 +80,8 @@ export interface BuildPromptInput {
   replyBudget: number;
   /** Multiplier applied to every estimate (1 = default heuristic; raise it after the engine reported a larger real count). */
   tokenScale?: number;
+  /** Custom continuity anchor override or false to disable automatic rolling anchor */
+  continuityAnchor?: string | false;
 }
 
 export interface BuiltPrompt {
@@ -87,6 +91,8 @@ export interface BuiltPrompt {
   estimatedPromptTokens: number;
   /** True if the newest user message itself had to be shortened. */
   truncatedUserMessage: boolean;
+  /** Rolling continuity anchor summarizing pruned earlier turns (if any). */
+  continuityAnchor?: string;
 }
 
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
@@ -121,9 +127,22 @@ export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   while (kept.length > 0 && kept[0].role !== 'user') kept.shift();
   const droppedMessages = history.length - kept.length;
 
+  let continuityAnchor: string | undefined;
+  if (droppedMessages > 0 && input.continuityAnchor !== false) {
+    const pruned = history.slice(0, droppedMessages);
+    const anchor = typeof input.continuityAnchor === 'string'
+      ? input.continuityAnchor
+      : buildContextContinuityAnchor(pruned, 120);
+    if (anchor) {
+      continuityAnchor = anchor;
+      used += tokens(anchor) + 8;
+    }
+  }
+
   // If the history ends with a user turn, merge the new message into it (alternation).
   const messages: PromptMessage[] = [];
-  if (system) messages.push({ role: 'system', content: system });
+  const effectiveSystem = [system, continuityAnchor].filter(Boolean).join('\n\n');
+  if (effectiveSystem) messages.push({ role: 'system', content: effectiveSystem });
   for (const m of kept) messages.push(m.images ? { role: m.role, content: m.content, images: [...m.images] } : { role: m.role, content: m.content });
   const last = messages[messages.length - 1];
   if (last && last.role === 'user') {
@@ -133,5 +152,5 @@ export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
     messages.push(userImages ? { role: 'user', content: userMessage, images: userImages } : { role: 'user', content: userMessage });
   }
 
-  return { messages, droppedMessages, estimatedPromptTokens: used, truncatedUserMessage };
+  return { messages, droppedMessages, estimatedPromptTokens: used, truncatedUserMessage, continuityAnchor };
 }

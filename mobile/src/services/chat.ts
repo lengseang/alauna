@@ -49,6 +49,7 @@ import { compileSoulPrompt } from '../core/soulCompiler.ts';
 import { getBuiltInSoul } from '../core/builtInSouls.ts';
 import { getActiveSoul, updateThreadRuntimeOnTurn } from './soulStore.ts';
 import { queryGraphContext } from './graphStore.ts';
+import { CONTINUATION_DIRECTIVE, preparePriorTextForContinuation } from '../core/conversationContinuity.ts';
 
 export type { ThreadMeta } from './chatStore.ts';
 
@@ -327,6 +328,113 @@ export async function regenerate(): Promise<SendResult> {
   if (!last || last.role !== 'assistant' || !prev || prev.role !== 'user') return { ok: false, reason: 'empty', message: 'Nothing to retry.' };
   setMessages((all) => all.slice(0, -2));
   return runTurn(prev, true);
+}
+
+/** Continue generating the last cut-off or stopped assistant message seamlessly. */
+export async function continueGeneration(): Promise<SendResult> {
+  const { thread, sending } = chatStore.getState();
+  if (sending) return { ok: false, reason: 'busy', message: 'Still answering.' };
+  const ms = thread.messages;
+  const last = ms[ms.length - 1];
+  if (!last || last.role !== 'assistant') return { ok: false, reason: 'empty', message: 'No reply to continue.' };
+  if (!last.canContinue && last.status !== 'stopped') return { ok: false, reason: 'empty', message: 'This reply is already complete.' };
+
+  const spec = getModel(settingsStore.getState().activeModelId);
+  if (!spec) return { ok: false, reason: 'no_model', message: 'No model selected yet.' };
+  if (!isInstalled(spec)) return { ok: false, reason: 'not_installed', message: `${spec.name} is not installed.` };
+
+  const priorText = preparePriorTextForContinuation(last.rawText ?? last.text);
+  const priorReasoning = last.reasoning;
+  const priorHistory = toHistory(
+    ms.map((m) => (m.id === last.id ? { ...m, text: priorText, status: 'stopped' as const } : m)),
+  );
+
+  chatStore.setState({ sending: true });
+  patchMessage(last.id, { status: 'streaming', phase: 'answering', canContinue: false });
+  void persist(false);
+
+  try {
+    const needsLoad = !engine.isReady(spec.id);
+    if (needsLoad) {
+      const mounted = await engine.mount(spec);
+      if (!mounted.ok) {
+        patchMessage(last.id, { status: 'error', error: mounted.message, phase: 'done' });
+        return { ok: false, reason: 'engine', message: mounted.message };
+      }
+    }
+
+    const settings = settingsStore.getState();
+    const threadSoul = effectiveSoul(thread, globalSoul(settings));
+    const activeDefinition = thread.soulOverride && thread.soul.archetype
+      ? (getBuiltInSoul(thread.soul.archetype) ?? getActiveSoul())
+      : getActiveSoul();
+
+    const graphTriples = queryGraphContext(priorText, { maxTriples: 4, maxHops: 1 });
+    const compiled = compileSoulPrompt({
+      soul: activeDefinition,
+      threadOverrides: thread.soulOverride
+        ? {
+            identity: {
+              ...activeDefinition.identity,
+              characterRules: threadSoul.customBackstory ? [threadSoul.customBackstory] : activeDefinition.identity.characterRules,
+            },
+          }
+        : undefined,
+      freedom: settings.freedom,
+      runtimeState: undefined,
+      knowledgeTriples: graphTriples,
+      userMemories: activeFactTexts(memoryStore.getState().facts),
+    });
+
+    const system = compiled.systemPrompt;
+    const sampling = padToSampling(threadSoul.pad, threadSoul.toneIntensity, settings.sampling);
+    await engine.preparePrefix(system, settings.thinkingEnabled && spec.thinking !== 'none');
+
+    let pending: Partial<ChatMessage> | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastSaved = Date.now();
+    const flush = () => {
+      timer = null;
+      if (pending) {
+        patchMessage(last.id, pending);
+        pending = null;
+        if (Date.now() - lastSaved >= PARTIAL_SAVE_MS) {
+          lastSaved = Date.now();
+          void persist(false);
+        }
+      }
+    };
+
+    const outcome = await runAssistantTurn({
+      history: priorHistory,
+      userText: CONTINUATION_DIRECTIVE,
+      attachments: [],
+      spec,
+      nCtx: engine.state.nCtx || engine.contextSize(),
+      system,
+      thinkingEnabled: settings.thinkingEnabled,
+      sampling,
+      backend: engine.state.info?.backend,
+      continuation: {
+        priorText,
+        priorReasoning,
+      },
+      generate: (p) => engine.generate(p),
+      countPromptTokens: (messages, thinking) => engine.countPromptTokens(messages, thinking),
+      now: () => Date.now(),
+      onUpdate: (patch) => {
+        pending = { ...(pending ?? {}), ...patch };
+        if (!timer) timer = setTimeout(flush, 66);
+      },
+    });
+    if (timer) clearTimeout(timer);
+    pending = null;
+    patchMessage(last.id, outcome);
+    return outcome.status === 'error' ? { ok: false, reason: 'engine', message: outcome.error ?? 'Continuation failed.' } : { ok: true };
+  } finally {
+    chatStore.setState({ sending: false });
+    await persist();
+  }
 }
 
 async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<SendResult> {

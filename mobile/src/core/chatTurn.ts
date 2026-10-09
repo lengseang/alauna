@@ -12,6 +12,7 @@ import { imagePaths, withAttachments, type Attachment, type ChatMessage, type Me
 import type { SamplingSettings } from './settingsModel.ts';
 import { friendlyEngineError, type GenerateParams, type GenerateResult } from './engineTypes.ts';
 import { parseThinking, type OutputPhase } from './thinking.ts';
+import { isMessageCutOff, closeUnclosedMarkup, stripContinuationPreamble, stripRedundantCodeFence } from './conversationContinuity.ts';
 
 export interface TurnInput {
   history: HistoryMessage[];
@@ -35,9 +36,14 @@ export interface TurnInput {
    * it really fits, which the character-based estimate cannot guarantee for Khmer, CJK, digits or code.
    */
   countPromptTokens?: (messages: PromptMessage[], enableThinking: boolean) => Promise<number | null>;
+  /** Optional continuation payload when resuming a cut-off or cancelled assistant message */
+  continuation?: {
+    priorText: string;
+    priorReasoning?: string;
+  };
 }
 
-export type TurnOutcome = Pick<ChatMessage, 'text' | 'reasoning' | 'status' | 'stats' | 'thinkSeconds' | 'error' | 'phase' | 'notice'>;
+export type TurnOutcome = Pick<ChatMessage, 'text' | 'reasoning' | 'status' | 'stats' | 'thinkSeconds' | 'error' | 'phase' | 'notice' | 'canContinue' | 'rawText'>;
 
 /** How many tokens we let the model write, relative to the context window. */
 export function replyBudgetFor(spec: ModelSpec, nCtx: number, thinking: boolean): number {
@@ -95,13 +101,18 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
   let forcedOpen = spec.thinking === 'always';
   let thinkStartedAt: number | null = null;
   let thinkEndedAt: number | null = null;
+  const priorText = input.continuation?.priorText ?? '';
+  const priorReasoning = input.continuation?.priorReasoning ?? '';
+  let lastStreamedRaw = '';
+  let lastParsedAnswer = '';
+  let lastParsedReasoning = '';
 
   input.onUpdate({
     status: 'streaming',
     phase: 'reading',
     promptTokensEst: built.estimatedPromptTokens,
-    text: '',
-    reasoning: '',
+    text: priorText,
+    reasoning: priorReasoning || '',
     notice: userImages.length > 0
       ? `Analyzing ${userImages.length === 1 ? 'image' : `${userImages.length} images`}${built.estimatedPromptTokens ? ` (~${built.estimatedPromptTokens} tokens)` : ''}`
       : notes.join(' ') || undefined,
@@ -132,13 +143,26 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
         forcedOpen = forcedOpen || info.thinkingForcedOpen;
       },
       onText: (raw) => {
+        lastStreamedRaw = raw;
         const p = track(raw);
-        input.onUpdate({ text: p.answer, reasoning: p.reasoning, phase: p.phase, status: 'streaming' });
+        lastParsedAnswer = p.answer;
+        lastParsedReasoning = p.reasoning;
+        const cleanedAnswer = input.continuation
+          ? stripRedundantCodeFence(stripContinuationPreamble(p.answer), priorText)
+          : p.answer;
+        const fullAnswer = priorText ? `${priorText}${cleanedAnswer}` : p.answer;
+        const fullReasoning = priorReasoning && p.reasoning ? `${priorReasoning}\n\n${p.reasoning}` : (priorReasoning || p.reasoning);
+        input.onUpdate({ text: fullAnswer, reasoning: fullReasoning || undefined, phase: p.phase, status: 'streaming' });
       },
     });
 
     forcedOpen = forcedOpen || result.thinkingForcedOpen;
     const final = track(result.text);
+    const cleanedFinal = input.continuation
+      ? stripRedundantCodeFence(stripContinuationPreamble(final.answer), priorText)
+      : final.answer;
+    const finalRawAnswer = priorText ? `${priorText}${cleanedFinal}` : final.answer;
+    const finalReasoning = priorReasoning && final.reasoning ? `${priorReasoning}\n\n${final.reasoning}` : (priorReasoning || final.reasoning);
     const endedAt = now();
     const stats: MessageStats = {
       modelId: spec.id,
@@ -155,19 +179,32 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
 
     if (result.contextFull) notes.push("The model's memory filled up, so the reply may be cut short. Start a new chat or raise the context size in Settings > Advanced.");
     let error: string | undefined;
-    if (!result.interrupted && !final.answer.trim()) {
-      if (final.reasoning.trim()) {
+    if (!result.interrupted && !finalRawAnswer.trim()) {
+      if (finalReasoning.trim()) {
         notes.push('The model spent its whole budget thinking and never wrote an answer. Try again with Thinking turned off.');
       } else {
         error = 'The model returned an empty reply. Try again, or switch to a different model.';
       }
     }
 
+    const cutOff = isMessageCutOff({
+      role: 'assistant',
+      text: finalRawAnswer,
+      status: error ? 'error' : result.interrupted ? 'stopped' : 'done',
+      interrupted: result.interrupted,
+      contextFull: result.contextFull,
+      generatedTokens: result.generatedTokens,
+      maxTokens: safeMaxTokens,
+    });
+
+    const finalAnswer = (result.interrupted || cutOff) ? closeUnclosedMarkup(finalRawAnswer) : finalRawAnswer;
     const thinkSeconds = thinkStartedAt !== null ? Math.max(0, ((thinkEndedAt ?? endedAt) - thinkStartedAt) / 1000) : undefined;
     return {
-      text: final.answer,
-      reasoning: final.reasoning || undefined,
+      text: finalAnswer,
+      rawText: finalRawAnswer,
+      reasoning: finalReasoning || undefined,
       status: error ? 'error' : result.interrupted ? 'stopped' : 'done',
+      canContinue: !error && cutOff,
       stats,
       thinkSeconds,
       error,
@@ -175,10 +212,44 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
       notice: notes.join(' ') || undefined,
     };
   } catch (e) {
+    const err = friendlyEngineError(e);
+    const isAbort = /stop|abort|cancel|interrupted/i.test(String(e)) || /stop|abort|cancel|interrupted/i.test(err);
+    if (isAbort || lastParsedAnswer.trim().length > 0 || lastParsedReasoning.trim().length > 0 || priorText.trim().length > 0) {
+      const cleanedLast = input.continuation
+        ? stripRedundantCodeFence(stripContinuationPreamble(lastParsedAnswer), priorText)
+        : lastParsedAnswer;
+      const combined = priorText ? `${priorText}${cleanedLast}` : lastParsedAnswer;
+      const closed = closeUnclosedMarkup(combined);
+      const combinedReasoning = priorReasoning && lastParsedReasoning ? `${priorReasoning}\n\n${lastParsedReasoning}` : (priorReasoning || lastParsedReasoning);
+      const endedAt = now();
+      return {
+        text: closed,
+        rawText: combined,
+        reasoning: combinedReasoning || undefined,
+        status: 'stopped',
+        canContinue: isMessageCutOff({
+          role: 'assistant',
+          text: combined,
+          status: 'stopped',
+          interrupted: true,
+        }),
+        stats: {
+          modelId: spec.id,
+          promptTokens: built.estimatedPromptTokens,
+          generatedTokens: Math.max(1, Math.round(lastStreamedRaw.length / 3.5)),
+          tokensPerSecond: 0,
+          promptMs: 0,
+          totalMs: endedAt - startedAt,
+          ...(input.backend ? { backend: input.backend } : {}),
+        },
+        phase: 'done',
+        notice: isAbort ? 'Stopped by user.' : notes.join(' ') || undefined,
+      };
+    }
     return {
       text: '',
       status: 'error',
-      error: friendlyEngineError(e),
+      error: err,
       phase: 'done',
       notice: undefined,
     };

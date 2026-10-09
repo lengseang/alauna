@@ -55,6 +55,10 @@ export interface ChatMessage {
   promptTokensEst?: number;
   /** Plain-language heads-up (e.g. older messages left out of the prompt). */
   notice?: string;
+  /** True if this assistant message was cut off or stopped mid-stream and can be seamlessly continued. */
+  canContinue?: boolean;
+  /** Exact unclosed text before markup repair (used for seamless continuation). */
+  rawText?: string;
 }
 
 export interface ThreadSoul {
@@ -196,7 +200,9 @@ export function toPersistable(thread: ChatThread): ChatThread {
       void _phase;
       void _est;
       // A message that was streaming when we save can never finish: store it as stopped.
-      return rest.status === 'streaming' ? { ...rest, status: 'stopped' as const } : rest;
+      return rest.status === 'streaming'
+        ? { ...rest, status: 'stopped' as const, canContinue: rest.role === 'assistant' && rest.text.trim().length > 0 }
+        : rest;
     }),
   };
 }
@@ -213,9 +219,15 @@ export function sanitizeThread(raw: unknown): ChatThread | null {
       const m = item as Record<string, unknown>;
       if (typeof m.id !== 'string' || typeof m.role !== 'string' || !ROLES.has(m.role) || typeof m.text !== 'string') continue;
       const status = typeof m.status === 'string' && STATUSES.has(m.status) ? (m.status as MessageStatus) : 'done';
+      const resolvedStatus = status === 'streaming' ? 'stopped' : status;
       messages.push({
         ...(m as unknown as ChatMessage),
-        status: status === 'streaming' ? 'stopped' : status,
+        status: resolvedStatus,
+        canContinue:
+          typeof m.canContinue === 'boolean'
+            ? m.canContinue
+            : resolvedStatus === 'stopped' && m.role === 'assistant' && typeof m.text === 'string' && m.text.trim().length > 0,
+        rawText: typeof m.rawText === 'string' ? m.rawText : undefined,
         phase: undefined,
         promptTokensEst: undefined,
       });

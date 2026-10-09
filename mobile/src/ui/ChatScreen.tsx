@@ -3,7 +3,7 @@ import { FlatList, KeyboardAvoidingView, Pressable, View, type NativeScrollEvent
 import { getModel } from '../core/catalog.ts';
 import type { ChatMessage } from '../core/chatTypes.ts';
 import * as Clipboard from 'expo-clipboard';
-import { chatStore, deleteMessage, newChat, regenerate, restoreMessages, showNotice, truncateFrom, useChatState } from '../services/chat.ts';
+import { chatStore, continueGeneration, deleteMessage, newChat, regenerate, restoreMessages, showNotice, truncateFrom, useChatState } from '../services/chat.ts';
 import { downloads } from '../services/downloads.ts';
 import { engine } from '../services/engine.ts';
 import { useSettings } from '../services/settings.ts';
@@ -62,10 +62,13 @@ export function ChatScreen() {
   const messages = chat.thread.messages;
   const data = useMemo(() => [...messages].reverse(), [messages]);
   const retry = useCallback(() => regenerate(), []);
+  const doContinue = useCallback(() => continueGeneration(), []);
   const sending = chat.sending;
   const renderItem = useCallback(
-    ({ item, index }: { item: ChatMessage; index: number }) => <MessageRow message={item} isLast={index === 0} busy={index === 0 && sending} onRetry={retry} onActions={setActs} />,
-    [sending, retry],
+    ({ item, index }: { item: ChatMessage; index: number }) => (
+      <MessageRow message={item} isLast={index === 0} busy={index === 0 && sending} onRetry={retry} onContinue={doContinue} onActions={setActs} />
+    ),
+    [sending, retry, doContinue],
   );
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -86,7 +89,7 @@ export function ChatScreen() {
   const openVoice = useCallback(() => setVoice(true), []);
   const closeVoice = useCallback(() => setVoice(false), []);
 
-  const doAction = async (kind: 'copy' | 'regen' | 'edit' | 'speak' | 'delete') => {
+  const doAction = async (kind: 'copy' | 'regen' | 'edit' | 'speak' | 'delete' | 'continue') => {
     const m = acts;
     setActs(null);
     if (!m) return;
@@ -106,7 +109,9 @@ export function ChatScreen() {
       showNotice('Wait for the reply to finish (or press Stop) first.');
       return;
     }
-    if (kind === 'regen') {
+    if (kind === 'continue') {
+      void doContinue();
+    } else if (kind === 'regen') {
       void regenerate();
     } else if (kind === 'edit') {
       const removed = await truncateFrom(th.id, m.id);
@@ -182,6 +187,9 @@ export function ChatScreen() {
         <Sheet visible={!!acts} onClose={() => setActs(null)} title="Message">
           <ListRow icon="file" title="Copy" onPress={() => void doAction('copy')} />
           {acts?.role === 'assistant' && acts.text ? <ListRow icon="speaker" title={isSpeakingMessage(acts.id) ? 'Stop reading' : 'Read aloud'} onPress={() => void doAction('speak')} /> : null}
+          {acts?.role === 'assistant' && acts.id === messages[messages.length - 1]?.id && acts.canContinue ? (
+            <ListRow icon="play" title="Continue generation" onPress={() => void doAction('continue')} />
+          ) : null}
           {acts?.role === 'assistant' && acts.id === messages[messages.length - 1]?.id ? <ListRow icon="bolt" title="Regenerate" onPress={() => void doAction('regen')} /> : null}
           {acts?.role === 'user' ? <ListRow icon="edit" title="Edit and resend" onPress={() => void doAction('edit')} /> : null}
           <ListRow icon="trash" title="Delete message" destructive onPress={() => void doAction('delete')} />

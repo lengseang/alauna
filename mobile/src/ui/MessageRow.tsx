@@ -26,6 +26,7 @@ interface Props {
   /** A reply is being generated (disables Retry). */
   busy: boolean;
   onRetry: () => void | Promise<unknown>;
+  onContinue?: () => void | Promise<unknown>;
   /** Long-press: copy / regenerate / edit & resend / speak / delete. */
   onActions: (message: ChatMessage) => void;
 }
@@ -151,7 +152,7 @@ function Attachments({ message: m }: { message: ChatMessage }) {
 
 // ------------------------------------------------------------------ row
 
-export const MessageRow = React.memo(function MessageRow({ message: m, isLast, busy, onRetry, onActions }: Props) {
+export const MessageRow = React.memo(function MessageRow({ message: m, isLast, busy, onRetry, onContinue, onActions }: Props) {
   const s = useStyles();
   const speaking = useIsSpoken(m.id);
   // Only a message that appeared just now fades in; rows that scroll back into view do not replay it.
@@ -214,6 +215,9 @@ export const MessageRow = React.memo(function MessageRow({ message: m, isLast, b
       {done && m.text && (isLast || speaking) ? (
         <View style={s.actions}>
           <Button label="Copy" variant="text" onPress={copy} />
+          {isLast && m.canContinue && onContinue ? (
+            <Button label="Continue" variant="text" onPress={onContinue} disabled={busy} />
+          ) : null}
           {isLast ? <Button label="Retry" variant="text" onPress={onRetry} disabled={busy} /> : null}
           <Button label={speaking ? 'Stop reading' : 'Read aloud'} variant="text" onPress={() => (speaking ? stopMessageSpeech() : speakMessage(m))} />
         </View>
