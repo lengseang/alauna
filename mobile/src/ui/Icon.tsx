@@ -49,10 +49,12 @@ const D = {
   incognito: 'M2.5 12C5 7.5 8.5 5.5 12 5.5s7 2 9.5 6.5c-2.5 4.5-6 6.5-9.5 6.5S5 16.5 2.5 12zM12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5zM4 4l16 16',
   sun: 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1',
   moon: 'M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
+  /** Brain / reasoning think glyph: two cerebral hemispheres, square cut */
+  brain: 'M9.5 4a3.5 3.5 0 0 0-3.5 3.5c0 .6.15 1.15.4 1.65A3.5 3.5 0 0 0 4 12.5 3.5 3.5 0 0 0 6.5 16v1a3 3 0 0 0 3 3h.5V4h-.5zM14.5 4a3.5 3.5 0 0 1 3.5 3.5c0 .6-.15 1.15-.4 1.65A3.5 3.5 0 0 1 20 12.5 3.5 3.5 0 0 1 17.5 16v1a3 3 0 0 1-3 3h-.5V4h.5z',
 } as const;
 
-/** Alias names used in the plan (new, soul, voice, turbo, compute, eye-off) map onto the same glyphs. */
-const PATHS = { ...D, new: D.compose, soul: D.persona, voice: D.speaker, turbo: D.bolt, compute: D.chip, 'eye-off': D.incognito } as const;
+/** Alias names used in the plan (new, soul, voice, turbo, compute, eye-off, think) map onto the same glyphs. */
+const PATHS = { ...D, new: D.compose, soul: D.persona, voice: D.speaker, turbo: D.bolt, compute: D.chip, 'eye-off': D.incognito, think: D.brain } as const;
 const FILLED = new Set<string>(['stop', 'more']);
 
 export type IconName = keyof typeof PATHS;

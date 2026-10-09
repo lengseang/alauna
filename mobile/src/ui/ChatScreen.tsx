@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { FlatList, KeyboardAvoidingView, Pressable, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { getModel } from '../core/catalog.ts';
 import type { ChatMessage } from '../core/chatTypes.ts';
 import * as Clipboard from 'expo-clipboard';
@@ -149,7 +149,7 @@ export function ChatScreen() {
             <Notice tone="danger">{chat.saveError}</Notice>
           </View>
         ) : null}
-        <KeyboardAvoidingView behavior="padding" style={s.fill}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.fill}>
           {messages.length === 0 ? (
             <EmptyChat hasModel={anyInstalled} loading={engineState === 'mounting'} incognito={chat.thread.incognito} />
           ) : (

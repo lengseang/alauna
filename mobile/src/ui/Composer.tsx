@@ -1,10 +1,20 @@
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { Image, Pressable, ScrollView, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  Image,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  TextInput,
+  TextInputChangeEventData,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Attachment } from '../core/chatTypes.ts';
 import { createStore } from '../core/store.ts';
 import { discardAttachment, toChatAttachment, type PickedAttachment } from '../services/attachments.ts';
 import { chatStore, sendMessage, showNotice, stopGeneration } from '../services/chat.ts';
+import { updateSection, useSettings } from '../services/settings.ts';
+import { showToast } from '../services/toast.ts';
 import { makeStyles, useTheme } from '../theme';
 import { AttachSheet } from './AttachSheet';
 import { Icon } from './Icon';
@@ -54,44 +64,71 @@ export async function submitMessage(text: string, atts: Attachment[] = []): Prom
 }
 
 /**
- * The flat bar at the bottom: attach (camera / photos / files), multiline field (grows to 6 lines), and one action key
- * that is Voice when empty, Send when there is something to send, Stop while answering.
- * Owns its own text state, so typing never re-renders the message list.
+ * ChatGPT-inspired Sovereign Greek Liquid Glass Composer:
+ * Translucent frosted glass bar, zero heavy frame, fluid attachments,
+ * live 'Think' (speculative reasoning) toggle, voice launcher, and synchronous text
+ * capture to eliminate fast-typing cut-off race conditions.
  */
 export const Composer = React.memo(function Composer({ placeholder, onVoice }: { placeholder: string; onVoice: () => void }) {
-  const { colors, type } = useTheme();
+  const { colors, type, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const keyboard = useKeyboardVisible();
   const s = useStyles();
+  const settings = useSettings();
   const sending = useSyncExternalStore(chatStore.subscribe, selectSending);
   const loadingModel = useSyncExternalStore(chatStore.subscribe, selectLoading);
   const draft = useSyncExternalStore(draftStore.subscribe, draftStore.getState);
+
   const [input, setInput] = useState('');
+  const textRef = useRef('');
   const [items, setItems] = useState<Item[]>([]);
   const [focused, setFocused] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const inputRef = useRef<TextInput>(null);
-  // Two quick taps on Send read the same `input` before React re-renders; a ref lock swallows the second one.
   const lock = useRef(false);
+
+  const speculativeEnabled = settings.speculative.enabled;
 
   useEffect(() => {
     if (!draft.seq) return;
+    textRef.current = draft.text;
     setInput(draft.text);
     setItems(draft.atts.map((att) => ({ att })));
     inputRef.current?.focus();
   }, [draft]);
 
+  const handleTextChange = useCallback((text: string) => {
+    textRef.current = text;
+    setInput(text);
+  }, []);
+
+  const handleNativeChange = useCallback((e: NativeSyntheticEvent<TextInputChangeEventData>) => {
+    textRef.current = e.nativeEvent.text;
+  }, []);
+
+  const toggleThink = useCallback(() => {
+    const next = !speculativeEnabled;
+    updateSection('speculative', { enabled: next });
+    showToast(next ? 'Deep Think: Enabled (Speculative Draft)' : 'Deep Think: Disabled');
+  }, [speculativeEnabled]);
+
   const send = async () => {
     if (lock.current) return;
     lock.current = true;
     try {
-      const text = input;
+      // Synchronous ref capture prevents fast-typing race conditions where state lags behind
+      const text = (textRef.current || input).trim();
       const pending = items;
-      if (!text.trim() && pending.length === 0) return;
+      if (!text && pending.length === 0) return;
+
+      textRef.current = '';
+      inputRef.current?.clear();
       setInput('');
       setItems([]);
+
       if (!(await submitMessage(text, pending.map((i) => i.att)))) {
-        setInput(text); // nothing was sent: keep the user's words and files
+        textRef.current = text;
+        setInput(text); // nothing was sent: restore user words and files
         setItems(pending);
       }
     } finally {
@@ -105,8 +142,9 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
   };
 
   const canSend = input.trim().length > 0 || items.length > 0;
+
   return (
-    <View style={[s.wrap, { paddingBottom: keyboard ? 8 : Math.max(insets.bottom, 8) }]}>
+    <View style={[s.wrap, { paddingBottom: keyboard ? 6 : Math.max(insets.bottom, 8) }]}>
       {items.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tiles} keyboardShouldPersistTaps="handled">
           {items.map((item, i) => {
@@ -138,12 +176,21 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
           })}
         </ScrollView>
       ) : null}
+
+      {/* Greek Liquid Glass Bar Container */}
       <View style={[s.bar, focused && s.barFocus]}>
-        <IconButton icon="plus" label="Attach a photo or file" onPress={() => setAttachOpen(true)} />
+        <IconButton
+          icon="plus"
+          label="Attach a photo or file"
+          color={colors.muted}
+          onPress={() => setAttachOpen(true)}
+          style={s.attachBtn}
+        />
         <TextInput
           ref={inputRef}
           value={input}
-          onChangeText={setInput}
+          onChangeText={handleTextChange}
+          onChange={handleNativeChange}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           placeholder={placeholder}
@@ -154,13 +201,41 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
           accessibilityLabel="Message"
           style={[s.input, type.body, { color: colors.text }]}
         />
-        {sending ? (
-          <IconButton icon="stop" label="Stop generating" tone="filled" disabled={loadingModel} onPress={() => stopGeneration()} />
-        ) : canSend ? (
-          <IconButton icon="send" label="Send" tone="filled" onPress={send} />
-        ) : (
-          <IconButton icon="mic" label="Voice mode" onPress={onVoice} />
-        )}
+        <View style={s.actionsRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Deep Think mode ${speculativeEnabled ? 'active' : 'inactive'}`}
+            onPress={toggleThink}
+            style={({ pressed }) => [
+              s.thinkPill,
+              speculativeEnabled && s.thinkPillActive,
+              pressed && s.pressed,
+            ]}
+          >
+            <Icon
+              name="brain"
+              size={15}
+              color={speculativeEnabled ? colors.accent : colors.muted}
+            />
+            <Text
+              variant="small"
+              style={[
+                s.thinkLabel,
+                { color: speculativeEnabled ? colors.accent : colors.muted },
+              ]}
+            >
+              Think
+            </Text>
+          </Pressable>
+
+          {sending ? (
+            <IconButton icon="stop" label="Stop generating" tone="filled" disabled={loadingModel} onPress={() => stopGeneration()} />
+          ) : canSend ? (
+            <IconButton icon="send" label="Send" tone="filled" onPress={send} />
+          ) : (
+            <IconButton icon="mic" label="Voice mode" onPress={onVoice} color={colors.accent} style={s.voiceBtn} />
+          )}
+        </View>
       </View>
       <AttachSheet visible={attachOpen} onClose={() => setAttachOpen(false)} room={MAX_ATTACHMENTS - items.length} onPicked={(picked) => setItems((all) => [...all, ...picked.map(fromPicked)].slice(0, MAX_ATTACHMENTS))} />
     </View>
@@ -168,11 +243,79 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
 });
 
 const TILE = 64;
-const useStyles = makeStyles(({ colors, space, line }) => ({
-  wrap: { paddingHorizontal: space.md, paddingTop: space.sm, gap: space.sm, backgroundColor: colors.bg },
-  bar: { flexDirection: 'row', alignItems: 'flex-end', gap: space.xs, backgroundColor: colors.surface, borderWidth: line, borderColor: colors.borderStrong, padding: space.xs },
-  barFocus: { borderColor: colors.accent },
-  input: { flex: 1, maxHeight: 144, minHeight: 48, paddingTop: 12, paddingBottom: 12, paddingHorizontal: space.xs, textAlignVertical: 'top' },
+const useStyles = makeStyles(({ colors, space, line, isDark }) => ({
+  wrap: {
+    paddingHorizontal: space.sm,
+    paddingTop: space.xs,
+    gap: space.xs,
+    backgroundColor: 'transparent',
+  },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    backgroundColor: isDark
+      ? 'rgba(15, 19, 41, 0.78)' // Greek starry night liquid glass
+      : 'rgba(243, 236, 219, 0.84)', // Greek marble/alabaster liquid glass
+    borderWidth: line,
+    borderColor: isDark
+      ? 'rgba(230, 199, 106, 0.14)' // No heavy frame: subtle golden shimmer edge
+      : 'rgba(138, 90, 0, 0.14)', // No heavy frame: subtle bronze shimmer edge
+    paddingLeft: 2,
+    paddingRight: 4,
+    paddingVertical: 2,
+    minHeight: 50,
+  },
+  barFocus: {
+    borderColor: isDark
+      ? 'rgba(230, 199, 106, 0.38)'
+      : 'rgba(138, 90, 0, 0.38)',
+    backgroundColor: isDark
+      ? 'rgba(20, 26, 52, 0.90)'
+      : 'rgba(250, 245, 234, 0.94)',
+  },
+  attachBtn: {
+    marginBottom: 1,
+  },
+  input: {
+    flex: 1,
+    maxHeight: 140,
+    minHeight: 44,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingHorizontal: space.xs,
+    textAlignVertical: 'center',
+    fontSize: 15,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    alignSelf: 'flex-end',
+    marginBottom: 1,
+  },
+  thinkPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderWidth: line,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
+    minHeight: 34,
+    marginRight: 2,
+  },
+  thinkPillActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  thinkLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  voiceBtn: {
+    backgroundColor: isDark ? 'rgba(230, 199, 106, 0.08)' : 'rgba(138, 90, 0, 0.08)',
+  },
   tiles: { gap: space.sm, paddingRight: space.lg },
   imageTile: { width: TILE, height: TILE, borderWidth: line, borderColor: colors.border },
   fileTile: { height: TILE, width: 168, borderWidth: line, borderColor: colors.border, backgroundColor: colors.surface },
