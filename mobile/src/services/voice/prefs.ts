@@ -9,11 +9,27 @@ import { initSettings, settingsStore, updateSection } from '../settings.ts';
 
 export type { VoicePrefs } from '../../core/voiceModels.ts';
 
-export const voicePrefsStore = createStore<VoicePrefs & { loaded: boolean }>({ ...DEFAULT_VOICE_PREFS, loaded: false });
+function voiceStateFromSettings(): VoicePrefs & { loaded: boolean } {
+  const { voice, loaded } = settingsStore.getState();
+  return { ...voice, loaded };
+}
+
+export const voicePrefsStore = createStore<VoicePrefs & { loaded: boolean }>(voiceStateFromSettings());
+
+function shallowEqual<T extends object>(a: T, b: T): boolean {
+  if (a === b) return true;
+  const ka = Object.keys(a) as (keyof T)[];
+  const kb = Object.keys(b) as (keyof T)[];
+  if (ka.length !== kb.length) return false;
+  return ka.every((k) => a[k] === b[k]);
+}
 
 settingsStore.subscribe(() => {
-  const { voice, loaded } = settingsStore.getState();
-  voicePrefsStore.setState({ ...voice, loaded });
+  const next = voiceStateFromSettings();
+  const current = voicePrefsStore.getState();
+  if (!shallowEqual(current, next)) {
+    voicePrefsStore.setState(next);
+  }
 });
 
 let loading: Promise<void> | null = null;
@@ -21,8 +37,7 @@ export function initVoicePrefs(): Promise<void> {
   if (!loading) {
     loading = (async () => {
       await initSettings();
-      const { voice, loaded } = settingsStore.getState();
-      voicePrefsStore.setState({ ...voice, loaded });
+      voicePrefsStore.setState(voiceStateFromSettings());
     })();
   }
   return loading;
@@ -39,8 +54,5 @@ export function updateVoicePrefs(patch: Partial<VoicePrefs>): VoicePrefs {
 }
 
 export function useVoicePrefs(): VoicePrefs & { loaded: boolean } {
-  return useSyncExternalStore(settingsStore.subscribe, () => ({
-    ...settingsStore.getState().voice,
-    loaded: settingsStore.getState().loaded,
-  }));
+  return useSyncExternalStore(voicePrefsStore.subscribe, voicePrefsStore.getState);
 }

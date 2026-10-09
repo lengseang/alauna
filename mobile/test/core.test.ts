@@ -238,6 +238,17 @@ test('store: immutable snapshots and unsubscribe', () => {
   assert.equal(s.getState().label, 'a');
 });
 
+test('store: snapshot reference stability for useSyncExternalStore contract', () => {
+  const s = createStore({ count: 1, text: 'hello' });
+  const snap1 = s.getState();
+  const snap2 = s.getState();
+  assert.equal(snap1, snap2, 'consecutive getState calls must return identical reference');
+  s.setState({ count: 2 });
+  const snap3 = s.getState();
+  assert.notEqual(snap1, snap3, 'state change produces new reference');
+  assert.equal(snap3, s.getState(), 'subsequent reads remain stable');
+});
+
 // --------------------------------------------------------------------------- markdown
 import { parseMarkdown, parseInline } from '../src/core/markdown.ts';
 
