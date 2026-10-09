@@ -35,11 +35,13 @@
       }
     },
     "production": {
+      "distribution": "internal",
       "env": {
         "EAS_SKIP_AUTO_FINGERPRINT": "1"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease"
       },
       "cache": {
         "key": "chiwiwi-prod-cache",
