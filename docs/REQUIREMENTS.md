@@ -1,179 +1,110 @@
-# CHIWIWI — Product Requirements (restructured from the original prompts)
+# CHIWIWI — Product Requirements (v2 "Temple")
 
-This file turns the original, scattered instructions given to Gemini into one
-clean, testable spec. **Every requirement has an ID and an acceptance check.**
-The QA checklist (`docs/QA_PLAN.md`) and the automated tests refer to these IDs.
-
-> **Source note.** Sections 1-3 are restructured directly from the prompt text
-> you pasted (reproduced in the Appendix). Section 6 (concepts) comes from the
-> earlier `ARCHITECTURE.md` / `README.md` / `ENTERPRISE_PLAN.md`. Where I had to
-> *infer* something, it is marked **[inferred]** so you can correct it.
-> If you have other old prompts, paste them and they get merged here.
+This document specifies the testable requirements for CHIWIWI. **Every requirement has an ID and an acceptance check.**
+The QA checklist (`docs/QA_PLAN.md`), Supervision Gate (`scripts/gate.mjs`), and automated test suite (`mobile/test/*`) enforce these requirements.
 
 ---
 
 ## 1. Product in one paragraph
 
-CHIWIWI is a **private, offline AI chat app for phones**. The user downloads a
-GGUF language model once, and from then on the AI runs **entirely on the phone**
-— no account, no cloud, no telemetry. It must work on **any reasonably modern
-phone, not only one device**, and it must **show the user's real device**
-(name, RAM) and recommend models that fit it.
+CHIWIWI is a **private, sovereign, offline AI companion app for phones**. The user downloads an open-weight
+GGUF model once, and from then on inference runs **entirely on-device** via `llama.rn` (llama.cpp JSI) — no account, no cloud, no telemetry. It is built on the **Temple** design system: razor-sharp geometry (`borderRadius: 0`), two ancient skies (Nyx dark with gold, Helios light with bronze), Cinzel and Inter typography, and absolute honesty (no fake numbers, no simulated delays).
 
-## 2. The golden path (the flow that MUST work end to end)
-
-This is the single most important requirement. The app is **not shippable** until
-a new user can do all seven steps without anything failing:
+## 2. The golden path (GP-1)
 
 | # | Step | What the user sees |
 |---|------|--------------------|
-| 1 | **Install** the app | — |
-| 2 | **Open** it, **allow the permissions** it needs | Welcome screen shows *their* device (brand, model, RAM) and explains each permission |
-| 3 | **Pick where data is stored** (folder) | A location picker. Nothing else is usable until this is done |
-| 4 | **Download a model** from the Model Hub | Real progress, speed, ETA; pause/resume/cancel |
-| 5 | **App verifies the model works** | "Checking file → Loading into memory → Test reply" then a green "Verified" |
-| 6 | **Open Chat** | Chat shows which model is active and its status |
-| 7 | **Chat → the AI replies** | Live "thinking/process" panel, then a clean answer |
+| 1 | **Install** the APK | Clean package, arm64 native libraries |
+| 2 | **Open** app | Welcome screen displays real phone details (brand, model, RAM, CPU) and explains required permissions |
+| 3 | **Configure storage** | Choose a folder or use app-private storage. App verifies write/read/delete access before proceeding |
+| 4 | **Download a model** | Pick from 110 catalog entries. Real progress, speed (MB/s), ETA, and parts count; background verification |
+| 5 | **Verify and mount** | "Checking file → Loading into RAM → Test reply" resulting in "Active · Verified" |
+| 6 | **Open Chat** | Chat displays active model and live status via the animated Eclipse |
+| 7 | **Chat → the AI replies** | Live reasoning process panel with token-by-token streaming, followed by clean Markdown answer |
 
-**Acceptance (GP-1):** on a clean install, steps 1-7 complete with no crash, no
-empty download, no fake reply, and no dead button.
+**Acceptance (GP-1):** On a clean install, steps 1-7 complete without crashes, fake responses, or dead controls.
 
 ## 3. Functional requirements
 
-### 3.1 Storage location (the "vault")
-- **ST-1** On first launch, if no storage location is configured, the app shows
-  the location picker and **blocks everything else** (no download, no chat).
-- **ST-2** The same rule applies on every later launch: if the saved location is
-  missing or no longer accessible, the app **gates again** instead of failing silently.
-- **ST-3** The user can **change the location any time** from *Settings → Storage*
-  (the "folder selection toggle"). Changing it never deletes files.
-- **ST-4** Models, chat history, memory and media all live in the chosen location.
-- **ST-5** The location must be **verified writable** (a real write/read test)
-  before the app accepts it. A location that fails is rejected with a clear reason.
-- **ST-6** Gallery apps must not index the vault (`.nomedia`).
-
-> **Platform fact that shaped the design:** the on-device AI engine (llama.cpp)
-> can only open models by a **real file path**; Android's folder picker returns a
-> `content://` link that the engine cannot read. So an external folder needs
-> *All files access* (Android 11+) / storage permission (Android 8-10), and there is
-> always an **App private storage** option that needs no permission. See
-> `docs/ARCHITECTURE.md` §Storage.
+### 3.1 Storage & Storage Slots (the "vault")
+- **ST-1** If no storage location is configured, the app gates first launch and prevents download or chat.
+- **ST-2** If a previously saved storage location becomes inaccessible, the app gates again with clear recovery choices.
+- **ST-3** The user can manage storage slots (*Settings → Storage*), designating which slot receives new downloads.
+- **ST-4** Models can be moved between storage slots (*moveToSlot*) with atomic copy, verification, and space auditing.
+- **ST-5** Every candidate location must pass a write/read/delete probe before acceptance.
+- **ST-6** Gallery apps are blocked from scanning model weights and chat media via `.nomedia`.
 
 ### 3.2 Permissions
-- **PM-1** Permissions are requested **in the onboarding flow, before the folder
-  picker**, each with a plain-language reason.
-- **PM-2** The app only asks for permissions a shipped feature actually uses
-  (storage access; internet for downloads). **[inferred]** Camera / microphone /
-  notifications are **not** requested yet because voice, camera and download
-  notifications are not implemented — asking for them would be dishonest.
-- **PM-3** If a permission is denied the app explains what is lost and offers the
-  fallback (e.g. app private storage). It never just breaks.
+- **PM-1** Permissions are requested on demand with plain-language explanations.
+- **PM-2** Storage access is requested during onboarding; Microphone access is requested only upon entering Voice mode; Camera access is requested only upon tapping Camera in attachments.
+- **PM-3** Denied permissions gracefully degrade with alternative options (e.g. app-private storage fallback).
 
-### 3.3 Model Hub (download)
-- **MD-1** Every model link is **tested against Hugging Face** (`scripts/verify-catalog.mjs`).
-- **MD-2** Tapping *Download* produces a **real file** in the vault with **real
-  progress** (bytes, MB/s, ETA). No "empty download".
-- **MD-3** Pause, resume and cancel work. **Resume continues from the partial
-  file** (never restarts or corrupts). Leaving the screen does **not** stop a download.
-- **MD-4** Download is **refused with a clear message** if there is not enough free space.
-- **MD-5** A finished download is verified: exact size from Hugging Face, GGUF
-  header check. An optional **deep SHA-256 check** is available.
-- **MD-6** The Hub shows **device-aware fit** for every model (Great / OK / Tight /
-  Too heavy) from the phone's real RAM, and highlights a recommended model.
-- **MD-7** Each model shows a **status**: Not downloaded · Downloading · Paused ·
-  Verifying · Installed · Loading · **Active** · Error.
-- **MD-8** The catalog contains only **truthful** entries: correct names, no
-  duplicates, no capability the app cannot deliver (no fake vision/voice badges).
+### 3.3 Model Vault & Downloads
+- **MD-1** Every catalog entry (110 models) resolves on Hugging Face with matching file size and sha256 (`scripts/verify-catalog.mjs`).
+- **MD-2** Downloads produce real files on disk with genuine speed, remaining bytes, and ETA.
+- **MD-3** Pause, resume, and cancel work reliably. Resuming appends to `.part` files via HTTP Range headers.
+- **MD-4** Free storage space is verified prior to download start.
+- **MD-5** Downloads support configurable verification modes (`verifyMode`: 'background' | 'always' | 'off').
+- **MD-6** Multi-download queue supports user-configured concurrency (1..4 parallel downloads) and manual reordering (`moveInQueue`).
+- **MD-7** Device RAM drives fit ratings (Runs great / OK / Tight / Too heavy) and context size recommendations.
+- **MD-8** 9 distinct model status states are mapped without dead or unresponsive controls.
 
-### 3.4 Model verification and mounting
-- **MV-1** "Mount" really loads the model into RAM through the inference engine.
-- **MV-2** After loading, the app runs a **test generation**. A model is marked
-  **Verified** only if it produced a reply. Failures show the real error.
-- **MV-3** The app **never fabricates** a reply. If no model is loaded, chat says
-  so and offers *Download / Load a model*.
+### 3.4 Model Verification and Mounting
+- **MV-1** Mount loads model weights into RAM through `llama.rn`.
+- **MV-2** After mounting, a test prompt is executed. Models are marked "Verified" only after producing output.
+- **MV-3** The app never fabricates replies. If no model is mounted, Chat offers a button to open the Vault.
 
-### 3.5 Chat (like Claude and other chatbots)
-- **CH-1** The reply **streams token by token**.
-- **CH-2** A **process panel** shows what the AI is really doing: *Loading model →
-  Reading prompt (N tokens) → Thinking → Answering*, and for reasoning models the
-  **real reasoning text**, collapsible. Nothing in it is invented.
-- **CH-3** The final **output is clean**: reasoning is separated from the answer;
-  basic Markdown (paragraphs, lists, bold, inline/ block code) is rendered.
-- **CH-4** A **Stop** button interrupts generation.
-- **CH-5** The AI sees the **conversation history** (sliding window sized to the
-  model's context), not only the last message.
-- **CH-6** Chat history is saved in the vault and survives restarts.
-- **CH-7** Errors are shown inline with an action (Retry / Open Model Hub).
+### 3.5 Chat & Reasoning
+- **CH-1** Text streams token-by-token with updates coalesced to ~15 fps.
+- **CH-2** Process panel shows genuine phases (*Loading → Reading prompt → Thinking → Writing*) and real engine telemetry (tok/s, TTFT ms).
+- **CH-3** Reasoning blocks (`<think>`) are parsed and rendered in a collapsible section, leaving clean answer Markdown.
+- **CH-4** Stop button halts generation immediately.
+- **CH-5** Conversation history is maintained within the model's context window.
+- **CH-6** Real message deletion (`deleteMessage`) and edit-resend (`truncateFrom`) without thread reloads.
+- **CH-7** Multimodal attachments: text files and photos (with vision-capable models and `mmproj` projectors).
+- **CH-8** Incognito chats remain in RAM and are never written to disk.
 
-### 3.6 Device awareness (broad, not one phone)
-- **DV-1** The app reads the **real device**: brand, model, Android version, CPU
-  architecture, total RAM — and shows it instead of any hard-coded phone name.
-- **DV-2** RAM drives **model fit ratings**, the **recommended model**, and the
-  **default context length**.
-- **DV-3** Unsupported hardware (e.g. 32-bit only) gets a clear message.
+### 3.6 Voice & Audio
+- **VO-1** On-device speech recognition via Whisper models (`whisper.rn`).
+- **VO-2** Speech synthesis via Android native TTS with selectable voices and pitch/rate sliders.
+- **VO-3** Voice loop state machine (`core/voiceLoop.ts`) manages idle, listening, transcribing, thinking, speaking.
+- **VO-4** Barge-in interruption allows interrupting assistant speech by talking or tapping.
 
-### 3.7 Interaction quality (the "no spam button" rule)
-- **UX-1** **Every** button has a defined action, a busy/disabled state, and
-  guards against double-tap.
-- **UX-2** Every async action shows progress and a recoverable error.
-- **UX-3** There is **no dead or placebo control**: a setting that does nothing is
-  removed or labelled *Coming soon*. Settings that exist are **persisted** and
-  actually applied.
-- **UX-4** Android Back works (closes sheet → previous screen → exit).
+### 3.7 Persona ("Soul") & Memory
+- **SO-1** 4 soul archetypes with bipolar PAD sliders (Pleasure, Arousal, Dominance) adjust system prompts and sampling hyperparameters.
+- **SO-2** Live soul preview generates real model responses and reads them aloud using TTS.
+- **SO-3** Long-term memory facts are injected into system prompts up to the configured budget (`memoryBudgetChars`).
 
-### 3.8 Build and delivery
-- **BD-1** Build only the **arm64** architecture (all current phones) — the main
-  cause of multi-hour builds was compiling four CPU architectures of llama.cpp.
-- **BD-2** A fast local/CI path exists and is documented (`docs/BUILDING.md`).
-- **BD-3** CI runs typecheck + tests on every push.
+### 3.8 Security & Privacy
+- **SE-1** Optional biometric lock (`expo-local-authentication`) with configurable grace period.
+- **SE-2** Granular purges: delete all chats, purge memory facts, purge KV cache, purge media, or full wipe (`purgeAll`).
+- **SE-3** Zero telemetry: zero network requests during chat, reasoning, or speech processing.
 
-## 4. Roles requested in the prompt, and how they are covered
+### 3.9 Design System & Accessibility ("Temple")
+- **DS-1** Sharp geometry: `borderRadius: 0` across all UI primitives.
+- **DS-2** Two themes: Nyx (`#080A17` with `#E6C76A` gold) and Helios (`#FAF6EC` with `#8A5A00` bronze).
+- **DS-3** Every icon-only button carries an explicit `accessibilityLabel`.
+- **DS-4** Minimum 48dp touch targets across interactive controls.
+- **DS-5** Text scaling up to 1.3x without layout clipping; maxFontSizeMultiplier 1.6.
+- **DS-6** Reduced motion flag stops ambient loops and simplifies transitions.
 
-The prompt asked to *"assign one more orchestrator for QA"*, *"one more for system
-design and code auditor"*, and asked *"do we need to hire new agent?"*.
+---
 
-**Answer: no new permanent agents are needed.** Two review *roles* are enough, and
-both are now concrete, repeatable artifacts instead of vague personas:
+## 4. Concepts Status (v2 Implementation)
 
-| Role | Responsibility | Where it lives |
-|------|----------------|----------------|
-| **QA orchestrator** | Check every function, component and page "to the bone"; no unshippable build | `docs/QA_PLAN.md` (per-screen/per-button checklist) + `mobile/test/*` + CI |
-| **System design & code auditor** | For every function/button: what input it needs, what events it fires, what guards it has; works with QA | `docs/AUDIT.md` (control inventory) + the same CI |
-
-An independent reviewer pass was run over the finished work (see `docs/AUDIT.md`).
-
-## 5. Non-functional requirements
-- **NF-1 Privacy:** zero network calls during chat. The only network use is model
-  download from Hugging Face (and the catalog check). No analytics.
-- **NF-2 Honesty:** the UI never claims something that is not true (no "GGUF
-  On-Device" badge on canned text, no fake speed-ups, no fake security toggles).
-- **NF-3 Performance:** UI thread stays responsive during download and
-  verification; heavy work is chunked.
-- **NF-4 Devices:** Android 8+ (API 26+) arm64. iOS builds are best-effort, not verified.
-
-## 6. Concepts from earlier docs — status
-
-These came from the earlier architecture docs. They are **kept as goals** but are
-**not implemented** in this version, and the UI no longer pretends they are.
-
-| Concept | Status | Notes |
+| Concept | Status in v2 | Notes |
 |---|---|---|
-| Real on-device LLM inference | **Done** (llama.rn / llama.cpp) | Needs a native build, not Expo Go |
-| Resumable HF downloader + verification | **Done** | Rebuilt; old version corrupted resumed files and rejected good files |
-| Model Hub with search / grade / filters | **Done** (truthful catalog) | |
-| Claude-style thinking/process view | **Done** (real stages + real reasoning) | |
-| Soul archetypes + PAD emotional vector | **Done, simplified** | PAD now steers the system prompt (real effect); no fake per-turn drift |
-| Episodic memory | **Done, simplified** | User-managed facts injected into prompts; no auto-extraction yet |
-| Incognito chat | **Done** | Not saved to disk |
-| Live voice (STT/VAD/TTS) | **Roadmap** | Needs whisper.rn + TTS; removed the fake overlay |
-| Vision / image understanding | **Roadmap** | Needs `mmproj` download + `initMultimodal` |
-| Speculative decoding (draft+target) | **Roadmap** | llama.rn exposes it; needs a vocabulary-compatible pair |
-| KV-cache freeze (`saveSession`) | **Roadmap** | llama.rn exposes `saveSession/loadSession` |
-| Intent gateway tiers | **Dropped for now** | Regex router misrouted common text |
-| Biometric lock, auto-purge | **Roadmap** | Removed placebo toggles |
-
-## Appendix — the original prompt (verbatim)
-
-> heyo this the app is a shell without a body, every connected to ai does not works, have we reached the functionality check yet, the app download without storage permission and then it not works it's must be a not a bug but your mistake, so the plan is to review everything from the bottom of the well until the sky reach the moon, anyway assign one more orchestrator for QA handle all the quality and check every function every component every page to the bone be strict about this you can't ship a not working product so, also one more for system design and code auditor every function every button every ui ux function they have what they need what example a button need event of each click not a no guard button will spam everything and bad overall and have to works closely with QA, plus do we need to hire new agent?, the app will not focusing solely on my device it has to be broad, detecting by device show their device instead.
-> btw also i tested and the functionality of each and every function are not working even the chat, so for the chat do it like claude and other chatbot showing the process of the ai thinking and running, the output should be clean, the model download bro it's not working, it just show empty download without real thing happening the model has no status of using and the model must first download so right now have you test the download link if it works, when click download on app it show downloading but no file (also before user to use the app they must use a place to store all the datas including model, the idea is when user open the app we check if user has set the folder location yet if not open location picking, this also apply to all the user that no have the folder picker otherwise no running, also the folder selection toggle also should be in storage setting.), let's check the flow, so user installed app then open app as user to allow all the permission then app ask user to pick and set folder directory, then user can go to download model then user can install model, app verify the model works, then user go to chat user chat then ai reply. got it? make sure it will run like that
-> how about you restructure these random historic prompt then use it to fix and implement above gemini and make the app usable fit the requirements and my goal product, also if the build process could be faster that's good too right now it took hours to just build one app. I trust you now la
+| Real on-device LLM inference | **Implemented** | `llama.rn 0.12.9` / llama.cpp via JSI |
+| Multi-download queue & concurrency | **Implemented** | 1..4 parallel transfers, reordering, stall watchdog |
+| Background verification | **Implemented** | `verifyMode`: background, always, off |
+| Storage slots & multi-volume | **Implemented** | Internal, SD card, custom paths; `moveToSlot` |
+| Claude-style reasoning view | **Implemented** | Real `<think>` parsing, live phases & tok/s |
+| Soul archetypes + PAD vector | **Implemented** | Real prompt descriptors & sampling adjustments; live TTS preview |
+| Episodic memory + budget | **Implemented** | Capped at `memoryBudgetChars` (default 2400) |
+| Incognito chat | **Implemented** | In-memory only; never written to storage |
+| Live voice mode (STT + TTS) | **Implemented** | Whisper STT, Android TTS, barge-in, `VoiceOverlay` |
+| Vision / image understanding | **Implemented** | Projector files (`mmproj`) + `expo-image-picker` |
+| Speculative decoding & MTP | **Implemented** | Multi-Token Prediction and draft/target pairs |
+| KV session cache | **Implemented** | `saveSession` / `loadSession` |
+| Biometric lock & Purge suite | **Implemented** | `expo-local-authentication`, granular data purges |
+| Temple design system | **Implemented** | Radius 0, Nyx/Helios, 48dp targets, WCAG AA |

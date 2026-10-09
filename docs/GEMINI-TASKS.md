@@ -27,7 +27,7 @@ Read `GEMINI.md` first (hard rules). Foundation and backbone are done; you build
 - [x] T4 Expose `verifyMode` ('background' | 'always' | 'off') in Settings → Security & privacy with an honest description.
 - [x] T5 Accessibility pass: `accessibilityLabel` on every icon-only button, text scale 1.3 does not clip, reduced motion respected, 48dp targets. Add a test that greps for `IconButton` without `label`.
 - [x] T6 Helios (light) splash + adaptive icon: hand-tune colours from `docs/DESIGN.md` tokens; owner approves visually.
-- [ ] T7 Refresh stale docs: `docs/ARCHITECTURE.md`, `docs/QA_PLAN.md`, `docs/REQUIREMENTS.md`, `docs/audit/00-master-spec.md` to match v2 (read the code, do not guess).
+- [x] T7 Refresh stale docs: `docs/ARCHITECTURE.md`, `docs/QA_PLAN.md`, `docs/REQUIREMENTS.md`, `docs/audit/00-master-spec.md` to match v2 (read the code, do not guess).
 
 ### Needs the phone (owner reports results, you fix)
 - [ ] P1 First load: Qwen3.5 0.8B → "Ready" → streams a reply with real tok/s. Fix whatever fails.

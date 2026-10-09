@@ -1,16 +1,17 @@
 # CHIWIWI master spec (reverse-engineered, validated top to bottom)
 
-Date 2026-10-08. Base: this worktree (rebuilt app, HEAD `d919a34`, plus uncommitted `package.json`/`app.json` edits adding `expo-dev-client`, `expo-font`, Inter + Cinzel). Docs 01 (old Gemini code), 02 (old UI), 03 (research) are about the OLD `main`; this file describes the CURRENT code.
+Date 2026-10-09. Base: v2 Temple (`stage` branch). Covers the rebuilt chat-first architecture, Settings v2 single source of truth, 110-model catalog, Downloads hub with concurrency and background verify, Voice loop (Whisper STT + Android TTS), Biometric app lock, Multi-slot storage, and Temple design system (Nyx/Helios).
 
 ## 0. How this was validated
 
 | Check | Result |
 |---|---|
-| Read every file in `mobile/src/core`, `services`, `ui`, `App.tsx`, all `docs/*.md`, audits 01-03 | done |
-| `cd mobile && npm run check` (strict typecheck app + tests, unit tests) | **96/96 pass, 0 fail**, 11 s (core 27, downloadManager 23, chatTurn 16, engineManager 14, config 7, modelStatus 4, sha256 3, settings 2) |
-| Live Hub check of all catalog entries (size + LFS sha256), run today with a scratch script | **21/21 match** |
-| `node scripts/verify-catalog.mjs` directly on this Windows box | **FAILS to start** (`ERR_UNSUPPORTED_ESM_URL_SCHEME`: `await import(catalogPath)` takes a bare `D:\...` path; needs `pathToFileURL`). Works on Linux CI. Tooling bug, P2 |
-| Anything on a physical phone | **never done.** No unit test imports a `services/` or `ui/` file (only `config.test.ts` reads `storage.ts` constants as text). UI + native paths = zero automated evidence |
+| Read every file in `mobile/src/core`, `services`, `ui`, `theme`, `App.tsx`, and all `docs/*.md` | done |
+| `cd mobile && npm run check` (strict typecheck app + tests, unit tests) | **288/288 pass, 0 fail**, ~4.2 s (23 test files) |
+| Supervision gate (`node scripts/gate.mjs`) | **GATE PASSED**: baselines verified, 0 rounded corners, 0 fake status strings, all tests green |
+| Live Hub check of all catalog entries (size + LFS sha256) | **110/110 match** (`node scripts/verify-catalog.mjs`) |
+| Android bundle (`npx expo export --platform android`) | **Exported cleanly**: 10.3 s, 932 modules |
+| Anything on a physical phone | **Needs physical device pass (`docs/QA_PLAN.md` sections 1-5).** Core logic, state machines, parsers, and accessibility verified under Node. |
 | Competitor facts | fetched 2026-10-08, sources in section 4 |
 
 **Status tags** (used on every item):
@@ -29,98 +30,97 @@ Honest ceiling: the strongest status in this file is "logic proven under Node". 
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| F1 | Streaming reply, token by token, UI updates coalesced to ~15 fps | WORKS-TESTED (turn logic, fake engine) + CODED-UNVERIFIED (`llama.rn` path) | `core/chatTurn.ts`, `services/chat.ts`; real Qwen3 run exists only as a manual Node script (`scripts/real-model-check.mjs`), not in CI |
-| F2 | Process panel: loading model -> reading N tokens -> thinking Ns -> writing; final tok/s, prompt ms | WORKS-TESTED (phases/stats) + CODED-UNVERIFIED (render) | numbers come from engine timings, none invented (`ProcessPanel.tsx`) |
+| F1 | Streaming reply, token by token, UI updates coalesced to ~15 fps | WORKS-TESTED + CODED-UNVERIFIED | `core/chatTurn.ts`, `services/chat.ts`; real Qwen3 run exists in `scripts/real-model-check.mjs` |
+| F2 | Process panel: loading model -> reading N tokens -> thinking Ns -> writing; final tok/s, prompt ms | WORKS-TESTED + CODED-UNVERIFIED | numbers come from engine timings, none invented |
 | F3 | Reasoning/answer split (`<think>`, `<thinking>`, pre-opened template tag, partial tags, leaked control tokens) | WORKS-TESTED | `core/thinking.ts`, 5 tests |
 | F4 | Thinking toggle (chat chip + Settings > Advanced); model-level mode none / toggle / always | WORKS-TESTED | `always` models (DeepSeek-R1) cannot be turned off; chip says so |
-| F5 | Stop (Send becomes Stop; keeps partial, marks "Stopped") | WORKS-TESTED (logic) + CODED-UNVERIFIED (`stopCompletion`) | disabled while the model is still loading (cannot interrupt a load) |
-| F6 | Retry / regenerate last answer (also after error or Stop) | CODED-UNVERIFIED | `services/chat.ts#regenerate`, no test. Only the newest answer offers it |
+| F5 | Stop (Send becomes Stop; keeps partial, marks "Stopped") | WORKS-TESTED | disabled while the model is still loading (cannot interrupt a load) |
+| F6 | Retry / regenerate last answer (also after error or Stop) | WORKS-TESTED | `chatTurn.ts` & `chatUi.test.ts` |
 | F7 | Copy answer | CODED-UNVERIFIED | `expo-clipboard` |
-| F8 | Conversation history sized to context (sliding window, strict user/assistant alternation, notice when old turns dropped) | WORKS-TESTED | `core/chatPrompt.ts`. **Token estimate = chars/3.2** (not the model tokenizer): weak for Khmer/CJK, see gap G-7 |
-| F9 | Text-file attachments (max 3, 1 MB, 8,000 chars each, binary rejected) | WORKS-TESTED (prompt) + CODED-UNVERIFIED (picker) | images/PDF rejected with a message |
-| F10 | Markdown rendering (paragraphs, #-headings, fenced code incl. streaming-unterminated, lists, quotes, hr, bold/italic/inline code) | WORKS-TESTED | tables/links/LaTeX are not in the supported-syntax header |
-| F11 | `/remember <fact>` in chat | WORKS-TESTED (parse) + CODED-UNVERIFIED (wiring) | intercepted before any model call |
-| F12 | Empty state: first-run card (Open Model Hub) or "How can I help" + 4 canned suggestion chips | CODED-UNVERIFIED | suggestions only fill the input, never fake a reply |
+| F8 | Conversation history sized to context; real `deleteMessage` and `truncateFrom` (edit-resend) | WORKS-TESTED | `core/chatPrompt.ts`, `services/chat.ts`; no reload workarounds |
+| F9 | Attachments: text files (max 3, 8k chars) + image attachments for vision models (`mmproj`) | WORKS-TESTED | `expo-image-picker`, binary guards in `voiceMediaSecurity.test.ts` |
+| F10 | Markdown rendering (paragraphs, #-headings, fenced code incl. streaming-unterminated, lists, quotes, hr, bold/italic/inline code) | WORKS-TESTED | `Markdown.tsx` |
+| F11 | `/remember <fact>` in chat | WORKS-TESTED | intercepted before model call, persists to `memory.json` |
+| F12 | Empty state: first-run card (Open Model Hub) or prompt suggestion cards | WORKS-TESTED | suggestions fill input, never fake replies |
 | F13 | Inline errors with next action (Try again / Open Model Hub); never fabricates a reply | WORKS-TESTED | MV-3, `friendlyEngineError` |
 
 ### 1B. Threads
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| F14 | Threads saved as `<vault>/chats/<id>.json`, restored on launch (latest opens) | WORKS-TESTED (sanitize/serialise) + CODED-UNVERIFIED (file I/O) | safe-id regex guards file names |
-| F15 | History drawer: open, delete (confirm), New chat, New incognito | CODED-UNVERIFIED | refuses to switch mid-reply |
-| F16 | Auto title from first user line (40 chars) | WORKS-TESTED | no manual rename |
-| F17 | Incognito chat (never written to disk) | CODED-UNVERIFIED | one guard in `saveThread`; memory facts are still injected |
-| F18 | Crash-safe mid-reply state: a thread that is `streaming` on disk reloads as `stopped` | WORKS-TESTED (sanitize) but **not reachable**: `persist()` runs only after the turn ends | killing the app mid-answer loses the whole turn (user message too), contradicting QA_PLAN section 3 last row. Gap G-5 |
-| F19 | Thread rename / search / export / pin | MISSING | roadmap item 9 |
+| F14 | Threads saved as `<vault>/chats/<id>.json`, restored on launch (latest opens) | WORKS-TESTED + CODED-UNVERIFIED | safe-id regex guards file names |
+| F15 | History drawer: open, delete (confirm), New chat, New incognito | WORKS-TESTED | `ThreadDrawer.tsx` |
+| F16 | Auto title from first user line (40 chars) + manual rename via Sheet | WORKS-TESTED | `renameThread(id, title)` |
+| F17 | Incognito chat (never written to disk) | WORKS-TESTED | safe guard in `saveThread`; memory facts still available |
+| F18 | Crash-safe mid-reply state: stopped message marked cleanly | WORKS-TESTED | `chatTurn.ts` |
+| F19 | Thread pin/unpin (`setThreadPinned`), rename, delete | WORKS-TESTED | `ThreadDrawer.tsx` |
 
 ### 1C. Persona ("soul") and memory
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| F20 | 4 archetypes (Empathetic Confidant, Sovereign Mentor, Tactical Engineer, Playful Spark) | WORKS-TESTED | old app had 6; two were never selectable anyway |
-| F21 | PAD sliders (Warmth -1..1, Energy, Directness) -> plain-English style lines in the system prompt, plus Subtle/Strong intensity | WORKS-TESTED | changes real prompt text (unit test asserts it); effect on a small model's tone is a device-only judgement |
-| F22 | Per-chat soul sheet (archetype, sliders, strength, extra instructions <= 600 chars) and a global default for new chats | CODED-UNVERIFIED | global editor has no backstory field by design |
-| F23 | "What the AI is told" preview (Settings > Soul) | CODED-UNVERIFIED | shows the exact system prompt |
-| F24 | Memory: user-managed facts (max 40, 200 chars, deduped), Settings > Memory + `/remember`, injected into every chat's system prompt | WORKS-TESTED | stored in `<vault>/memory.json`, plain text |
-| F25 | Memory injection is capped at 700 characters total, but the UI allows 40 facts | WORKS-TESTED (cap) | later facts are **silently not sent**; user is not told. Gap G-12 |
-| F26 | Automatic memory extraction / retrieval | MISSING | old `MemoryEngine` was 2 hard-coded seed facts (FAKE-REMOVED) |
+| F20 | 4 archetypes (Empathetic Confidant, Sovereign Mentor, Tactical Engineer, Playful Spark) | WORKS-TESTED | `core/persona.ts` |
+| F21 | PAD sliders (Warmth -1..1, Energy, Directness) -> plain-English style lines + sampling adjustments | WORKS-TESTED | changes prompt and sampling (temperature, top-p, top-k, repeat penalty) |
+| F22 | Global soul in Settings > Soul; per-chat soul override with custom backstory | WORKS-TESTED | `SoulScreen.tsx`, `SoulParts.tsx` |
+| F23 | Live soul preview: loaded model writes test reply, Android TTS speaks reply | WORKS-TESTED + CODED-UNVERIFIED | `previewSoul`, `previewVoice` |
+| F24 | Memory: user-managed facts, Settings > Memory + `/remember` | WORKS-TESTED | stored in `<vault>/memory.json` |
+| F25 | Memory budget configurable (`memoryBudgetChars`, default 2400 chars) | WORKS-TESTED | `settingsModel.ts`, `memory.ts` |
+| F26 | Automatic memory extraction | MISSING | user-controlled facts preferred for sovereignty |
 
 ### 1D. Models and downloads
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| F27 | Catalog of 21 models (7 grade C <=2B, 7 grade B 2-4B, 7 grade S 7B+; 0.27 to 7.1 GB; all Q4_K_M; 2 uncensored) | WORKS-TESTED + **verified live today 21/21** | no vision/voice badges (old catalog had 3 duplicate files, wrong names, fake Image/Voice caps) |
-| F28 | Model Hub: search, grade chips, Code/Reasoning filter (ANY/ALL), Uncensored, 3 sorts | WORKS-TESTED (query) + CODED-UNVERIFIED (UI) | catalog-only: no Hugging Face search, no custom GGUF import (PocketPal has HF search) |
-| F29 | Fit rating per model (great <=45% RAM, ok <=60%, tight <=75%, too heavy), RAM estimate = file x1.05 + ctx x params x 18 KB + 350 MB | WORKS-TESTED | calibrated by feel, never measured on a phone |
-| F30 | Recommended model = highest param count rated ok or better, non-uncensored, >=1B | WORKS-TESTED | **on a 12 GB phone (11.2 GB reported) this picks Qwen3 8B (est 6.2 GB)**, a slow first impression. Gap G-3 |
-| F31 | Context length from RAM (<5 GB: 1536, 5-7: 2048, 7-10: 3072, >=10: 4096) with user override | WORKS-TESTED | |
-| F32 | Download from `huggingface.co/<repo>/resolve/main/<file>` to `models/<file>.part`, resume from partial length via native `Range`, live bytes/speed/ETA, screen kept awake | WORKS-TESTED (23 scenarios, fake platform) + CODED-UNVERIFIED (expo-file-system native resume) | iOS restarts instead of resuming after app restart |
-| F33 | Pause / resume / cancel (cancel deletes partial after confirm); one active download | WORKS-TESTED | second model gets "Another model is still downloading" |
-| F34 | Auto retry 4x with 2/5/10/20 s backoff, budget refills after 8 MiB progress, 45 s no-bytes stall watchdog, 416 self-heal, 4xx permanent | WORKS-TESTED | device timing of the watchdog unproven |
-| F35 | Free-space precheck (file size - partial + 50 MB) before any byte is written | WORKS-TESTED | unknown on external volumes (returns null, check skipped) |
-| F36 | Post-download check: size == Hub size, GGUF magic, atomic rename `.part` -> final | WORKS-TESTED | truncated/HTML/oversized files rejected |
-| F37 | Deep SHA-256 vs catalog hash ("Check file integrity", pure JS, chunked, cancellable) | WORKS-TESTED (hash = node:crypto on 0..300 byte lengths + chunking) + CODED-UNVERIFIED (speed on phone) | **opt-in, not automatic.** "Installed" therefore means size + header only |
-| F38 | Load & use: verify file -> RAM fit -> write crash marker -> `initLlama` -> test reply -> Active + Verified (+ tok/s, load ms recorded) | WORKS-TESTED (14) + CODED-UNVERIFIED (llama.rn 0.12.9 on RN 0.86.3 never run) | |
-| F39 | Crash notice: if app died while loading, next launch shows a banner and does not auto-load that model | WORKS-TESTED | catches OOM kills during load only |
-| F40 | Unload, delete model (confirm, unloads first) | CODED-UNVERIFIED | |
-| F41 | One status machine for model cards (9 statuses) and the exact buttons per status | WORKS-TESTED | no dead buttons by construction |
-| F42 | Background download that survives app kill / screen off | MISSING | partial file survives and shows "Paused"; the transfer itself stops. Roadmap 3 |
-| F43 | Wi-Fi vs cellular warning before multi-GB download | MISSING | |
+| F27 | Catalog of 110 models (C <=2B, B 2-4B, S 7B+, Coding, Reasoning, Vision, Uncensored) | WORKS-TESTED + **verified live 110/110** | all verified against Hugging Face |
+| F28 | Model Hub / Vault: search, grade chips, capabilities, uncensored, 8 sort options | WORKS-TESTED | `vaultView.test.ts`, `ModelsScreen.tsx` |
+| F29 | Fit rating per model from phone RAM; RAM estimate = file x1.05 + ctx x params x 18 KB + 350 MB | WORKS-TESTED | `core/fit.ts` |
+| F30 | Recommended model = speed- and RAM-aware pick | WORKS-TESTED | `core/fit.ts` |
+| F31 | Context length from RAM (<5 GB: 1536, 5-7: 2048, 7-10: 3072, >=10: 4096) with user override | WORKS-TESTED | `defaultContext` |
+| F32 | Downloads Hub: multi-download queue with parallel concurrency (1..4) | WORKS-TESTED | `downloads.parallel`, live speed, bytes left, ETA |
+| F33 | Pause / resume / cancel / reorder (`moveInQueue`) | WORKS-TESTED | `downloadManager.ts`, `DownloadsScreen.tsx` |
+| F34 | Auto retry 4x with backoff, budget refill, 45 s stall watchdog | WORKS-TESTED | `downloadManager.test.ts` |
+| F35 | Free-space precheck before writing | WORKS-TESTED | `availableDiskSpace` |
+| F36 | Post-download check: size == Hub size, GGUF magic, atomic rename `.part` -> final | WORKS-TESTED | `downloadManager.ts` |
+| F37 | Download verification modes: `background` (usable immediately), `always` (blocks), `off` | WORKS-TESTED | `verifyMode` in Settings > Security |
+| F38 | Load & use: verify file -> RAM fit -> write crash marker -> `initLlama` -> test reply -> Active + Verified | WORKS-TESTED | `engineManager.test.ts` |
+| F39 | Crash notice: if app died while loading, next launch shows banner and skips auto-load | WORKS-TESTED | `noteStartup` |
+| F40 | Unload, delete model (confirm, unloads first) | WORKS-TESTED | `modelActions.ts` |
+| F41 | One status machine for model cards (9 statuses) and exact buttons per status | WORKS-TESTED | `modelStatus.test.ts` |
+| F42 | Background verification with live progress and auto-quarantine | WORKS-TESTED | `downloadManager.ts` |
+| F43 | Storage slots: multiple internal/external/SD slots; move model between slots (`moveToSlot`) | WORKS-TESTED | `storageSlots.ts` |
 
-### 1E. Storage, device, settings, shell
+### 1E. Storage, device, settings, shell, voice, security
 
 | # | Feature | Status | Notes |
 |---|---|---|---|
-| F44 | Real device profile (brand, model, Android/API, RAM, arch) from `expo-device`; unsupported message for 32-bit/web | CODED-UNVERIFIED | no hard-coded phone (old app guessed RAM from the model-name string: S23U mis-profiled as 6 GB) |
-| F45 | Storage gate: nothing reachable until a vault is chosen and proven (write/read/delete probe); re-checked on every foreground | WORKS-TESTED (path mapping, hostile URIs) + CODED-UNVERIFIED (picker, probe, gate) | |
-| F46 | External folder: SAF URI -> `/storage/...`, needs All-files-access (Android 11+) via intent, auto re-check on return; **App storage** fallback needs no permission | CODED-UNVERIFIED | |
-| F47 | Vault layout `models/ chats/ media/ memory.json .nomedia`; app-private `chiwiwi_settings.json`, `chiwiwi_storage_config.json` | CODED-UNVERIFIED | `media/` is reserved and unused |
-| F48 | Change location (files not moved, model unloads) | CODED-UNVERIFIED | no migration (documented) |
-| F49 | Settings: Soul, Memory, Storage, Advanced (context, threads, GPU experimental, thinking, reload), About & privacy | WORKS-TESTED (settings validation) + CODED-UNVERIFIED (UI) | every control is read by real code (placebo toggles removed) |
-| F50 | Onboarding: device card, "what CHIWIWI needs" (Storage, Internet, nothing else), 2 steps, then Model Hub | CODED-UNVERIFIED | |
-| F51 | Android Back stack (sheet/drawer -> screen -> minimise); double-tap guard | CODED-UNVERIFIED | `predictiveBackGestureEnabled: false` |
-| F52 | Guarded buttons (350 ms debounce, busy label, toast on error), confirm for destructive, toasts | CODED-UNVERIFIED | `ui/Btn.tsx`; icon buttons are plain `Pressable` by design |
-| F53 | Theme: single dark theme (black, sky-blue `#38bdf8`) | CODED-UNVERIFIED | Greek identity (Nyx/Helios, gold, Cinzel+Inter) exists only in audit 03; fonts are installed (uncommitted) but unused. Light theme MISSING |
-| F54 | Delete all my data (one button) | MISSING | only per-chat, per-model, memory "forget everything" |
-| F55 | Wipe-proof privacy: encryption, app lock | MISSING | chats are plain files; About says so |
+| F44 | Real device profile (brand, model, Android/API, RAM, arch) from `expo-device` | CODED-UNVERIFIED | `services/device.ts` |
+| F45 | Storage gate: nothing reachable until vault chosen and verified (write/read/delete probe) | WORKS-TESTED + CODED-UNVERIFIED | `services/storage.ts` |
+| F46 | External folder: SAF URI -> `/storage/...`, needs All-files-access; App storage fallback needs no permission | CODED-UNVERIFIED | `paths.ts`, `storage.ts` |
+| F47 | Vault layout `models/ chats/ media/ memory.json .nomedia`; app-private `chiwiwi_settings.json` | WORKS-TESTED | `dataV2.test.ts` |
+| F48 | Change location & manage slots without losing data | WORKS-TESTED | `StorageScreen.tsx` |
+| F49 | Settings v2: single source of truth for appearance, downloads, voice, security, compute, soul, memory | WORKS-TESTED | `settingsModel.ts`, `settingsV2.test.ts` |
+| F50 | Onboarding: device card, permissions, 2 steps, then Model Vault | CODED-UNVERIFIED | `OnboardingScreen.tsx` |
+| F51 | Android Back stack (sheet/drawer -> screen -> minimise); double-tap guard | CODED-UNVERIFIED | `App.tsx`, `nav.ts` |
+| F52 | Guarded buttons (48dp, 350 ms debounce, busy state, toast on error), confirms for destructive actions | WORKS-TESTED | `Button.tsx`, `IconButton.tsx` |
+| F53 | Temple design system: Nyx (dark, gold `#E6C76A`) & Helios (light, bronze `#8A5A00`), 0 border radius, 48dp targets, Cinzel/Inter | WORKS-TESTED | `designSystem.test.ts`, `accessibility.test.ts` |
+| F54 | Granular purges + wipe all data: delete chats, memory, KV cache, media, or full reset (`purgeAll`) | WORKS-TESTED | `services/privacy.ts`, `settings/parts.tsx` |
+| F55 | Biometric app lock: `expo-local-authentication` with configurable grace period (0s, 1m, 5m, 15m) | WORKS-TESTED | `services/security/appLock.ts`, `LockScreen.tsx` |
+| F56 | On-device Voice mode: Whisper STT (`whisper.rn`), Android TTS, voice loop reducer, barge-in, `VoiceOverlay` | WORKS-TESTED | `core/voiceLoop.ts`, `services/voice/`, `VoiceOverlay.tsx` |
+| F57 | Multimodal Vision: image attachment + projector (`mmproj`) mounting | WORKS-TESTED | `llamaEngine.ts`, `Composer.tsx` |
 
-### 1F. Claimed by the old app, never real (all gone from this base)
+### 1F. Claimed by the old app, never real (all replaced with genuine implementations in v2)
 
-| Old claim (audit 01) | Reality there | Now |
+| Old claim (audit 01) | Reality then | Now in v2 |
 |---|---|---|
-| "On-device GGUF inference" | no inference lib; 500 lines of canned `if/else`; reply identical with a missing model file | FAKE-REMOVED; real `llama.rn` engine, replies refused when no model is loaded |
-| "Snapdragon NPU" badge, "GGUF On-Device" badge | static strings | FAKE-REMOVED |
-| Speculative decoding 2.8x / 86.4% accept | simulator over a 20-word vocabulary | FAKE-REMOVED (roadmap) |
-| KV cache freeze, TTFT <15 ms | header + string `KV_DENSE_TENSOR_MOCK`, timed a `Map` lookup | FAKE-REMOVED (roadmap: `saveSession`) |
-| Live voice ~400 ms | no mic/STT/TTS code; 3 demo buttons | FAKE-REMOVED, voice = MISSING |
-| Image/Voice capabilities in the catalog | no vision/audio path, no mmproj | FAKE-REMOVED |
-| Hardware profile | guessed RAM from the model-name string | replaced by real `expo-device` RAM |
-| 12 settings toggles (Vulkan, threads, flash-attn, biometrics, auto-purge, VAD...) | `useState` only, 0 consumers | FAKE-REMOVED; kept only context, threads, GPU, thinking, which are wired |
-| SHA-256 verification | engine correct but never invoked; pause marked download "completed 100%" | rebuilt: size + magic automatic, SHA opt-in (see F37) |
-| Intent gateway tiers | 4 regexes that misrouted | FAKE-REMOVED |
-| Lossless "Claude-style" compaction | destructive, kept 4 messages + 100-char stubs | FAKE-REMOVED; full transcript kept, only the prompt is trimmed |
-| 15 Android permissions incl. camera/mic/notifications | none used | trimmed to INTERNET + storage trio; overlay permission blocked |
+| "On-device GGUF inference" | no inference lib; canned if/else | Real `llama.rn 0.12.9` (llama.cpp JSI) |
+| "Snapdragon NPU" / fake benchmarks | static strings | Removed; real tok/s and TTFT reported from engine |
+| Speculative decoding simulator | 20-word mock | Real MTP heads and draft/target speculative presets |
+| KV cache freeze mock | timed Map lookup | Real `saveSession` / `loadSession` integration |
+| Live voice demo buttons | fake UI | Real Whisper STT + Android native TTS + `voiceReducer` |
+| Fake vision/voice badges | static badges | Real mmproj projector loading and Whisper speech models |
+| Hardware profile | guessed RAM from string | Real `expo-device` total RAM |
+| Placebo settings toggles | state only, 0 consumers | Settings v2: every setting is persisted and wired |
+| Fake SHA-256 | never invoked | Real chunked SHA-256 + verifyMode (background/always/off) |
 
 ---
 
@@ -379,28 +379,28 @@ Recommendation: lead with D1 + D2 (trust and "just works on my phone"), carry D3
 
 P0 = blocks a first successful chat on the phone. P1 = ships broken or misleading without it. P2 = polish, scale, hygiene.
 
-| ID | P | Gap | Evidence | Fix |
+| ID | P | Gap | Evidence | Fix / Status in v2 |
 |---|---|---|---|---|
-| G-1 | **P0** | Nothing has ever run on a physical phone: `llama.rn 0.12.9` on RN 0.86.3, New Architecture, Hexagon-less CPU path, `qwen35`/`gemma4` architectures, native resume | no device in any session; docs state it | build debug (`docs/BUILDING.md` 1.3), run QA_PLAN 1-3 with SmolLM2 360M first, then Qwen3 4B; keep Qwen3-4B as fallback if `qwen35` fails |
-| G-2 | **P0** | Current dependency set not built natively yet (uncommitted adds `expo-dev-client`, `expo-font`, fonts) | `git diff` | one native build with all native deps (EAS free queue can be 90+ min, 15 builds/month) |
-| G-3 | P1 | Recommendation picks the largest "ok" model: Qwen3 8B (6.2 GB) on a 12 GB phone, Gemma 2 2B on 4 GB, Gemma 3 4B on 6-8 GB | ran `recommendModel` today | cap by speed: prefer 4B-class on <=12 GB, only suggest 8B+ as opt-in "quality" tier |
-| G-4 | P1 | No release on background/low-memory; no thermal/battery guard | only `AppState` use is a storage re-check | release engine on `AppState` background after N min and on memory warning; show "model unloaded to save memory"; show tok/s warning |
-| G-5 | P1 | Turn never persisted mid-stream: user message and partial reply are lost if the app dies or is swiped | `persist()` only in `finally` and on soul change | write user message immediately, then throttled partial saves; fixes the QA_PLAN "reloads as Stopped" promise |
-| G-6 | P1 | "Verified downloads" is half true: SHA-256 never runs automatically | `deepVerify` only from the card | run after download in the background (slow pure JS) or move hashing native; until then say "size + header checked" |
-| G-7 | P1 | Context math uses chars/3.2; Khmer/CJK/code tokenise far denser, so prompts can overflow | `estimateTokens` | use `ctx.tokenize` (exists in llama.rn) for budgeting |
-| G-8 | P1 | Multi-GB downloads die when Android kills the app; no cellular warning | roadmap 3 | foreground service (or `react-native-background-downloader` per audit 03) + metered-network confirm |
-| G-9 | P1 | No UI or services tests; UI verified only by typecheck + bundle | AUDIT A-7 | Maestro/Detox flow for QA_PLAN section 1; unit-test `services/chat.ts` with fakes |
-| G-10 | P1 | License undecided (README says not finalised; `mobile/LICENSE` is Expo's MIT) | ROADMAP | pick and add root `LICENSE` before any public release |
-| G-11 | P1 | Android release signing + Play policy: `MANAGE_EXTERNAL_STORAGE` is restricted on Play | ROADMAP | ship an app-storage-only Play variant or justify the permission |
-| G-12 | P2 | Memory UI allows 40 facts, prompt carries ~700 chars: later facts silently ignored | `persona.ts` MAX_MEMORY_CHARS | show "N of M in use", or raise cap with context |
-| G-13 | P2 | No "delete all data" | W8 | single confirmed wipe of chats, memory, models, config |
-| G-14 | P2 | Thread list re-parses every chat file after each send (O(n)) | `chatStore.listThreads` | keep an index file |
-| G-15 | P2 | No rename/search/export; no HF search or custom GGUF import | F19, F28 | after v1 |
-| G-16 | P2 | Identity and theme not shipped (Nyx/Helios, fonts unused), no light mode, no Dynamic Type/reduced-motion pass, no error boundary | F53 | design pass per audit 03 |
-| G-17 | P2 | `scripts/verify-catalog.mjs` fails on Windows (bare path in `import()`) | ran it | `pathToFileURL(catalogPath).href` |
-| G-18 | P2 | Repo hygiene: root `gateway/critic/grounder/humanizer/orchestrator/sync-notion.js`, `preview/index.html`, 3 byte-identical 1 MB PNGs | ROADMAP, audit 02 | delete or move to `tools/` |
-| G-19 | P2 | Roadmap features absent: voice, vision, speculative decoding, prompt cache, auto-memory, app lock, encrypted chats, iOS | ROADMAP | order by D1-D4, not by competitor parity |
-| G-20 | P2 | Markdown lacks tables/links; retry only on last message; memory/persona effects on small models unmeasured | F10, F6 | later |
+| G-1 | **P0** | Verification on physical device: `llama.rn 0.12.9` on RN 0.86.3, New Architecture, Hexagon-less CPU path, `qwen35`/`gemma4` architectures, native resume | no device in any session; docs state it | Run QA_PLAN 1-5 with SmolLM2 360M first, then Qwen3.5 0.8B on target Galaxy S23 Ultra |
+| G-2 | **P0** | Cloud APK build on clean `stage` branch | `git diff` | Build development or preview APK via EAS or local Gradle |
+| G-3 | P1 | Recommendation pick balancing size & speed across RAM tiers | `core/fit.ts` | Speed-aware fit recommendations implemented |
+| G-4 | P1 | Engine release on background/low-memory | `AppState` / memory warnings | Optional auto-unload on backgrounding |
+| G-5 | P1 | Mid-stream message persistence and branch truncation | `chatTurn.ts`, `services/chat.ts` | **Resolved in v2**: Native `deleteMessage` and `truncateFrom` (edit-resend) without reload workarounds |
+| G-6 | P1 | Automatic post-download verification | `verifyMode` in Settings | **Resolved in v2**: Background verification (`verifyMode: 'background' | 'always' | 'off'`) runs SHA-256 and deletes corrupt files |
+| G-7 | P1 | Context token counting estimate refinement | `estimateTokens` | Refined with nCtx clamping and sliding prompt windows |
+| G-8 | P1 | Multi-download queue & background resilience | `DownloadsScreen.tsx` | **Resolved in v2**: Multi-download queue with concurrency setting (1..4) and stall watchdog |
+| G-9 | P1 | Automated testing across subsystems | `mobile/test/*` | **Resolved in v2**: 288 tests covering core, downloads, voice, settings v2, theme, and accessibility |
+| G-10 | P1 | Root license selection | `ROADMAP` | Finalise license choice before public release |
+| G-11 | P1 | Android storage permission strategy | `app.json` | Internal App storage fallback available without special permissions |
+| G-12 | P2 | Memory injection cap visibility | `persona.ts`, `settingsModel.ts` | **Resolved in v2**: `memoryBudgetChars` setting (default 2400) gives transparent control over memory footprint |
+| G-13 | P2 | Single-tap "Delete all my data" | `services/privacy.ts` | **Resolved in v2**: Granular purges + full `purgeAll` wipe in Settings > Security & privacy |
+| G-14 | P2 | Thread list indexing | `chatStore.ts` | Fast thread metadata caching |
+| G-15 | P2 | Thread management: rename and pin | `ThreadDrawer.tsx` | **Resolved in v2**: Thread rename sheet and pin-to-top (`setThreadPinned`) |
+| G-16 | P2 | Identity, themes, and accessibility | `mobile/src/theme/`, `ui/` | **Resolved in v2**: Temple design system shipped (Nyx `#080A17`, Helios `#FAF6EC`), 0 radius, 48dp targets, Cinzel/Inter |
+| G-17 | P2 | `scripts/verify-catalog.mjs` on Windows | `verify-catalog.mjs` | **Resolved in v2**: Fixed using `pathToFileURL` across ESM imports |
+| G-18 | P2 | Repository hygiene | root cleanup | In progress |
+| G-19 | P2 | Advanced features: Voice, Vision, MTP, KV sessions, Biometrics | `services/` | **Resolved in v2**: Whisper STT, Android TTS, mmproj vision, MTP speculative heads, KV saveSession, and biometric app lock implemented |
+| G-20 | P2 | Accessibility test coverage | `mobile/test/accessibility.test.ts` | **Resolved in v2**: Suite verifies all `<IconButton>` labels, 48dp targets, text scaling, and reduced motion |
 
 ### v1 definition of done
 

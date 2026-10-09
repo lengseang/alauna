@@ -1,131 +1,126 @@
-# CHIWIWI Architecture
+# CHIWIWI Architecture (v2 "Temple")
 
-What is actually in the app (not a wish list; see `ROADMAP.md` for what is not built yet).
+What is actually in the app (verified against the codebase; see `ROADMAP.md` for deferred items).
 
 ## 1. Shape
 
 ```
 mobile/
-  App.tsx                 shell: startup order, storage gate, routes, Android Back
+  App.tsx                 shell: startup order, theme provider, lock screen, storage gate, routes, Android Back
   src/
     core/                 PURE logic. No React, no Expo. Unit-tested under plain Node.
-    services/             adapters to the phone (files, device, llama.cpp, network) + app-wide stores
-    ui/                   React Native screens and components
-    components/Icons.tsx  SVG line icons
-    hooks/useGuardedAction.ts
-  test/                   node:test suites for everything in core/
-scripts/                  verify-catalog.mjs (live Hub check), real-model-check.mjs (manual QA)
+                          (catalog, fit, downloadManager, chatTurn, persona, memory, voiceLoop, settingsModel, sha256)
+    services/             adapters to phone (files, storageSlots, llama.rn, whisper.rn, tts, downloads, security) + stores
+    theme/                Temple design system: tokens, Nyx & Helios palettes, WCAG contrast verification, theme hooks
+    ui/                   React Native screens and primitives (radius 0, 48dp targets, Cinzel/Inter type ramp)
+  test/                   node:test suites for core logic, theme, settings, downloads, voice, and accessibility
+scripts/                  gate.mjs (supervision), verify-catalog.mjs (live HF check), real-model-check.mjs (manual QA)
 ```
 
-**Dependency rule:** `ui -> services -> core`. `core` never imports `services` or `ui`. Anything that
-touches the phone is injected into core as a small interface, which is why the download state machine
-and the engine lifecycle are tested with fakes (`DownloadPlatform`, `EngineDeps`).
+**Dependency rule:** `ui -> services -> core`. `core` never imports `services` or `ui`. Anything that touches the phone is injected into core as a pure interface, which is why the download state machine, voice reducer, and engine lifecycle are tested with fakes (`DownloadPlatform`, `EngineDeps`).
 
-State is held in tiny observable stores (`core/store.ts`) read in React with `useSyncExternalStore`.
-There is no Redux/Context layer.
+State is held in observable stores (`core/store.ts`) read in React with `useSyncExternalStore`.
 
-## 2. Startup (order matters)
+## 2. Startup & Lifecycle (order matters)
 
 `services/lifecycle.ts#bootstrap`:
 
-1. `initSettings()` - load `chiwiwi_settings.json` (app-private).
-2. `initStorage()` - load the saved vault location and **re-prove it is writable**.
-3. `engine.noteStartup()` - if the last run died while loading a model, remember it (probable out-of-memory).
-4. `onStorageReady()` - only now touch data inside the vault: refresh downloads, load memory, open chats.
+1. `initSettings()` - load `chiwiwi_settings.json` (Settings v2 single source of truth). Migrates legacy voice/security configs and syncs download concurrency (`downloads.setConcurrency`).
+2. `initStorage()` - load saved vault location, discover storage slots (`services/storageSlots.ts`), and **re-prove writable**.
+3. `checkAppLock()` - if biometric lock is enabled and grace period elapsed, prompt via `expo-local-authentication`.
+4. `engine.noteStartup()` - if the last run died while mounting a model, note it (prevents crash loop on OOM).
+5. `onStorageReady()` - touch data inside the vault: refresh downloads hub, load memory facts, restore chat threads.
 
 `App.tsx` renders `OnboardingScreen` until storage is `ready`. Nothing else is reachable (ST-1/ST-2).
 
-## 3. Storage (the vault)
+## 3. Storage & Storage Slots (`services/storage.ts`, `services/storageSlots.ts`)
 
-Layout inside the chosen root (`<root>/` is either app-private `…/files/vault` or `<picked>/CHIWIWI`):
+Layout inside each storage slot root:
 
 ```
-models/     *.gguf and *.gguf.part (resumable partials)
+models/     *.gguf, mmproj-*.gguf, *.gguf.part (resumable partials)
 chats/      <threadId>.json
-media/      (reserved)
-memory.json
+media/      cached vision attachments
+memory.json user-managed long-term memory facts
 .nomedia    keeps gallery scanners out
 ```
 
-App-private (never in the vault): `chiwiwi_storage_config.json`, `chiwiwi_settings.json`.
+App-private files (outside the vault): `chiwiwi_settings.json`, `chiwiwi_storage_config.json`.
 
-**Why a path, not just a picker.** The inference engine opens the model by a real file path.
-`llama.rn` (checked in 0.12.9 and 0.13.0-rc) strips `file://` but has no `content://` support, and
-Android's folder picker returns `content://`. So `core/paths.ts#safTreeUriToPath` maps the picked URI to
-`/storage/...`, and `services/storage.ts#probeWritable` **proves** it by writing, reading back and deleting
-a file. On Android 11+ that only succeeds with *All files access*; the UI walks the user to that screen
-and re-checks automatically when they return. If they decline, **app storage** always works.
+**Storage Slots:**
+- Supports multiple volumes: App-private internal storage, Primary external storage, Secondary external (SD card), and custom user-picked directories.
+- Each slot reports capacity, free space, and installed model bytes.
+- Models can be moved between slots (`moveToSlot`) with atomic copy, verify, delete, and cancellation tokens.
+- Downloads are routed to the designated default download slot.
 
-## 4. Downloads (`core/downloadManager.ts` + `services/downloadPlatform.ts`)
+**File Paths vs SAF:** The engine opens models by real filesystem paths. Android folder pickers return `content://` URIs. `core/paths.ts#safTreeUriToPath` maps picked URIs to `/storage/...`, and `services/storage.ts#probeWritable` proves access by write/read/delete probe. On Android 11+ this uses *All files access*; if declined, **App storage** always works without permissions.
 
-- Size and sha256 come from the Hub **repo-tree API** (`core/hf.ts`, `services/hfClient.ts`).
-  (The old code used the CDN `etag`, which is not the file hash, and rejected good downloads.)
-- States: `idle -> resolving -> downloading <-> paused -> finalizing -> completed`, or `error` (with `retryable`).
-- **Resume:** Android native `DownloadTask.resume()` sends `Range: bytes=<offset>-`, truncates to the
-  offset and appends the 206 body. The offset is the partial file's length, so resume survives app
-  restarts. We never add our own `Range` to a fresh task (native `start()` would overwrite the file).
-  Verified against the live CDN: 206 + correct `Content-Range`, and the joined bytes reproduce the published SHA-256.
-  iOS has only in-memory resume data, so after a restart the partial is discarded (best effort).
-- Auto-retry (4x, backoff) from the partial file on network errors; HTTP 4xx is permanent; 416 handled.
-  A retry that moved the file forward by 8 MiB or more refills the budget, so a long download on a flaky network is not killed by four unrelated blips.
-- **Stall watchdog:** the phone can freeze a backgrounded transfer without raising any error. If no new bytes arrive for 45 s
-  (and the user has not paused), the native task is cancelled (the partial file stays) and the same retry path resumes from the partial.
-  Tested with fakes (`downloadManager.test.ts`); the timing on a real phone is a device-only check in `QA_PLAN.md`.
-- Free space is checked before starting (`Paths.availableDiskSpace`, same volume only).
-- Final check: exact size == Hub size, GGUF magic, then atomic `rename` of `*.part`.
-- Optional **deep verify** (full SHA-256 in pure JS, chunked with yields) from the model card.
-- Only one active download; screen keeps awake while it runs. State lives in a singleton, not in a screen,
-  so navigating away never pauses it.
+## 4. Downloads Hub (`core/downloadManager.ts`, `services/downloads.ts`)
 
-## 4b. Model status (`core/modelStatus.ts`)
+- **Multi-download queue:** Concurrency (1..4 parallel transfers) configured in Settings v2 (`downloads.parallel`) and applied at boot.
+- **Queue reordering:** Users can prioritize waiting models with `moveInQueue`.
+- **Live telemetry:** Aggregated and per-file speed (bytes/sec), bytes remaining, ETA, and parts tracking.
+- **Pause & Resume:** Native `DownloadTask.resume()` sends `Range: bytes=<offset>-`, appending to the partial file. Resume survives app restarts.
+- **Auto-retry:** 4x exponential backoff on network failures; budget refills after 8 MiB of progress.
+- **Stall watchdog:** 45 s timeout with zero incoming bytes automatically triggers retry to survive phone background freezes.
+- **Integrity verification:** Exact size matches Hugging Face, GGUF magic header check, followed by atomic rename from `.part`.
+- **Verification modes:** Configured in Settings → Security & privacy (`verifyMode`):
+  - `background`: Usable immediately; SHA-256 completes in background (corrupt files deleted and unloaded).
+  - `always`: Blocks until SHA-256 fingerprint matches Hugging Face.
+  - `off`: Skips post-download SHA-256 computation.
 
-One pure function turns (download state, engine state, verified?) into the status and the list of
-allowed actions on a model card, so every combination is tested and no card shows a dead button.
+## 5. Model Status & Vault (`core/modelStatus.ts`, `core/catalog.ts`)
 
-## 5. Engine (`core/engineManager.ts`, `services/llamaEngine.ts`)
+- One pure state function maps download state, engine state, and verification into 9 explicit states and allowed actions.
+- Catalog contains 110 verified Hugging Face entries across grades C (<=2B), B (2-4B), S (7B+), Coding, Reasoning, Vision, and Uncensored.
+- Every model link resolves on Hugging Face with matching size and sha256 (`scripts/verify-catalog.mjs`).
 
-`InferenceEngine { load, generate, stop, release }`, implemented by `LlamaEngine` over `llama.rn`
-(llama.cpp via JSI). `llama.rn` is `require`d lazily so Expo Go / web shows a clear message instead of crashing.
+## 6. Inference Engine (`core/engineManager.ts`, `services/llamaEngine.ts`)
 
-`EngineManager.mount(spec)`: **verify file -> RAM fit check -> mark `pendingMountModelId` -> load -> test
-generation -> Active + Verified**. A model is "Verified" only if it produced output. If the process is
-killed while loading (out of memory), the marker is still set at next launch and the app says so and
-does not auto-load that model again.
+`InferenceEngine { load, generate, stop, release }` implemented over `llama.rn 0.12.9`:
 
-Decisions:
-- **Chat template:** `completion({messages})` renders the model's own jinja template, so Llama, Qwen,
-  Gemma and DeepSeek each get the right format (the old code applied one of two hard-coded templates, never used).
-- **CPU by default on Android** (`devices: ['CPU']`). GPU is an explicit, experimental setting.
-  The engine ships several CPU variants (`dotprod`, `i8mm`, `opencl`...) and picks one at runtime.
-- **Context size** defaults from real RAM (`core/fit.ts`); users can override it.
-- **Fit rating** = estimated RAM (file + KV cache + overhead) vs. real `totalMemory`; "too heavy" is refused unless forced.
+- **Jinja chat templates:** `completion({messages})` renders each model's native template (Qwen, Llama, Gemma, DeepSeek).
+- **Multimodal vision:** Supports vision models via projector files (`clipModelPath` / mmproj) with `expo-image-picker`.
+- **CPU & GPU backends:** CPU by default with runtime ISA detection (`dotprod`, `i8mm`, `opencl`); experimental GPU toggle with honest fallback reporting.
+- **Memory budget & fit rating:** Real device RAM (`expo-device`) drives fit ratings and context length (`nCtx`).
+- **MTP / Speculative execution:** Supports Multi-Token Prediction and draft/target speculative pairs where compatible.
+- **KV session cache:** Exposes `saveSession` and `loadSession` for warm-start prompt evaluation.
 
-## 6. Chat (`core/chatTurn.ts`, `core/thinking.ts`, `services/chat.ts`)
+## 7. Chat (`core/chatTurn.ts`, `core/thinking.ts`, `services/chat.ts`)
 
-`runAssistantTurn` builds the prompt (system = persona + PAD style + user memories; sliding-window
-history sized to the context), streams tokens, and splits raw output into **reasoning** and **answer**.
+- **Token streaming:** Coalesced at ~15 fps to preserve 60 fps UI responsiveness.
+- **Deterministic reasoning parser:** Extracts `<think>` and `<thinking>` blocks while streaming.
+- **Telemetry:** Real engine timings: time-to-first-token (TTFT), tokens per second (tok/s), prompt tokens.
+- **Message operations:** Native `deleteMessage(threadId, id)` and `truncateFrom(threadId, id)` for branching and edit-resend.
+- **Attachments:** Text files and images (for vision-capable models) with size caps and binary sniffing guards.
+- **Incognito threads:** In-memory only; never written to disk.
 
-- Reasoning markup is parsed deterministically (`<think>`, a template that pre-opens the tag, partial tags
-  while streaming, leaked control tokens). Verified against a real Qwen3 model (`scripts/real-model-check.mjs`).
-- The **process panel** shows real phases (loading -> reading N tokens -> thinking -> writing) and the
-  engine's own timings (tok/s, prompt ms). Nothing in it is invented.
-- Updates are coalesced (~15 fps) so token streaming does not flood React.
-- Failures become inline messages with an action; the app never fabricates a reply.
-- Threads persist as JSON in `chats/`; a message that was streaming when the app died reloads as "stopped".
-  Incognito threads are never written.
+## 8. Persona ("Soul") & Memory (`core/persona.ts`, `core/memory.ts`, `services/soul.ts`)
 
-## 7. Persona and memory
+- **PAD emotional vector:** Pleasure, Arousal, Dominance bipolar sliders (-1..1) generate prompt descriptors and dynamic sampling adjustments (temperature, top-p, top-k, repeat penalty).
+- **Archetypes:** Empathetic Confidant, Sovereign Mentor, Tactical Engineer, Playful Spark.
+- **Live preview:** Loaded model generates a test response with soul parameters; TTS speaks the reply.
+- **Memory budget:** Long-term facts in `<vault>/memory.json` injected into system prompts up to configurable budget (`memoryBudgetChars`, default 2,400 chars).
 
-`core/persona.ts` turns archetype + PAD (warmth/energy/directness) into plain style instructions in the
-system prompt, so the sliders change the output (visible in Settings > Soul). Memory is a user-managed
-list (`/remember ...` or Settings > Memory), capped so it cannot eat the context window.
+## 9. Voice & Audio (`core/voiceLoop.ts`, `services/voice/`)
 
-## 8. Deliberate trade-offs
+- Pure state machine reducer: `idle -> listening -> transcribing -> thinking -> speaking -> listening`.
+- **STT:** On-device Whisper models (`whisper.rn`) downloaded from Hugging Face (`tiny.en`, `base.en`, `small.en`, and multilingual).
+- **TTS:** Native speech synthesis with voice selection, rate (0.25..3), and pitch (0.25..3) controls.
+- **Barge-in:** Speaking can be interrupted by user voice activity or manual tap.
+- **Voice Overlay:** Full-screen UI with animated Eclipse status and live transcript streaming.
 
-- **No Expo Router.** Navigation is a ~40-line stack (`ui/nav.ts`) with Android Back. Router would add
-  native modules (screens/gestures) and build time for a 7-screen app.
-- **No secure storage / encryption of chats.** The vault is plain files the user can open; the About
-  screen says so.
-- **Unused native modules removed** (Reanimated, Worklets, Gesture Handler, image/document pickers,
-  linear-gradient) to shorten the native build.
-- Text attachments only (read as text, 8,000-character cap). Images need a vision model + projector file; see roadmap.
+## 10. Security, Privacy & App Lock (`services/security/`, `services/privacy.ts`)
+
+- **Biometric lock:** `expo-local-authentication` gate with configurable grace period (0s, 1m, 5m, 15m).
+- **Purge controls:** Granular deletion of chats, memory, KV cache, media attachments, or full factory reset (`purgeAll`).
+- **Zero telemetry:** Zero external network requests during chat or inference. Network is used only for user-initiated model downloads.
+
+## 11. Design System ("Temple", `mobile/src/theme/`, `mobile/src/ui/`)
+
+- **Sharp geometry:** `borderRadius: 0` across all UI primitives.
+- **Dual skies:**
+  - **Nyx (dark):** Background `#080A17`, surface `#0F1329`, gold accent `#E6C76A`.
+  - **Helios (light):** Background `#FAF6EC`, surface `#F3ECDB`, bronze accent `#8A5A00`.
+- **Typography:** Inter (400/600) for body and UI; Cinzel (600) for headers and wordmark.
+- **Accessibility:** 48dp minimum touch targets, WCAG AA contrast (4.5:1 text, 3:1 borders), text scaling up to 1.3x, and reduced motion respected throughout animations.
