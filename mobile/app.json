@@ -5,24 +5,24 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#0A0D1C",
+    "backgroundColor": "#080A17",
     "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.chiwiwi.sovereign",
-      "backgroundColor": "#0A0D1C"
+      "backgroundColor": "#080A17"
     },
     "android": {
       "package": "com.chiwiwi.sovereign",
       "versionCode": 1,
-      "backgroundColor": "#0A0D1C",
+      "backgroundColor": "#080A17",
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundColor": "#0A0D1C"
+        "backgroundColor": "#080A17"
       },
       "permissions": [
         "android.permission.INTERNET",
@@ -55,10 +55,10 @@
           "image": "./assets/splash-icon-light.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FBF6EA",
+          "backgroundColor": "#FAF6EC",
           "dark": {
             "image": "./assets/android-icon-foreground.png",
-            "backgroundColor": "#0A0D1C"
+            "backgroundColor": "#080A17"
           }
         }
       ],
