@@ -18,23 +18,53 @@ import type { DownloadFile, DownloadPlatform, ModelFiles, TransferTask } from '.
 import { uriToPath } from '../core/paths.ts';
 import { fetchRemoteFileInfo } from './hfClient.ts';
 import { destFile, fileSize, hashFile, partFile, readHeader } from './modelLibrary.ts';
-import { downloadModelsDir, isStorageReady, locateModelFile, volumeSpace } from './storage.ts';
+import { downloadModelsDir, invalidateModelIndex, isStorageReady, locateModelFile, volumeSpace } from './storage.ts';
 
 const KEEP_AWAKE_TAG = 'chiwiwi-download';
 
 function filesFor(f: DownloadFile): ModelFiles {
   return {
-    destExists: () => destFile(f).exists,
-    destSize: () => fileSize(destFile(f)),
-    partExists: () => partFile(f).exists,
-    partSize: () => fileSize(partFile(f)),
+    destExists: () => {
+      if (!f.dir) {
+        const hit = locateModelFile(f.localName);
+        if (!hit) return false;
+        return hit.file.exists;
+      }
+      return destFile(f).exists;
+    },
+    destSize: () => {
+      if (!f.dir) {
+        const hit = locateModelFile(f.localName);
+        if (!hit) return 0;
+        return fileSize(hit.file);
+      }
+      return fileSize(destFile(f));
+    },
+    partExists: () => {
+      if (!f.dir) {
+        const hit = locateModelFile(`${f.localName}.part`);
+        if (!hit) return false;
+        return hit.file.exists;
+      }
+      return partFile(f).exists;
+    },
+    partSize: () => {
+      if (!f.dir) {
+        const hit = locateModelFile(`${f.localName}.part`);
+        if (!hit) return 0;
+        return fileSize(hit.file);
+      }
+      return fileSize(partFile(f));
+    },
     deletePart: () => {
       const file = partFile(f);
       if (file.exists) file.delete();
+      invalidateModelIndex();
     },
     deleteDest: () => {
       const file = destFile(f);
       if (file.exists) file.delete();
+      invalidateModelIndex();
     },
     readHeader: (which) => readHeader(which === 'part' ? partFile(f) : destFile(f)),
     promotePart: () => {
@@ -43,6 +73,7 @@ function filesFor(f: DownloadFile): ModelFiles {
       if (dest.exists) dest.delete();
       // rename() stays inside one directory, so it is atomic and never crosses volumes.
       part.rename(f.localName);
+      invalidateModelIndex();
     },
   };
 }

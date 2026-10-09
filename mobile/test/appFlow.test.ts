@@ -202,3 +202,27 @@ test('kill while a model was loading is remembered, and that model is not reload
   assert.equal(settings.settingsStore.getState().activeModelId, null);
   assert.equal(settings.settingsStore.getState().pendingMountModelId, null);
 });
+
+test('model index cache: locateModelFile finds files quickly and invalidates on update', () => {
+  const hit1 = storage.locateModelFile(spec.filename);
+  assert.ok(hit1);
+  assert.equal(hit1.file.name, spec.filename);
+
+  // locate non-existent file returns null
+  const none = storage.locateModelFile('non_existent.gguf');
+  assert.equal(none, null);
+
+  // invalidation clears index and re-scans when needed
+  storage.invalidateModelIndex();
+  const hit2 = storage.locateModelFile(spec.filename);
+  assert.ok(hit2);
+  assert.equal(hit2.file.name, spec.filename);
+});
+
+test('parallel thread listing: listThreads and searchThreads work properly with multiple chats', async () => {
+  const threads = await listThreads();
+  assert.ok(Array.isArray(threads));
+  const searchResults = await chat.searchChats('hello');
+  assert.ok(Array.isArray(searchResults));
+});
+

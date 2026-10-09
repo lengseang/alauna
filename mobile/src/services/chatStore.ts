@@ -66,9 +66,10 @@ export const sortThreads = (list: ThreadMeta[]): ThreadMeta[] =>
   list.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
 
 export async function listThreads(): Promise<ThreadMeta[]> {
+  const ids = threadIdsOnDisk();
+  const loaded = await Promise.all(ids.map((id) => loadThread(id)));
   const out: ThreadMeta[] = [];
-  for (const id of threadIdsOnDisk()) {
-    const t = await loadThread(id);
+  for (const t of loaded) {
     if (t && t.messages.length > 0) out.push(metaOf(t));
   }
   return sortThreads(out);
@@ -77,9 +78,10 @@ export async function listThreads(): Promise<ThreadMeta[]> {
 /** Search titles and every message (case-insensitive). ponytail: parses every file, add an index when chats number in the thousands. */
 export async function searchThreads(query: string): Promise<ThreadMeta[]> {
   if (!query.trim()) return listThreads();
+  const ids = threadIdsOnDisk();
+  const loaded = await Promise.all(ids.map((id) => loadThread(id)));
   const out: ThreadMeta[] = [];
-  for (const id of threadIdsOnDisk()) {
-    const t = await loadThread(id);
+  for (const t of loaded) {
     if (!t || t.messages.length === 0) continue;
     const hit = threadMatch(t, query);
     if (hit) out.push(metaOf(t, hit.snippet));
@@ -125,20 +127,23 @@ export interface ThreadIntegrity {
 export async function validateThreads(): Promise<ThreadIntegrity> {
   const out: ThreadIntegrity = { ok: 0, recovered: [], corrupt: [] };
   const dir = io();
-  for (const id of threadIdsOnDisk()) {
-    const name = nameFor(id);
-    let main = false;
-    try {
-      main = dir.exists(name) && sanitizeThread(JSON.parse(await dir.read(name))) !== null;
-    } catch {
-      main = false;
-    }
-    if (main) {
-      out.ok++;
-      continue;
-    }
-    if ((await loadThread(id)) !== null) out.recovered.push(id);
-    else out.corrupt.push(id);
-  }
+  const ids = threadIdsOnDisk();
+  await Promise.all(
+    ids.map(async (id) => {
+      const name = nameFor(id);
+      let main = false;
+      try {
+        main = dir.exists(name) && sanitizeThread(JSON.parse(await dir.read(name))) !== null;
+      } catch {
+        main = false;
+      }
+      if (main) {
+        out.ok++;
+        return;
+      }
+      if ((await loadThread(id)) !== null) out.recovered.push(id);
+      else out.corrupt.push(id);
+    }),
+  );
   return out;
 }

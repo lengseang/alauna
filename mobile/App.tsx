@@ -46,7 +46,6 @@ function Root() {
   const device = getDeviceProfile();
   const wasGated = useRef(false);
   const [auto, setAuto] = useState<AutoLoad>(undefined);
-  const [skipped, setSkipped] = useState(false);
 
   // Real boot: app lock and voice prefs alongside settings -> storage -> crash check -> vault data (lifecycle order).
   useEffect(() => {
@@ -117,9 +116,8 @@ function Root() {
 
   let body: React.ReactNode;
   if (!device.supported) body = <EmptyState brand title="This phone cannot run CHIWIWI" body={device.unsupportedReason ?? 'This device is not supported.'} />;
-  else if (!dataReady || !security.loaded || (auto === undefined && ready)) body = <BootScreen steps={plan.steps} fraction={plan.fraction} location={location} />;
+  else if (!dataReady || !security.loaded) body = <BootScreen steps={plan.steps} fraction={plan.fraction} location={location} />;
   else if (!ready) body = <OnboardingScreen />;
-  else if (auto && !auto.done && !skipped) body = <BootScreen steps={plan.steps} fraction={plan.fraction} location={location} onContinue={() => setSkipped(true)} />;
   else body = <RouteStack />;
 
   return (

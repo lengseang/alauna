@@ -13,6 +13,7 @@ import { MEMORY_FILE } from './memory.ts';
 import { hashFile, installedFiles, readHeader, type CancelToken } from './modelLibrary.ts';
 import {
   chatsDir,
+  invalidateModelIndex,
   isStorageReady,
   listSlotRoots,
   locateModelFile,
@@ -238,6 +239,7 @@ export async function moveModel(spec: ModelSpec, toSlotId: string, opts: MoveMod
   );
   for (const c of copies) if (!shared.has(uriToPath(c.src.uri))) deleteQuietly(c.src);
   progress('cleaning', 1);
+  invalidateModelIndex();
   refreshSlots();
   return { ok: true, bytes, verified: verify === 'sha256' && spec.sha256 ? 'sha256' : 'size', from: src.slotId, to: dest.id };
 }

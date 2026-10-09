@@ -9,7 +9,7 @@ import { companionLocalName, installFiles, type DownloadFile, type FileKind } fr
 import { hasGgufMagic } from '../core/gguf.ts';
 import { pathToUri, uriToPath } from '../core/paths.ts';
 import { Sha256Digest } from '../core/sha256.ts';
-import { downloadModelsDir, locateModelFile } from './storage.ts';
+import { downloadModelsDir, invalidateModelIndex, locateModelFile } from './storage.ts';
 
 export const PARTIAL_SUFFIX = '.part';
 
@@ -21,11 +21,20 @@ function folderFor(localName: string, dir?: string): Directory {
 }
 
 export function destFile(f: Pick<DownloadFile, 'localName' | 'dir'>): File {
+  if (!f.dir) {
+    const hit = locateModelFile(f.localName);
+    if (hit) return hit.file;
+  }
   return new File(folderFor(f.localName, f.dir), f.localName);
 }
 
 export function partFile(f: Pick<DownloadFile, 'localName' | 'dir'>): File {
-  return new File(folderFor(f.localName, f.dir), `${f.localName}${PARTIAL_SUFFIX}`);
+  const partName = `${f.localName}${PARTIAL_SUFFIX}`;
+  if (!f.dir) {
+    const hit = locateModelFile(partName);
+    if (hit) return hit.file;
+  }
+  return new File(folderFor(f.localName, f.dir), partName);
 }
 
 const modelEntry = (spec: ModelSpec): DownloadFile => installFiles(spec, { vision: false })[0];
@@ -167,6 +176,7 @@ export function deleteModelFiles(spec: ModelSpec): void {
       // ignore: reported by the caller if the file is still there
     }
   }
+  invalidateModelIndex();
 }
 
 /** Bytes on disk for these models, companions and partials included (shared projectors counted once). */

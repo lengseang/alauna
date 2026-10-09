@@ -185,6 +185,7 @@ function activate(config: StorageConfig): StorageConfig {
   const next: StorageConfig = { ...config, version: 2, slots: config.slots ?? previous.filter((s) => s.rootPath !== config.rootPath) };
   saveConfig(next);
   storageStore.setState({ status: 'ready', config: next, reason: undefined });
+  invalidateModelIndex();
   return next;
 }
 
@@ -392,6 +393,46 @@ export function downloadModelsDir(): Directory {
   return dir;
 }
 
+interface SlotIndex {
+  files: Map<string, File>;
+  timestamp: number;
+}
+
+const slotIndices = new Map<string, SlotIndex>();
+const INDEX_TTL_MS = 5000;
+
+/** Invalidate cached directory listing for model slots (e.g. after download, move, or delete). */
+export function invalidateModelIndex(slotId?: string): void {
+  if (slotId) {
+    slotIndices.delete(slotId);
+  } else {
+    slotIndices.clear();
+  }
+}
+
+function getSlotFileMap(slot: StorageSlot): Map<string, File> {
+  const now = Date.now();
+  const cached = slotIndices.get(slot.id);
+  if (cached && now - cached.timestamp < INDEX_TTL_MS) {
+    return cached.files;
+  }
+  const files = new Map<string, File>();
+  try {
+    const dir = slotModelsDir(slot);
+    if (dir.exists) {
+      for (const entry of dir.list()) {
+        if (entry instanceof File) {
+          files.set(entry.name, entry);
+        }
+      }
+    }
+  } catch {
+    // unavailable slot (e.g. unmounted SD card)
+  }
+  slotIndices.set(slot.id, { files, timestamp: now });
+  return files;
+}
+
 /** Find a model file (or `.part`) by name in any slot: the download slot first, then the vault, then the others. */
 export function locateModelFile(filename: string): { slotId: string; file: File } | null {
   let order: StorageSlot[];
@@ -403,8 +444,9 @@ export function locateModelFile(filename: string): { slotId: string; file: File 
   }
   for (const slot of order) {
     try {
-      const f = new File(slotModelsDir(slot), filename);
-      if (f.exists) return { slotId: slot.id, file: f };
+      const fileMap = getSlotFileMap(slot);
+      const hit = fileMap.get(filename);
+      if (hit) return { slotId: slot.id, file: hit };
     } catch {
       // unavailable slot (SD card removed): skip
     }
@@ -426,6 +468,7 @@ function addSlot(slot: StorageSlot): AddSlotResult {
   const next: StorageConfig = { ...config, slots: [...(config.slots ?? []), slot] };
   saveConfig(next);
   storageStore.setState({ config: next });
+  invalidateModelIndex();
   return { ok: true, slot };
 }
 
@@ -466,13 +509,8 @@ export async function addFolderSlot(pickedUri?: string): Promise<AddSlotResult> 
 /** Model files (complete or partial) in a slot. */
 export function slotModelFileNames(slot: StorageSlot): string[] {
   try {
-    const dir = slotModelsDir(slot);
-    if (!dir.exists) return [];
-    return dir
-      .list()
-      .filter((e): e is File => e instanceof File)
-      .map((f) => f.name)
-      .filter((n) => /\.gguf(\.part)?$/i.test(n));
+    const map = getSlotFileMap(slot);
+    return Array.from(map.keys()).filter((n) => /\.gguf(\.part)?$/i.test(n));
   } catch {
     return [];
   }
@@ -491,6 +529,7 @@ export function removeSlot(id: string): { ok: true } | { ok: false; message: str
   saveConfig(next);
   storageStore.setState({ config: next, slots: storageStore.getState().slots.filter((s) => s.id !== id) });
   if (settingsStore.getState().storage?.modelSlotId === id) updateSettings({ storage: { modelSlotId: null } });
+  invalidateModelIndex(id);
   return { ok: true };
 }
 
