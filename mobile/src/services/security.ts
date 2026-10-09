@@ -11,11 +11,9 @@
  */
 import { useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
-import { Paths } from 'expo-file-system';
 import { DEFAULT_SECURITY_PREFS, lockMethodFrom, sanitizeSecurityPrefs, shouldLockOnResume, type LockMethod, type SecurityPrefs } from '../core/appLock.ts';
-import { readWithFallback, writeAtomic } from '../core/atomicFile.ts';
 import { createStore } from '../core/store.ts';
-import { directoryIO } from './atomicIo.ts';
+import { initSettings, settingsStore, updateSection } from './settings.ts';
 
 export type { LockMethod, SecurityPrefs } from '../core/appLock.ts';
 export { LOCK_AFTER_CHOICES, DEFAULT_SECURITY_PREFS, sanitizeSecurityPrefs } from '../core/appLock.ts';
@@ -44,12 +42,18 @@ export const securityStore = createStore<SecurityState>({
   message: null,
 });
 
+settingsStore.subscribe(() => {
+  const { security } = settingsStore.getState();
+  const current = securityStore.getState();
+  if (current.appLock !== security.appLock || current.lockAfterMinutes !== security.lockAfterMinutes) {
+    securityStore.setState({ appLock: security.appLock, lockAfterMinutes: security.lockAfterMinutes });
+  }
+});
+
 export function useSecurity(): SecurityState {
   return useSyncExternalStore(securityStore.subscribe, securityStore.getState);
 }
 
-const FILE_NAME = 'chiwiwi_security.json';
-const io = () => directoryIO(() => Paths.document);
 const NOT_IN_BUILD = 'App lock (expo-local-authentication) is not in this build of the app. Install the latest APK.';
 const NO_SCREEN_LOCK = 'App lock is paused: this phone has no screen lock. Set a PIN, pattern or fingerprint in Android settings and it turns back on.';
 
@@ -63,14 +67,6 @@ function auth(): AuthModule | null {
 
 function prefsOf(s: SecurityState): SecurityPrefs {
   return { appLock: s.appLock, lockAfterMinutes: s.lockAfterMinutes };
-}
-
-function save(prefs: SecurityPrefs): void {
-  try {
-    writeAtomic(io(), FILE_NAME, JSON.stringify(prefs));
-  } catch {
-    // keep running with the in-memory value
-  }
 }
 
 /** What the phone can unlock with right now (the user may add/remove a screen lock at any time). */
@@ -138,12 +134,8 @@ let initPromise: Promise<void> | null = null;
 export function initSecurity(): Promise<void> {
   if (!initPromise) {
     initPromise = (async () => {
-      let prefs = DEFAULT_SECURITY_PREFS;
-      try {
-        prefs = (await readWithFallback(io(), FILE_NAME, (t) => sanitizeSecurityPrefs(JSON.parse(t)))) ?? DEFAULT_SECURITY_PREFS;
-      } catch {
-        // corrupt -> defaults (lock off) rather than a locked-out app
-      }
+      await initSettings();
+      const prefs = settingsStore.getState().security;
       securityStore.setState({ ...prefs, loaded: true });
       installAppStateListener();
       await engageLock();
@@ -205,7 +197,7 @@ export type SetLockResult = { ok: true } | { ok: false; message: string };
 export async function setAppLock(enabled: boolean): Promise<SetLockResult> {
   if (!enabled) {
     securityStore.setState({ appLock: false, status: 'unlocked', message: null });
-    save(prefsOf(securityStore.getState()));
+    updateSection('security', { appLock: false });
     return { ok: true };
   }
   const method = await detectLockMethod();
@@ -213,14 +205,14 @@ export async function setAppLock(enabled: boolean): Promise<SetLockResult> {
   const r = await authenticate('Confirm it is you to turn on app lock');
   if (!r.ok) return { ok: false, message: r.message };
   securityStore.setState({ appLock: true, status: 'unlocked', message: null });
-  save(prefsOf(securityStore.getState()));
+  updateSection('security', { appLock: true });
   return { ok: true };
 }
 
 export function setLockAfterMinutes(minutes: number): void {
   const prefs = sanitizeSecurityPrefs({ ...prefsOf(securityStore.getState()), lockAfterMinutes: minutes });
   securityStore.setState(prefs);
-  save(prefs);
+  updateSection('security', { lockAfterMinutes: prefs.lockAfterMinutes });
 }
 
 /** Lock immediately (e.g. a "Lock now" button). */

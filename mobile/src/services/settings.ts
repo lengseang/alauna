@@ -17,11 +17,13 @@ export type {
   ComputeSettings,
   DownloadSettings,
   SamplingSettings,
+  SecurityPrefs,
   Settings,
   SpeculativeSettings,
   SttSettings,
   TtsSettings,
   VerifiedInfo,
+  VoicePrefs,
 } from '../core/settingsModel.ts';
 export { importLegacyDownloads } from '../core/settingsModel.ts';
 
@@ -34,6 +36,10 @@ export const SETTINGS_FILE = 'chiwiwi_settings.json';
 const LEGACY_THEME_FILE = 'chiwiwi_theme.json';
 /** Written by downloadPrefs.ts; imported once into `downloads`. */
 const LEGACY_DOWNLOADS_FILE = 'chiwiwi_downloads.json';
+/** Written by services/voice/prefs.ts; imported once into `voice`. */
+const LEGACY_VOICE_FILE = 'chiwiwi_voice.json';
+/** Written by services/security.ts; imported once into `security`. */
+const LEGACY_SECURITY_FILE = 'chiwiwi_security.json';
 
 export const settingsStore = createStore<SettingsState>({ ...sanitizeSettings(DEFAULT_SETTINGS), loaded: false });
 
@@ -54,11 +60,15 @@ export function initSettings(): Promise<void> {
       let next: Settings | null = null;
       let hadAppearance = false;
       let hadDownloads = false;
+      let hadVoice = false;
+      let hadSecurity = false;
       try {
         next = await readWithFallback(io(), SETTINGS_FILE, (text) => {
           const raw = JSON.parse(text) as Record<string, unknown>;
           hadAppearance = !!raw && typeof raw === 'object' && 'appearance' in raw;
           hadDownloads = !!raw && typeof raw === 'object' && 'downloads' in raw;
+          hadVoice = !!raw && typeof raw === 'object' && ('voice' in raw || 'stt' in raw || 'tts' in raw);
+          hadSecurity = !!raw && typeof raw === 'object' && ('security' in raw || 'biometricLock' in raw);
           return sanitizeSettings(raw);
         });
       } catch {
@@ -79,6 +89,26 @@ export function initSettings(): Promise<void> {
           const f = new File(Paths.document, LEGACY_DOWNLOADS_FILE);
           const imported = f.exists ? importLegacyDownloads(JSON.parse(await f.text())) : null;
           if (imported) next = { ...next, downloads: imported };
+        } catch {
+          // nothing to import
+        }
+      }
+      if (!hadVoice) {
+        try {
+          const f = new File(Paths.document, LEGACY_VOICE_FILE);
+          if (f.exists) {
+            next = sanitizeSettings({ ...next, voice: JSON.parse(await f.text()) });
+          }
+        } catch {
+          // nothing to import
+        }
+      }
+      if (!hadSecurity) {
+        try {
+          const f = new File(Paths.document, LEGACY_SECURITY_FILE);
+          if (f.exists) {
+            next = sanitizeSettings({ ...next, security: JSON.parse(await f.text()) });
+          }
         } catch {
           // nothing to import
         }
@@ -125,7 +155,7 @@ export async function updateSettingsNow(patch: Partial<Settings>): Promise<void>
   await flushSettings();
 }
 
-type Section = 'compute' | 'sampling' | 'speculative' | 'stt' | 'tts' | 'appearance' | 'storage' | 'downloads';
+type Section = 'compute' | 'sampling' | 'speculative' | 'stt' | 'tts' | 'appearance' | 'storage' | 'downloads' | 'voice' | 'security';
 /** Patch one nested section: `updateSection('compute', { threads: 6 })`. */
 export function updateSection<K extends Section>(key: K, partial: Partial<Settings[K]>): void {
   updateSettings({ [key]: { ...settingsStore.getState()[key], ...partial } } as Partial<Settings>);

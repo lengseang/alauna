@@ -9,6 +9,11 @@
  *    `applySettingsPatch` updates `compute`.
  */
 import { ARCHETYPES, clampPad, type PADVector, type SoulArchetypeKey } from './persona.ts';
+import { DEFAULT_SECURITY_PREFS, sanitizeSecurityPrefs, type SecurityPrefs } from './appLock.ts';
+import { DEFAULT_VOICE_PREFS, sanitizeVoicePrefs, type VoicePrefs } from './voiceModels.ts';
+
+export type { SecurityPrefs } from './appLock.ts';
+export type { VoicePrefs } from './voiceModels.ts';
 
 export const SETTINGS_VERSION = 2;
 
@@ -135,13 +140,18 @@ export interface Settings {
   /** Selected speculative preset card (UI index). */
   activePresetIndex: number;
   // ---- voice
+  voice: VoicePrefs;
+  /** Mirror of voice.sttModelId and voice.vadThreshold */
   stt: SttSettings;
+  /** Mirror of voice.ttsEnabled, voice.ttsVoice, voice.ttsRate, voice.ttsPitch */
   tts: TtsSettings;
   // ---- privacy & security
   /** Block every network request except downloads the user started (services/networkGate.ts). */
   offlineStrict: boolean;
   /** New chats start as incognito (never written to disk). */
   incognitoDefault: boolean;
+  security: SecurityPrefs;
+  /** Mirror of security.appLock */
   biometricLock: boolean;
   /** Delete chats not updated for this many days at launch (pinned chats are kept). 0 = off. */
   autoPurgeDays: number;
@@ -192,11 +202,13 @@ function defaults(): Settings {
     sampling: { ...DEFAULT_SAMPLING },
     speculative: { enabled: false, draftModelId: null, nDraft: 4, pMin: 0.75 },
     activePresetIndex: 0,
-    stt: { model: 'whisper-tiny', vadThreshold: 0.5 },
-    tts: { enabled: true, voiceId: null, rate: 1, pitch: 1 },
+    voice: { ...DEFAULT_VOICE_PREFS },
+    stt: { model: DEFAULT_VOICE_PREFS.sttModelId, vadThreshold: DEFAULT_VOICE_PREFS.vadThreshold },
+    tts: { enabled: DEFAULT_VOICE_PREFS.ttsEnabled, voiceId: DEFAULT_VOICE_PREFS.ttsVoice, rate: DEFAULT_VOICE_PREFS.ttsRate, pitch: DEFAULT_VOICE_PREFS.ttsPitch },
     offlineStrict: true,
     incognitoDefault: false,
-    biometricLock: false,
+    security: { ...DEFAULT_SECURITY_PREFS },
+    biometricLock: DEFAULT_SECURITY_PREFS.appLock,
     autoPurgeDays: 0,
     appearance: { theme: 'system', textScale: 1, haptics: true, reducedMotion: false },
     storage: { modelSlotId: null },
@@ -320,19 +332,31 @@ export function sanitizeSettings(raw: unknown): Settings {
   };
   out.activePresetIndex = int(r.activePresetIndex, 0, 99, d.activePresetIndex);
 
-  const stt = obj(r.stt);
-  out.stt = { model: str(stt.model, 64, d.stt.model).trim() || d.stt.model, vadThreshold: num(stt.vadThreshold, 0, 1, d.stt.vadThreshold) };
-  const tts = obj(r.tts);
-  out.tts = {
-    enabled: bool(tts.enabled, d.tts.enabled),
-    voiceId: strOrNull(tts.voiceId, 200, d.tts.voiceId),
-    rate: num(tts.rate, 0.25, 2, d.tts.rate),
-    pitch: num(tts.pitch, 0.5, 2, d.tts.pitch),
-  };
+  if (r.voice && typeof r.voice === 'object') {
+    out.voice = sanitizeVoicePrefs(r.voice);
+  } else {
+    const stt = obj(r.stt);
+    const tts = obj(r.tts);
+    out.voice = sanitizeVoicePrefs({
+      ...d.voice,
+      ...(typeof stt.model === 'string' && stt.model.trim() ? { sttModelId: stt.model.trim() } : {}),
+      ...(typeof stt.vadThreshold === 'number' ? { vadThreshold: stt.vadThreshold } : {}),
+      ...(typeof tts.enabled === 'boolean' ? { ttsEnabled: tts.enabled } : {}),
+      ...(typeof tts.voiceId === 'string' || tts.voiceId === null ? { ttsVoice: tts.voiceId } : {}),
+      ...(typeof tts.rate === 'number' ? { ttsRate: tts.rate } : {}),
+      ...(typeof tts.pitch === 'number' ? { ttsPitch: tts.pitch } : {}),
+    });
+  }
 
   out.offlineStrict = bool(r.offlineStrict, d.offlineStrict);
   out.incognitoDefault = bool(r.incognitoDefault, d.incognitoDefault);
-  out.biometricLock = bool(r.biometricLock, d.biometricLock);
+  if (r.security && typeof r.security === 'object') {
+    out.security = sanitizeSecurityPrefs(r.security);
+  } else if (typeof r.biometricLock === 'boolean') {
+    out.security = sanitizeSecurityPrefs({ ...d.security, appLock: r.biometricLock });
+  } else {
+    out.security = sanitizeSecurityPrefs(d.security);
+  }
   out.autoPurgeDays = int(r.autoPurgeDays, 0, MAX_AUTO_PURGE_DAYS, d.autoPurgeDays);
 
   const ap = obj(r.appearance);
@@ -350,11 +374,14 @@ export function sanitizeSettings(raw: unknown): Settings {
   return withMirrors(out);
 }
 
-/** Recompute the v1 mirror fields from `compute` (the source of truth). */
+/** Recompute the v1 mirror fields from `compute`, `voice`, and `security` (the sources of truth). */
 function withMirrors(s: Settings): Settings {
   s.threads = s.compute.threads;
   s.useGpu = s.compute.backend === 'gpu';
   s.contextOverride = s.compute.nCtx;
+  s.biometricLock = s.security.appLock;
+  s.stt = { model: s.voice.sttModelId, vadThreshold: s.voice.vadThreshold };
+  s.tts = { enabled: s.voice.ttsEnabled, voiceId: s.voice.ttsVoice, rate: s.voice.ttsRate, pitch: s.voice.ttsPitch };
   s.version = SETTINGS_VERSION;
   return s;
 }
@@ -372,6 +399,26 @@ export function applySettingsPatch(prev: Settings, patch: Partial<Settings>): Se
     if ('contextOverride' in patch) c.nCtx = patch.contextOverride ?? null;
     if ('useGpu' in patch) c.backend = patch.useGpu ? 'gpu' : 'cpu';
     next.compute = c;
+  }
+  if (!('security' in patch) && 'biometricLock' in patch && typeof patch.biometricLock === 'boolean') {
+    next.security = { ...prev.security, appLock: patch.biometricLock };
+  }
+  if (!('voice' in patch)) {
+    let vChanged = false;
+    const v = { ...prev.voice };
+    if (patch.stt && typeof patch.stt === 'object') {
+      const stt = patch.stt as Partial<SttSettings>;
+      if (typeof stt.model === 'string') { v.sttModelId = stt.model; vChanged = true; }
+      if (typeof stt.vadThreshold === 'number') { v.vadThreshold = stt.vadThreshold; vChanged = true; }
+    }
+    if (patch.tts && typeof patch.tts === 'object') {
+      const tts = patch.tts as Partial<TtsSettings>;
+      if (typeof tts.enabled === 'boolean') { v.ttsEnabled = tts.enabled; vChanged = true; }
+      if (tts.voiceId !== undefined) { v.ttsVoice = tts.voiceId; vChanged = true; }
+      if (typeof tts.rate === 'number') { v.ttsRate = tts.rate; vChanged = true; }
+      if (typeof tts.pitch === 'number') { v.ttsPitch = tts.pitch; vChanged = true; }
+    }
+    if (vChanged) next.voice = v;
   }
   return sanitizeSettings(next);
 }

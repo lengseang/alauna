@@ -69,8 +69,7 @@ export function SecurityScreen() {
             switchValue={sec.appLock}
             onSwitch={async (on) => {
               const r = await setAppLock(on);
-              if (r.ok) updateSettings({ biometricLock: on });
-              else showToast(r.message);
+              if (!r.ok) showToast(r.message);
             }}
           />
           <ChoiceRow title="Lock again" options={LOCK_AFTER_CHOICES} value={sec.lockAfterMinutes as (typeof LOCK_AFTER_CHOICES)[number]} onChange={setLockAfterMinutes} label={labelMinutes} disabled={!sec.appLock} />

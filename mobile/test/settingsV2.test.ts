@@ -44,8 +44,8 @@ test('settings v2: every field is validated and clamped on its own', () => {
   });
   assert.deepEqual(s.sampling, { temperature: 0, topP: 1, topK: 200, minP: DEFAULT_SAMPLING.minP, repeatPenalty: 1 });
   assert.deepEqual(s.speculative, { enabled: true, draftModelId: null, nDraft: 16, pMin: 1 });
-  assert.deepEqual(s.stt, { model: 'whisper-tiny', vadThreshold: 1 });
-  assert.deepEqual(s.tts, { enabled: false, voiceId: 'en-us-x', rate: 2, pitch: 0.5 });
+  assert.deepEqual(s.stt, { model: 'whisper-base.en', vadThreshold: 0.95 });
+  assert.deepEqual(s.tts, { enabled: false, voiceId: 'en-us-x', rate: 3, pitch: 0.25 });
   assert.equal(s.autoPurgeDays, MAX_AUTO_PURGE_DAYS);
   assert.deepEqual(s.appearance, { theme: 'system', textScale: 1.5, haptics: false, reducedMotion: true });
   assert.deepEqual(s.storage, { modelSlotId: null });
@@ -92,6 +92,27 @@ test('settings v2: v1 setters write through to compute; compute writes update th
   assert.deepEqual([s.threads, s.useGpu, s.contextOverride], [null, false, null]);
   s = applySettingsPatch(s, { contextOverride: 10_000_000 });
   assert.equal(s.compute.nCtx, 32768, 'patches are clamped too');
+});
+
+test('settings v2: voice and security are single source of truth; mirrors stay in sync', () => {
+  let s = applySettingsPatch(DEFAULT_SETTINGS, { biometricLock: true });
+  assert.equal(s.security.appLock, true);
+  assert.equal(s.biometricLock, true);
+
+  s = applySettingsPatch(s, { security: { appLock: false, lockAfterMinutes: 5 } });
+  assert.equal(s.security.appLock, false);
+  assert.equal(s.security.lockAfterMinutes, 5);
+  assert.equal(s.biometricLock, false);
+
+  s = applySettingsPatch(s, { stt: { model: 'whisper-base', vadThreshold: 0.6 } });
+  assert.equal(s.voice.sttModelId, 'whisper-base');
+  assert.equal(s.voice.vadThreshold, 0.6);
+  assert.equal(s.stt.model, 'whisper-base');
+  assert.equal(s.stt.vadThreshold, 0.6);
+
+  s = applySettingsPatch(s, { voice: { ...s.voice, sttModelId: 'whisper-small-q5_1', ttsEnabled: false } });
+  assert.equal(s.stt.model, 'whisper-small-q5_1');
+  assert.equal(s.tts.enabled, false);
 });
 
 test('soul: the six archetypes of the old app are back with their PAD defaults', () => {
