@@ -29,6 +29,12 @@ Read `GEMINI.md` first (hard rules). Foundation and backbone are done; you build
 - [ ] T6 Helios (light) splash + adaptive icon: hand-tune colours from `docs/DESIGN.md` tokens; owner approves visually.
 - [ ] T7 Refresh stale docs: `docs/ARCHITECTURE.md`, `docs/QA_PLAN.md`, `docs/REQUIREMENTS.md`, `docs/audit/00-master-spec.md` to match v2 (read the code, do not guess).
 
+- [ ] T8 Add models (owner request 2026-10-09). Search Hugging Face (https://huggingface.co/api/models?search=<q>&sort=downloads; quantizers: bartowski, unsloth, mradermacher, lmstudio-community, NousResearch) and add REAL, verified GGUF entries to `mobile/src/core/catalogData.ts` (copy an existing entry's shape; fill `uniqueTag`, `bestFor`, size, sha256 from the HF API `lfs.oid`):
+  - Hermes (Nous Research, neutral/steerable): Hermes 3 8B (a Llama 3.1 8B entry already exists, keep it) and **Hermes 4 14B** (~9 GB Q4_K_M, tight on 12 GB: mark honestly in `bestFor`). Also look for Hermes 4 smaller sizes (e.g. 8B/70B-no) that fit a phone.
+  - Dolphin (Eric Hartford, refusal-free finetunes): Dolphin 3.0 in 8B (exists), **14B** and **24B** if a Dolphin 3.x/Mistral-Small-based build exists (24B ≈ 14 GB: add only if it can load on 12 GB; otherwise list as "too large for this phone" in the report, do not add).
+  - Mistral: **Mistral NeMo 12B** (base/instruct; an abliterated NeMo and Rocinante exist) and **Mistral Small 3.2 (24B)**: 24B is ~14 GB at Q4, too large for 12 GB RAM; add a smaller Q2/Q3 quant ONLY if it is verified to load, else report it as not addable.
+  - Run `node scripts/verify-catalog.mjs --write` then plain `node scripts/verify-catalog.mjs` (must exit 0), tests, gate, `node scripts/gate.mjs --update`. Never invent a repo/file; list anything not found.
+
 ### Needs the phone (owner reports results, you fix)
 - [ ] P1 First load: Qwen3.5 0.8B → "Ready" → streams a reply with real tok/s. Fix whatever fails.
 - [ ] P2 Download pause/resume/kill-app/resume; background verification finishing; mismatch path.
