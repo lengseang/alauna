@@ -7,6 +7,7 @@ import { formatDuration, formatPercent } from '../core/format.ts';
 import { createStore } from '../core/store.ts';
 import { nextSentences } from '../core/voiceChunker.ts';
 import { engine } from '../services/engine.ts';
+import { stopGeneration } from '../services/chat.ts';
 import { showToast } from '../services/toast.ts';
 import { speak, stopSpeaking, TTS_MISSING, ttsStore } from '../services/voice/tts.ts';
 import { makeStyles } from '../theme';
@@ -76,9 +77,12 @@ function useElapsed(active: boolean, startMs: number): number {
 }
 
 /** "Loading <model> 42%": subscribes to the engine itself so the message list does not re-render for it. */
-function LoadingLine({ modelName }: { modelName: string }) {
+function LoadingLine({ modelName, startMs }: { modelName: string; startMs: number }) {
   const p = useSyncExternalStore(engine.store.subscribe, () => engine.store.getState().loadProgress);
-  return <LiveLine text={`Loading ${modelName} ${formatPercent(p)}`} />;
+  const elapsed = useElapsed(true, startMs);
+  return (
+    <LiveLine text={`Loading ${modelName} ${formatPercent(p)}${elapsed >= 1 ? ` · ⏱ ${Math.round(elapsed)}s` : ''}`} />
+  );
 }
 
 function LiveLine({ text }: { text: string }) {
@@ -88,6 +92,43 @@ function LiveLine({ text }: { text: string }) {
       <PulseDot />
       <Text variant="small" tone="accent">
         {text}
+      </Text>
+    </View>
+  );
+}
+
+function VisionReadingLine({ message: m }: { message: ChatMessage }) {
+  const s = useStyles();
+  const elapsed = useElapsed(true, m.createdAt);
+  const tokenEst = m.promptTokensEst ?? 1300;
+  return (
+    <View style={s.visionCard} accessibilityLiveRegion="polite">
+      <View style={s.live}>
+        <PulseDot />
+        <Text variant="small" tone="accent">
+          Analyzing image features (~{tokenEst} tokens) · ⏱ {Math.round(elapsed)}s
+        </Text>
+      </View>
+      <Text variant="small" tone="muted" style={s.visionDesc}>
+        Multimodal vision models evaluate image embeddings in memory before generating words. This prefill takes 15–45s on mobile hardware.
+      </Text>
+    </View>
+  );
+}
+
+function ReadingLine({ message: m }: { message: ChatMessage }) {
+  const s = useStyles();
+  const elapsed = useElapsed(true, m.createdAt);
+  const isImage = !!m.notice?.toLowerCase().includes('image') || !!m.attachments?.some((a) => a.kind === 'image');
+  if (isImage) {
+    return <VisionReadingLine message={m} />;
+  }
+  const text = m.notice ?? `Reading your message${m.promptTokensEst ? ` (~${m.promptTokensEst} tokens)` : ''}`;
+  return (
+    <View style={s.live} accessibilityLiveRegion="polite">
+      <PulseDot />
+      <Text variant="small" tone="accent">
+        {elapsed >= 2 ? `${text} · ⏱ ${Math.round(elapsed)}s` : text}
       </Text>
     </View>
   );
@@ -183,20 +224,26 @@ export const MessageRow = React.memo(function MessageRow({ message: m, isLast, b
   return (
     <FadeIn enabled={fresh} style={s.ai}>
       <Pressable onLongPress={actions} delayLongPress={350} accessibilityHint="Hold for copy, regenerate, read aloud, delete" style={s.aiBody}>
-        {live && m.phase === 'loading' ? <LoadingLine modelName={modelName} /> : null}
-        {live && m.phase === 'reading' ? <LiveLine text={m.notice ?? `Reading your message${m.promptTokensEst ? ` (~${m.promptTokensEst} tokens)` : ''}`} /> : null}
+        {live && m.phase === 'loading' ? <LoadingLine modelName={modelName} startMs={m.createdAt} /> : null}
+        {live && m.phase === 'reading' ? <ReadingLine message={m} /> : null}
         {hasReasoning || (live && m.phase === 'thinking') ? <Reasoning message={m} live={live} /> : null}
         {m.text ? <Markdown text={m.text} /> : null}
         {live && m.phase === 'answering' ? <PulseDot size={10} /> : null}
 
         {m.status === 'stopped' ? <Text variant="small">Stopped{m.text ? '' : ' before any answer'}.</Text> : null}
-        {m.notice ? <Text variant="small">{m.notice}</Text> : null}
+        {m.notice && !live ? <Text variant="small">{m.notice}</Text> : null}
         {stats ? (
           <Text variant="small" accessibilityLabel={stats.join(', ')}>
             {stats.join(' · ')}
           </Text>
         ) : null}
       </Pressable>
+
+      {live ? (
+        <View style={s.liveActions}>
+          <Button label="Cancel reply" variant="quiet" icon="stop" onPress={() => stopGeneration()} />
+        </View>
+      ) : null}
 
       {m.status === 'error' && m.error ? (
         <Notice
@@ -235,6 +282,22 @@ const useStyles = makeStyles(({ colors, space }) => ({
   reasoning: { gap: space.xs },
   reasonHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 48 },
   reasonBody: { borderLeftWidth: 2, borderLeftColor: colors.border, paddingLeft: space.md },
+  visionCard: {
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.accent,
+    gap: space.xs,
+  },
+  visionDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  liveActions: {
+    flexDirection: 'row',
+    marginTop: space.xs,
+  },
   attachments: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   thumb: { width: 120, height: 120, backgroundColor: colors.surface },
   fileChip: { flexDirection: 'row', alignItems: 'center', gap: space.xs, maxWidth: 240 },

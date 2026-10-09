@@ -292,3 +292,45 @@ test('turn: vision attachment emits analyzing image notice and clamps maxTokens 
   assert.ok(calledParams.maxTokens >= 64);
 });
 
+test('turn: cancellation via AbortSignal aborts turn immediately before or during streaming', async () => {
+  const abortCtrl = new AbortController();
+  abortCtrl.abort();
+  const s = streamer(['Should not run']);
+  const { inp } = input(plain, s.generate, { signal: abortCtrl.signal });
+  const out = await runAssistantTurn(inp);
+  assert.equal(out.status, 'stopped');
+  assert.equal(out.notice, 'Stopped by user.');
+  assert.equal(s.seen.length, 0);
+
+  // Active abort mid-turn
+  const activeCtrl = new AbortController();
+  let count = 0;
+  const slowStreamer = streamer(['Hello ', 'world']);
+  const { inp: inp2 } = input(plain, async (p) => {
+    activeCtrl.abort();
+    return slowStreamer.generate(p);
+  }, { signal: activeCtrl.signal });
+  const out2 = await runAssistantTurn(inp2);
+  assert.equal(out2.status, 'stopped');
+  assert.equal(out2.notice, 'Stopped by user.');
+});
+
+test('turn: vision prompt counting runs once without repeating loops when image tokens dominate', async () => {
+  let countCalls = 0;
+  const imgAttachment = { kind: 'image' as const, name: 'scene.png', content: '', truncated: false, path: '/vault/scene.png' };
+  const s = streamer(['A dog']);
+  const { inp, updates } = input(plain, s.generate, {
+    attachments: [imgAttachment],
+    nCtx: 2048,
+    userText: 'what is this',
+    countPromptTokens: async () => {
+      countCalls++;
+      return 1320; // 1320 tokens for image + prompt
+    },
+  });
+  const out = await runAssistantTurn(inp);
+  assert.equal(out.status, 'done');
+  assert.equal(countCalls, 1, 'vision prompt counting should not repeat loops');
+  assert.match(updates[0].notice ?? '', /Analyzing image \(~1320 tokens\)/);
+});
+

@@ -31,6 +31,8 @@ export interface TurnInput {
   sampling?: SamplingSettings;
   /** Backend label to store in the reply's stats ("CPU" / "GPU (...)"). */
   backend?: string;
+  /** Optional abort signal to cancel generation at any point (during prefill, reasoning, or answer). */
+  signal?: AbortSignal;
   /**
    * Exact prompt size from the model's own tokenizer (null = cannot count). When given, the prompt is re-trimmed until
    * it really fits, which the character-based estimate cannot guarantee for Khmer, CJK, digits or code.
@@ -59,6 +61,8 @@ export function wantsThinking(spec: ModelSpec, thinkingEnabled: boolean): boolea
 
 export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
   const { spec, now } = input;
+  const priorText = input.continuation?.priorText ?? '';
+  const priorReasoning = input.continuation?.priorReasoning ?? '';
   const thinking = wantsThinking(spec, input.thinkingEnabled);
   const replyBudget = replyBudgetFor(spec, input.nCtx, thinking);
   const userContent = withAttachments(input.userText, input.attachments);
@@ -73,12 +77,25 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
       replyBudget,
       tokenScale,
     });
+  if (input.signal?.aborted) {
+    return {
+      text: priorText,
+      rawText: priorText,
+      reasoning: priorReasoning || undefined,
+      status: 'stopped',
+      phase: 'done',
+      notice: 'Stopped by user.',
+    };
+  }
+
   let built = build(1);
   let countedPromptTokens: number | null = null;
-  if (input.countPromptTokens) {
+  if (input.countPromptTokens && !input.signal?.aborted) {
     const allowance = Math.max(256, input.nCtx - replyBudget);
     let scale = 1;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    const maxAttempts = userImages.length > 0 ? 1 : 3;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (input.signal?.aborted) break;
       let real: number | null = null;
       try {
         real = await input.countPromptTokens(built.messages, thinking);
@@ -87,10 +104,23 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
       }
       if (real !== null) countedPromptTokens = real;
       if (real === null || real <= allowance) break;
+      // Trimming user text can only recover tokens from text, not from image embeddings.
+      if (userImages.length > 0) break;
       // The estimate was too low for this text: scale it by the error we just observed (+5%) and trim again.
       scale *= Math.max(1.1, (real / Math.max(1, built.estimatedPromptTokens)) * 1.05);
       built = build(scale);
     }
+  }
+
+  if (input.signal?.aborted) {
+    return {
+      text: priorText,
+      rawText: priorText,
+      reasoning: priorReasoning || undefined,
+      status: 'stopped',
+      phase: 'done',
+      notice: 'Stopped by user.',
+    };
   }
 
   const notes: string[] = [];
@@ -101,20 +131,19 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
   let forcedOpen = spec.thinking === 'always';
   let thinkStartedAt: number | null = null;
   let thinkEndedAt: number | null = null;
-  const priorText = input.continuation?.priorText ?? '';
-  const priorReasoning = input.continuation?.priorReasoning ?? '';
   let lastStreamedRaw = '';
   let lastParsedAnswer = '';
   let lastParsedReasoning = '';
 
+  const actualPromptEst = countedPromptTokens ?? built.estimatedPromptTokens;
   input.onUpdate({
     status: 'streaming',
     phase: 'reading',
-    promptTokensEst: built.estimatedPromptTokens,
+    promptTokensEst: actualPromptEst,
     text: priorText,
     reasoning: priorReasoning || '',
     notice: userImages.length > 0
-      ? `Analyzing ${userImages.length === 1 ? 'image' : `${userImages.length} images`}${built.estimatedPromptTokens ? ` (~${built.estimatedPromptTokens} tokens)` : ''}`
+      ? `Analyzing ${userImages.length === 1 ? 'image' : `${userImages.length} images`}${actualPromptEst ? ` (~${actualPromptEst} tokens)` : ''}`
       : notes.join(' ') || undefined,
   });
 
@@ -143,6 +172,7 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
         forcedOpen = forcedOpen || info.thinkingForcedOpen;
       },
       onText: (raw) => {
+        if (input.signal?.aborted) return;
         lastStreamedRaw = raw;
         const p = track(raw);
         lastParsedAnswer = p.answer;
@@ -187,33 +217,34 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
       }
     }
 
+    const isAborted = !!input.signal?.aborted || result.interrupted;
     const cutOff = isMessageCutOff({
       role: 'assistant',
       text: finalRawAnswer,
-      status: error ? 'error' : result.interrupted ? 'stopped' : 'done',
-      interrupted: result.interrupted,
+      status: error ? 'error' : isAborted ? 'stopped' : 'done',
+      interrupted: isAborted,
       contextFull: result.contextFull,
       generatedTokens: result.generatedTokens,
       maxTokens: safeMaxTokens,
     });
 
-    const finalAnswer = (result.interrupted || cutOff) ? closeUnclosedMarkup(finalRawAnswer) : finalRawAnswer;
+    const finalAnswer = (isAborted || cutOff) ? closeUnclosedMarkup(finalRawAnswer) : finalRawAnswer;
     const thinkSeconds = thinkStartedAt !== null ? Math.max(0, ((thinkEndedAt ?? endedAt) - thinkStartedAt) / 1000) : undefined;
     return {
       text: finalAnswer,
       rawText: finalRawAnswer,
       reasoning: finalReasoning || undefined,
-      status: error ? 'error' : result.interrupted ? 'stopped' : 'done',
+      status: error ? 'error' : isAborted ? 'stopped' : 'done',
       canContinue: !error && cutOff,
       stats,
       thinkSeconds,
       error,
       phase: 'done',
-      notice: notes.join(' ') || undefined,
+      notice: isAborted ? 'Stopped by user.' : notes.join(' ') || undefined,
     };
   } catch (e) {
     const err = friendlyEngineError(e);
-    const isAbort = /stop|abort|cancel|interrupted/i.test(String(e)) || /stop|abort|cancel|interrupted/i.test(err);
+    const isAbort = !!input.signal?.aborted || /stop|abort|cancel|interrupted/i.test(String(e)) || /stop|abort|cancel|interrupted/i.test(err);
     if (isAbort || lastParsedAnswer.trim().length > 0 || lastParsedReasoning.trim().length > 0 || priorText.trim().length > 0) {
       const cleanedLast = input.continuation
         ? stripRedundantCodeFence(stripContinuationPreamble(lastParsedAnswer), priorText)

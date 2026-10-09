@@ -25,11 +25,6 @@ import { useKeyboardVisible } from './useKeyboard';
 
 const MAX_ATTACHMENTS = 3;
 const selectSending = () => chatStore.getState().sending;
-const selectLoading = () => {
-  const s = chatStore.getState();
-  const last = s.thread.messages[s.thread.messages.length - 1];
-  return s.sending && last?.phase === 'loading';
-};
 
 /** One attachment waiting in the composer. `picked` = fresh from the picker (its copied image is ours to delete). */
 interface Item {
@@ -76,7 +71,6 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
   const s = useStyles();
   const settings = useSettings();
   const sending = useSyncExternalStore(chatStore.subscribe, selectSending);
-  const loadingModel = useSyncExternalStore(chatStore.subscribe, selectLoading);
   const draft = useSyncExternalStore(draftStore.subscribe, draftStore.getState);
 
   const [input, setInput] = useState('');
@@ -229,7 +223,7 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
           </Pressable>
 
           {sending ? (
-            <IconButton icon="stop" label="Stop generating" tone="filled" disabled={loadingModel} onPress={() => stopGeneration()} />
+            <IconButton icon="stop" label="Stop generating" tone="filled" onPress={() => stopGeneration()} />
           ) : canSend ? (
             <IconButton icon="send" label="Send" tone="filled" onPress={send} />
           ) : (

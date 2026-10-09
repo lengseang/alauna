@@ -82,7 +82,7 @@ export function useChatState(): ChatState {
 
 export type SendResult =
   | { ok: true }
-  | { ok: false; reason: 'empty' | 'busy' | 'no_storage' | 'no_model' | 'not_installed' | 'no_vision' | 'engine'; message: string };
+  | { ok: false; reason: 'empty' | 'busy' | 'no_storage' | 'no_model' | 'not_installed' | 'no_vision' | 'engine' | 'stopped'; message: string };
 
 const NO_VISION =
   'This model cannot see images. Load a vision model (one that comes with an image projector) or remove the image and send the text.';
@@ -330,6 +330,8 @@ export async function regenerate(): Promise<SendResult> {
   return runTurn(prev, true);
 }
 
+let currentTurnAbort: (() => void) | null = null;
+
 /** Continue generating the last cut-off or stopped assistant message seamlessly. */
 export async function continueGeneration(): Promise<SendResult> {
   const { thread, sending } = chatStore.getState();
@@ -349,6 +351,9 @@ export async function continueGeneration(): Promise<SendResult> {
     ms.map((m) => (m.id === last.id ? { ...m, text: priorText, status: 'stopped' as const } : m)),
   );
 
+  const abortController = new AbortController();
+  currentTurnAbort = () => abortController.abort();
+
   chatStore.setState({ sending: true });
   patchMessage(last.id, { status: 'streaming', phase: 'answering', canContinue: false });
   void persist(false);
@@ -357,10 +362,19 @@ export async function continueGeneration(): Promise<SendResult> {
     const needsLoad = !engine.isReady(spec.id);
     if (needsLoad) {
       const mounted = await engine.mount(spec);
+      if (abortController.signal.aborted) {
+        patchMessage(last.id, { status: 'stopped', phase: 'done', notice: 'Stopped by user.' });
+        return { ok: false, reason: 'stopped', message: 'Stopped by user.' };
+      }
       if (!mounted.ok) {
         patchMessage(last.id, { status: 'error', error: mounted.message, phase: 'done' });
         return { ok: false, reason: 'engine', message: mounted.message };
       }
+    }
+
+    if (abortController.signal.aborted) {
+      patchMessage(last.id, { status: 'stopped', phase: 'done', notice: 'Stopped by user.' });
+      return { ok: false, reason: 'stopped', message: 'Stopped by user.' };
     }
 
     const settings = settingsStore.getState();
@@ -390,6 +404,11 @@ export async function continueGeneration(): Promise<SendResult> {
     const sampling = padToSampling(threadSoul.pad, threadSoul.toneIntensity, settings.sampling);
     await engine.preparePrefix(system, settings.thinkingEnabled && spec.thinking !== 'none');
 
+    if (abortController.signal.aborted) {
+      patchMessage(last.id, { status: 'stopped', phase: 'done', notice: 'Stopped by user.' });
+      return { ok: false, reason: 'stopped', message: 'Stopped by user.' };
+    }
+
     let pending: Partial<ChatMessage> | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let lastSaved = Date.now();
@@ -415,6 +434,7 @@ export async function continueGeneration(): Promise<SendResult> {
       thinkingEnabled: settings.thinkingEnabled,
       sampling,
       backend: engine.state.info?.backend,
+      signal: abortController.signal,
       continuation: {
         priorText,
         priorReasoning,
@@ -423,6 +443,7 @@ export async function continueGeneration(): Promise<SendResult> {
       countPromptTokens: (messages, thinking) => engine.countPromptTokens(messages, thinking),
       now: () => Date.now(),
       onUpdate: (patch) => {
+        if (abortController.signal.aborted) return;
         pending = { ...(pending ?? {}), ...patch };
         if (!timer) timer = setTimeout(flush, 66);
       },
@@ -432,6 +453,7 @@ export async function continueGeneration(): Promise<SendResult> {
     patchMessage(last.id, outcome);
     return outcome.status === 'error' ? { ok: false, reason: 'engine', message: outcome.error ?? 'Continuation failed.' } : { ok: true };
   } finally {
+    currentTurnAbort = null;
     chatStore.setState({ sending: false });
     await persist();
   }
@@ -445,6 +467,9 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
   const needsLoad = !engine.isReady(spec.id);
   const priorHistory = toHistory(chatStore.getState().thread.messages);
   const wasBlank = chatStore.getState().thread.messages.length === 0;
+
+  const abortController = new AbortController();
+  currentTurnAbort = () => abortController.abort();
 
   chatStore.setState({ sending: true });
   setMessages(
@@ -462,10 +487,19 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
   try {
     if (needsLoad) {
       const mounted = await engine.mount(spec);
+      if (abortController.signal.aborted) {
+        patchMessage(assistantId, { status: 'stopped', phase: 'done', notice: 'Stopped by user.' });
+        return { ok: false, reason: 'stopped', message: 'Stopped by user.' };
+      }
       if (!mounted.ok) {
         patchMessage(assistantId, { status: 'error', error: mounted.message, phase: 'done' });
         return { ok: false, reason: 'engine', message: mounted.message };
       }
+    }
+
+    if (abortController.signal.aborted) {
+      patchMessage(assistantId, { status: 'stopped', phase: 'done', notice: 'Stopped by user.' });
+      return { ok: false, reason: 'stopped', message: 'Stopped by user.' };
     }
 
     if (imagePaths(userMessage.attachments).length > 0 && !engine.supportsVision()) {
@@ -507,6 +541,11 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
     // KV session cache: restore (or evaluate + save) the system-prompt prefix before the reply. Never throws.
     await engine.preparePrefix(system, settings.thinkingEnabled && spec.thinking !== 'none');
 
+    if (abortController.signal.aborted) {
+      patchMessage(assistantId, { status: 'stopped', phase: 'done', notice: 'Stopped by user.' });
+      return { ok: false, reason: 'stopped', message: 'Stopped by user.' };
+    }
+
     // Coalesce token updates (~15 fps) so long answers do not flood React with renders.
     let pending: Partial<ChatMessage> | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -534,10 +573,12 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
       thinkingEnabled: settings.thinkingEnabled,
       sampling,
       backend: engine.state.info?.backend,
+      signal: abortController.signal,
       generate: (p) => engine.generate(p),
       countPromptTokens: (messages, thinking) => engine.countPromptTokens(messages, thinking),
       now: () => Date.now(),
       onUpdate: (patch) => {
+        if (abortController.signal.aborted) return;
         pending = { ...(pending ?? {}), ...patch };
         if (!timer) timer = setTimeout(flush, 66);
       },
@@ -547,11 +588,29 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
     patchMessage(assistantId, outcome);
     return outcome.status === 'error' ? { ok: false, reason: 'engine', message: outcome.error ?? 'Generation failed.' } : { ok: true };
   } finally {
+    currentTurnAbort = null;
     chatStore.setState({ sending: false });
     await persist();
   }
 }
 
 export async function stopGeneration(): Promise<void> {
+  if (currentTurnAbort) {
+    currentTurnAbort();
+    currentTurnAbort = null;
+  }
   await engine.stop();
+  const s = chatStore.getState();
+  if (s.sending) {
+    const last = s.thread.messages[s.thread.messages.length - 1];
+    if (last && last.role === 'assistant' && (last.status === 'streaming' || last.phase !== 'done')) {
+      patchMessage(last.id, {
+        status: 'stopped',
+        phase: 'done',
+        notice: last.notice ?? 'Stopped by user.',
+      });
+    }
+    chatStore.setState({ sending: false });
+    void persist();
+  }
 }
