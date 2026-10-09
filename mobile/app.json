@@ -2,7 +2,7 @@
   "expo": {
     "name": "CHIWIWI",
     "slug": "chiwiwi",
-    "version": "1.0.0",
+    "version": "1.0.4",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#080A17",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.chiwiwi.sovereign",
-      "versionCode": 3,
+      "versionCode": 4,
       "backgroundColor": "#080A17",
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [

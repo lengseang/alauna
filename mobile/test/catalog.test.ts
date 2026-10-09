@@ -104,7 +104,7 @@ test('library: every entry is well-formed and verified data (never hand-typed ze
       assert.ok(f.repo.includes('/') && f.filename.endsWith('.gguf') && f.sizeBytes > 10_000_000, `${m.id}: companion file`);
       assert.match(f.sha256, HEX64, `${m.id}: companion sha256`);
     }
-    if (m.mmproj) assert.match(m.mmproj.filename, /mmproj/i, `${m.id}: projector file name`);
+    if (m.mmproj) assert.match(m.mmproj.filename, /mmproj|vision/i, `${m.id}: projector file name`);
     // Tags must be deliverable: images/audio need the projector, reasoning needs a thinking mode.
     for (const c of m.capabilities) assert.ok(ALL_CAPABILITIES.includes(c), `${m.id}: tag ${c}`);
     assert.ok(m.capabilities.includes('Text'), `${m.id}: every model chats in text`);

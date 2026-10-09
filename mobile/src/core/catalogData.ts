@@ -958,4 +958,13 @@ export const MODEL_DATA: ModelData[] = [
     kvBytesPerToken: 163_840, contextLength: 1_024_000, published: '2024-07-18',
     description: 'Official 12B parameter model built by Mistral AI and NVIDIA. Features 128k context window, state-of-the-art multilingual reasoning, and Apache 2.0 license.',
   },
+  {
+    id: 'glm-5.3-flash-uncensored-mixed', name: 'GLM-5.3 Flash Uncensored Mixed Quant', family: 'GLM', paramsB: 240, role: 'Heavy (16 GB phones)', priority: 0,
+    uniqueTag: '#1MContextMoE', bestFor: 'Massive 1M-context uncensored reasoning and creative exploration with vision input.',
+    capabilities: ['Text', 'Image'], thinking: 'none', contentPolicy: 'Uncensored', quantization: 'Mixed IQ2/Q2K', license: 'mit', chatTemplate: 'chatml', draftKey: 'glm-5.3',
+    repo: 'Baekpica/GLM-5.3-Flash-Uncensored-Mixed-Quant-GGUF', filename: 'GLM-5.3-Flash-Uncensored-Mixed-IQ2XXS-IQ2XS-Q2K.gguf', sizeBytes: 93_920_031_264, sha256: '7f6f96df758b5d651561c2f06ffdd0d1075a24f10654320e24e7d66c48db6017',
+    mmproj: { repo: 'Baekpica/GLM-5.3-Flash-Uncensored-Mixed-Quant-GGUF', filename: 'GLM-5.3-Flash-Uncensored-BF16-Vision.gguf', sizeBytes: 1_127_280_960, sha256: 'e7f71610840eb4df88164ac1eda36bf1ea0449e140ebcd6afba458c7c54b04d7' },
+    kvBytesPerToken: 47_104, contextLength: 1_048_576, published: '2026-10-07',
+    description: 'Massive 94 GB uncensored mixed-quant MoE model with native 1M context and vision projector. Built from orcarouter/GLM-5.3-Flash-Uncensored-FP8 with IQ2_XS and Q2_K.',
+  },
 ];

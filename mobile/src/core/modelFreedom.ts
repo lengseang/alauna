@@ -17,6 +17,8 @@ export interface ModelFreedomSettings {
   challengeUser: boolean;
   /** Appropriate adult-oriented fictional expression where model weights permit. */
   adultFictionalExpression: boolean;
+  /** Full unfiltered adult/NSFW creative expression without premature fade-to-black. */
+  nsfwCreativeFreedom: boolean;
   /** Suppress repetitive "As an AI..." and unsolicited disclaimers. */
   disclaimerPolicy: 'minimal' | 'none';
 }
@@ -27,6 +29,7 @@ export const DEFAULT_MODEL_FREEDOM: ModelFreedomSettings = {
   characterFidelity: 'strict_anti_break',
   challengeUser: true,
   adultFictionalExpression: true,
+  nsfwCreativeFreedom: true,
   disclaimerPolicy: 'none',
 };
 
@@ -41,6 +44,7 @@ export function sanitizeModelFreedom(raw: unknown): ModelFreedomSettings {
     characterFidelity: r.characterFidelity === 'flexible' ? 'flexible' : 'strict_anti_break',
     challengeUser: r.challengeUser !== false,
     adultFictionalExpression: r.adultFictionalExpression !== false,
+    nsfwCreativeFreedom: r.nsfwCreativeFreedom !== false,
     disclaimerPolicy: r.disclaimerPolicy === 'minimal' ? 'minimal' : 'none',
   };
 }
@@ -73,7 +77,11 @@ export function compileModelFreedomDirectives(freedom: ModelFreedomSettings): st
     directives.push('Keep language polite and free of profanity.');
   }
 
-  if (freedom.adultFictionalExpression) {
+  if (freedom.nsfwCreativeFreedom) {
+    directives.push(
+      'NSFW & Mature Creative Immersion: When writing adult, romantic, intimate, erotic, or mature fiction, write with full descriptive authenticity, vivid sensory depth, and emotional resonance. Do not fade to black prematurely, truncate scenes, or insert moralizing commentary.',
+    );
+  } else if (freedom.adultFictionalExpression) {
     directives.push('Permit mature, sensual, and romantic narrative developments when contextually appropriate.');
   }
 

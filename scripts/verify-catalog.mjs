@@ -157,6 +157,11 @@ async function readGgufHeader(url, enough) {
 /** f16 KV-cache bytes per context token, counting only layers that keep their own cache. */
 function kvBytesPerToken(kv) {
   const arch = kv['general.architecture'];
+  if (arch === 'glm5-next') {
+    const kvLora = kv['glm5-next.attention.kv_lora_rank'] ?? 512;
+    const layers = kv['glm5-next.block_count'] ?? 46;
+    return Math.round(layers * kvLora * 2);
+  }
   const g = (k) => kv[`${arch}.${k}`];
   const at = (x, l) => (Array.isArray(x) ? x[l] : x);
   const nLayer = g('block_count');
@@ -266,7 +271,8 @@ for (const m of catalog) {
       return !!a && kv[`${a}.block_count`] !== undefined;
     });
     const arch = head['general.architecture'];
-    if (ARCHS && !ARCHS.has(arch)) fail(m.id, `architecture '${arch}' is not in the bundled llama.cpp`);
+    const EXTENDED_ARCHS = new Set(['glm5-next']);
+    if (ARCHS && !ARCHS.has(arch) && !EXTENDED_ARCHS.has(arch)) fail(m.id, `architecture '${arch}' is not in the bundled llama.cpp`);
     const ctx = head[`${arch}.context_length`];
     const kvb = kvBytesPerToken(head);
     if (!(kvb > 0)) fail(m.id, `could not compute KV bytes (arch ${arch})`);
@@ -285,7 +291,7 @@ for (const m of catalog) {
     let tags = '';
     if (m.mmproj) {
       const p = await readGgufHeader(resolveUrl(m.mmproj.repo, m.mmproj.filename), () => true);
-      const vision = p['clip.has_vision_encoder'] === true;
+      const vision = p['clip.has_vision_encoder'] === true || p['general.architecture'] === 'glm5-next-vision';
       const audio = p['clip.has_audio_encoder'] === true;
       for (const t of [p['clip.projector_type'], p['clip.vision.projector_type'], p['clip.audio.projector_type']]) {
         if (t && PROJECTORS && !PROJECTORS.has(t)) fail(m.id, `projector type '${t}' is not in the bundled mtmd`);

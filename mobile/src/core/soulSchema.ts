@@ -26,7 +26,8 @@ export type SoulCategory =
   | 'explorer'
   | 'diplomat'
   | 'strategist'
-  | 'creator';
+  | 'creator'
+  | 'companion';
 
 export const SOUL_CATEGORIES: SoulCategory[] = [
   'sage',
@@ -39,6 +40,7 @@ export const SOUL_CATEGORIES: SoulCategory[] = [
   'diplomat',
   'strategist',
   'creator',
+  'companion',
 ];
 
 // --- Chapter 01: Identity & Character

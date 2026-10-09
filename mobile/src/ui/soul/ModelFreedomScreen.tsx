@@ -10,7 +10,7 @@ import { Switch } from '../Switch';
 import { Tag } from '../Tag';
 import { Text } from '../Text';
 
-type FreedomPresetKey = 'safe' | 'balanced' | 'unrestricted' | 'creative_roleplay';
+type FreedomPresetKey = 'safe' | 'balanced' | 'unrestricted' | 'creative_roleplay' | 'unfiltered_nsfw';
 
 const PRESETS: Record<FreedomPresetKey, ModelFreedomSettings> = {
   safe: {
@@ -19,6 +19,7 @@ const PRESETS: Record<FreedomPresetKey, ModelFreedomSettings> = {
     characterFidelity: 'flexible',
     challengeUser: false,
     adultFictionalExpression: false,
+    nsfwCreativeFreedom: false,
     disclaimerPolicy: 'minimal',
   },
   balanced: {
@@ -27,6 +28,7 @@ const PRESETS: Record<FreedomPresetKey, ModelFreedomSettings> = {
     characterFidelity: 'strict_anti_break',
     challengeUser: true,
     adultFictionalExpression: false,
+    nsfwCreativeFreedom: false,
     disclaimerPolicy: 'minimal',
   },
   unrestricted: {
@@ -35,6 +37,7 @@ const PRESETS: Record<FreedomPresetKey, ModelFreedomSettings> = {
     characterFidelity: 'strict_anti_break',
     challengeUser: true,
     adultFictionalExpression: true,
+    nsfwCreativeFreedom: true,
     disclaimerPolicy: 'none',
   },
   creative_roleplay: {
@@ -43,6 +46,16 @@ const PRESETS: Record<FreedomPresetKey, ModelFreedomSettings> = {
     characterFidelity: 'strict_anti_break',
     challengeUser: true,
     adultFictionalExpression: true,
+    nsfwCreativeFreedom: true,
+    disclaimerPolicy: 'none',
+  },
+  unfiltered_nsfw: {
+    profanityAndBluntness: 'unfiltered',
+    complexFictionalThemes: true,
+    characterFidelity: 'strict_anti_break',
+    challengeUser: true,
+    adultFictionalExpression: true,
+    nsfwCreativeFreedom: true,
     disclaimerPolicy: 'none',
   },
 };
@@ -72,6 +85,7 @@ export function ModelFreedomScreen() {
       freedom.characterFidelity === p.characterFidelity &&
       freedom.challengeUser === p.challengeUser &&
       freedom.adultFictionalExpression === p.adultFictionalExpression &&
+      freedom.nsfwCreativeFreedom === p.nsfwCreativeFreedom &&
       freedom.disclaimerPolicy === p.disclaimerPolicy
     );
   };
@@ -86,8 +100,13 @@ export function ModelFreedomScreen() {
       <View style={s.section}>
         <Text variant="label">FREEDOM PRESETS</Text>
         <View style={s.presetRow}>
-          {(['safe', 'balanced', 'unrestricted', 'creative_roleplay'] as const).map((key) => {
-            const label = key === 'creative_roleplay' ? 'Creative RP' : key.charAt(0).toUpperCase() + key.slice(1);
+          {(['safe', 'balanced', 'creative_roleplay', 'unrestricted', 'unfiltered_nsfw'] as const).map((key) => {
+            const label =
+              key === 'creative_roleplay'
+                ? 'Creative RP'
+                : key === 'unfiltered_nsfw'
+                  ? 'Unfiltered NSFW'
+                  : key.charAt(0).toUpperCase() + key.slice(1);
             return (
               <Tag
                 key={key}
@@ -211,6 +230,29 @@ export function ModelFreedomScreen() {
               label="Adult fictional expression"
               value={freedom.adultFictionalExpression}
               onValueChange={(v) => setPatch({ adultFictionalExpression: v })}
+            />
+          </View>
+        </Card>
+
+        <Card style={s.card}>
+          <View style={s.toggleRow}>
+            <View style={s.toggleText}>
+              <Text variant="body" style={{ fontWeight: '600' }}>
+                Unfiltered NSFW & Adult Immersion
+              </Text>
+              <Text variant="small" tone="muted">
+                Full uncensored descriptive creative fiction without premature fade-to-black, scene truncation, or moralizing.
+              </Text>
+            </View>
+            <Switch
+              label="Unfiltered NSFW immersion"
+              value={freedom.nsfwCreativeFreedom}
+              onValueChange={(v) =>
+                setPatch({
+                  nsfwCreativeFreedom: v,
+                  adultFictionalExpression: v ? true : freedom.adultFictionalExpression,
+                })
+              }
             />
           </View>
         </Card>
