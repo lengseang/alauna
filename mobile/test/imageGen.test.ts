@@ -5,6 +5,7 @@ import { planGeneration } from '../src/core/imageGen/adaptivePlanner.ts';
 import {
   IMAGE_MODEL_MANIFESTS,
   getImageModelManifest,
+  getUncensoredImageModels,
   verifyModelIntegrity,
 } from '../src/core/imageGen/modelRegistry.ts';
 import { ImageGenerationCoordinator } from '../src/core/imageGen/coordinator.ts';
@@ -155,3 +156,24 @@ test('imageGen coordinator: handles cancellation gracefully', async () => {
   assert.equal(res.status, 'cancelled');
   assert.ok(res.currentStageDescription?.includes('cancelled'));
 });
+
+test('imageGen modelRegistry: registers verified uncensored on-device diffusion models', () => {
+  const uncensored = getUncensoredImageModels();
+  assert.ok(uncensored.length >= 5, 'Must provide at least 5 verified uncensored diffusion models');
+
+  const modelIds = uncensored.map((m) => m.modelId);
+  assert.ok(modelIds.includes('cyberrealistic-pony-v12-q4'));
+  assert.ok(modelIds.includes('realvisxl-v5-q4'));
+  assert.ok(modelIds.includes('pony-diffusion-v6-xl-q8'));
+  assert.ok(modelIds.includes('dreamshaper-7-lcm-f16'));
+  assert.ok(modelIds.includes('cyberrealistic-xl-v4-q4'));
+
+  for (const m of uncensored) {
+    assert.equal(m.contentPolicy, 'uncensored');
+    assert.ok(m.hfRepo, `Model ${m.modelId} must specify hfRepo`);
+    assert.ok(m.hfFile, `Model ${m.modelId} must specify hfFile`);
+    assert.ok(m.sha256.length === 64, `Model ${m.modelId} must have 64-char sha256`);
+    assert.ok(m.downloadSizeBytes > 0, `Model ${m.modelId} must have non-zero size`);
+  }
+});
+

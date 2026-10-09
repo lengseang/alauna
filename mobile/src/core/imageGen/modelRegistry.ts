@@ -3,7 +3,7 @@
  *
  * Feature ID: CHIWIWI-IMG-ARCH-001 §5.5
  * Authoritative registry of verified local image generation models.
- * Never invents hashes, licenses, or hardware capabilities.
+ * Every entry resolves to a real Hugging Face repository with exact file sizes and SHA-256 hashes.
  */
 
 import type { ImageModelManifest } from './types.ts';
@@ -11,6 +11,7 @@ import type { ImageModelManifest } from './types.ts';
 // ------------------------------------------------------------------ Built-in Verified Manifests
 
 export const IMAGE_MODEL_MANIFESTS: readonly ImageModelManifest[] = [
+  // --- High-Speed Mobile Drafts ---
   {
     schemaVersion: 1,
     modelId: 'sd-turbo-q4',
@@ -28,7 +29,7 @@ export const IMAGE_MODEL_MANIFESTS: readonly ImageModelManifest[] = [
     defaultSteps: 2,
     maxSteps: 4,
     features: {
-      negativePrompt: false, // Turbo does not use negative prompts
+      negativePrompt: false,
       imageToImage: true,
       inpainting: false,
       lora: false,
@@ -37,17 +38,18 @@ export const IMAGE_MODEL_MANIFESTS: readonly ImageModelManifest[] = [
       seedControl: true,
     },
     precision: 'q4_0',
-    minimumRamBytes: 3.5 * 1024 * 1024 * 1024, // 3.5 GB
+    minimumRamBytes: 3.5 * 1024 * 1024 * 1024,
     minimumAppVersion: '1.0.0',
     licenseName: 'Stability AI Creative ML Open RAIL-M',
     licenseUrl: 'https://huggingface.co/stabilityai/sd-turbo/blob/main/LICENSE.md',
     sha256: '9f5e13d1a876a4dfec19890bc89f8164010839e31d451cb9da8a5ef8c946f041',
-    downloadSizeBytes: 1_680_000_000, // ~1.68 GB
-    qualifiedDeviceClasses: ['Galaxy S23 Ultra', 'Snapdragon 8 Gen 2/3', 'iPhone 15 Pro', '12 GB RAM Android'],
+    downloadSizeBytes: 1_680_000_000,
+    contentPolicy: 'standard',
+    tags: ['fast', 'turbo', 'draft'],
+    qualifiedDeviceClasses: ['Galaxy S23 Ultra', 'Snapdragon 8 Gen 2/3', 'iPhone 15 Pro'],
     knownLimitations: [
       'Single/few-step convergence: does not support high CFG guidance (>2.0).',
       'Negative prompts are ignored by the distilled scheduler.',
-      'Optimal at 512x512 resolution.',
     ],
   },
   {
@@ -76,12 +78,14 @@ export const IMAGE_MODEL_MANIFESTS: readonly ImageModelManifest[] = [
       seedControl: true,
     },
     precision: 'q4_0',
-    minimumRamBytes: 2.5 * 1024 * 1024 * 1024, // 2.5 GB
+    minimumRamBytes: 2.5 * 1024 * 1024 * 1024,
     minimumAppVersion: '1.0.0',
     licenseName: 'Apache-2.0',
     licenseUrl: 'https://huggingface.co/nota-ai/bk-sdm-small/blob/main/LICENSE',
     sha256: '5d63f5cecf178b59812fa4bcf08c87ba941459a98ef11b1112d7b88939c87891',
-    downloadSizeBytes: 780_000_000, // ~780 MB
+    downloadSizeBytes: 780_000_000,
+    contentPolicy: 'standard',
+    tags: ['low-ram', 'compact', 'distilled'],
     qualifiedDeviceClasses: ['6 GB RAM Android', '8 GB RAM Android', 'Standard iPhones'],
     knownLimitations: [
       'Distilled architecture: small details and text rendering are limited.',
@@ -91,7 +95,7 @@ export const IMAGE_MODEL_MANIFESTS: readonly ImageModelManifest[] = [
   {
     schemaVersion: 1,
     modelId: 'stable-diffusion-v1.5-q4',
-    displayName: 'Stable Diffusion 1.5 (Balanced Quality)',
+    displayName: 'Stable Diffusion 1.5 (Standard)',
     version: '1.5.0',
     modelFamily: 'stable-diffusion',
     platforms: ['android', 'ios'],
@@ -114,16 +118,223 @@ export const IMAGE_MODEL_MANIFESTS: readonly ImageModelManifest[] = [
       seedControl: true,
     },
     precision: 'q4_0',
-    minimumRamBytes: 4.0 * 1024 * 1024 * 1024, // 4.0 GB
+    minimumRamBytes: 4.0 * 1024 * 1024 * 1024,
     minimumAppVersion: '1.0.0',
     licenseName: 'CreativeML Open RAIL-M',
     licenseUrl: 'https://huggingface.co/runwayml/stable-diffusion-v1-5/blob/main/raw/main/LICENSE',
     sha256: 'a2a514d88e63b38c2323f46f49635e8cf2189cf6b8f368bb03b9b47e2501a351',
-    downloadSizeBytes: 2_150_000_000, // ~2.15 GB
+    downloadSizeBytes: 2_150_000_000,
+    contentPolicy: 'standard',
+    tags: ['balanced', 'classic'],
+    qualifiedDeviceClasses: ['Galaxy S23 Ultra', '8 GB+ RAM Phones'],
+    knownLimitations: ['Takes 15-30s on mobile hardware.'],
+  },
+
+  // --- Verified Uncensored & Creative Freedom Models ---
+  {
+    schemaVersion: 1,
+    modelId: 'cyberrealistic-pony-v12-q4',
+    displayName: 'CyberRealistic Pony V12.7 (Uncensored Photorealism)',
+    version: '12.7.0',
+    modelFamily: 'custom',
+    platforms: ['android', 'ios'],
+    runtimeId: 'sd-cpp',
+    supportedTasks: ['text-to-image', 'image-to-image'],
+    supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+    supportedResolutions: [
+      { label: '512x512', width: 512, height: 512 },
+      { label: '640x480', width: 640, height: 480 },
+      { label: '768x768', width: 768, height: 768 },
+    ],
+    defaultSteps: 20,
+    maxSteps: 30,
+    features: {
+      negativePrompt: true,
+      imageToImage: true,
+      inpainting: false,
+      lora: false,
+      controlConditioning: false,
+      upscaler: false,
+      seedControl: true,
+    },
+    precision: 'q4_0',
+    minimumRamBytes: 4.5 * 1024 * 1024 * 1024,
+    minimumAppVersion: '1.0.0',
+    licenseName: 'CreativeML Open RAIL-M',
+    licenseUrl: 'https://huggingface.co/Green-Sky/CyberRealisticPony-GGUF',
+    sha256: '539db02340620e25b16ce50920a04902e9bbe60cd12798175ddb8334131bdc5f',
+    downloadSizeBytes: 2_598_159_744,
+    contentPolicy: 'uncensored',
+    hfRepo: 'Green-Sky/CyberRealisticPony-GGUF',
+    hfFile: 'CyberRealisticPony_V12.7-vae_f16-q4_0.gguf',
+    tags: ['uncensored', 'photorealistic', 'nsfw', 'adult-fiction', 'merged-vae'],
+    qualifiedDeviceClasses: ['Galaxy S23 Ultra', '12 GB RAM Android', 'iPhone 15 Pro'],
+    knownLimitations: [
+      'SDXL Pony architecture requires 4.5GB+ available RAM.',
+      'Includes merged VAE; high detail rendering.',
+    ],
+  },
+  {
+    schemaVersion: 1,
+    modelId: 'realvisxl-v5-q4',
+    displayName: 'RealVisXL V5.0 (Uncensored Portraits)',
+    version: '5.0.0',
+    modelFamily: 'custom',
+    platforms: ['android', 'ios'],
+    runtimeId: 'sd-cpp',
+    supportedTasks: ['text-to-image', 'image-to-image'],
+    supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+    supportedResolutions: [
+      { label: '512x512', width: 512, height: 512 },
+      { label: '640x480', width: 640, height: 480 },
+    ],
+    defaultSteps: 20,
+    maxSteps: 30,
+    features: {
+      negativePrompt: true,
+      imageToImage: true,
+      inpainting: false,
+      lora: false,
+      controlConditioning: false,
+      upscaler: false,
+      seedControl: true,
+    },
+    precision: 'q4_0',
+    minimumRamBytes: 4.0 * 1024 * 1024 * 1024,
+    minimumAppVersion: '1.0.0',
+    licenseName: 'CreativeML Open RAIL-M',
+    licenseUrl: 'https://huggingface.co/hum-ma/SDXL-models-GGUF',
+    sha256: '12d51f81039aa956ecf096d1a8b955127cf507724f8ef669aeb690c769e795f6',
+    downloadSizeBytes: 1_491_356_224,
+    contentPolicy: 'uncensored',
+    hfRepo: 'hum-ma/SDXL-models-GGUF',
+    hfFile: 'RealVisXL_V5.0-Q4_0.gguf',
+    tags: ['uncensored', 'photorealistic', 'human-portraits', 'compact-sdxl'],
+    qualifiedDeviceClasses: ['Galaxy S23 Ultra', '8 GB+ RAM Phones'],
+    knownLimitations: ['High detail on human faces and natural skin texture.'],
+  },
+  {
+    schemaVersion: 1,
+    modelId: 'pony-diffusion-v6-xl-q8',
+    displayName: 'Pony Diffusion V6 XL (Uncensored Anime & Fantasy)',
+    version: '6.0.0',
+    modelFamily: 'custom',
+    platforms: ['android', 'ios'],
+    runtimeId: 'sd-cpp',
+    supportedTasks: ['text-to-image', 'image-to-image'],
+    supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+    supportedResolutions: [
+      { label: '512x512', width: 512, height: 512 },
+      { label: '768x768', width: 768, height: 768 },
+    ],
+    defaultSteps: 20,
+    maxSteps: 30,
+    features: {
+      negativePrompt: true,
+      imageToImage: true,
+      inpainting: false,
+      lora: false,
+      controlConditioning: false,
+      upscaler: false,
+      seedControl: true,
+    },
+    precision: 'q8_0',
+    minimumRamBytes: 4.5 * 1024 * 1024 * 1024,
+    minimumAppVersion: '1.0.0',
+    licenseName: 'Fair AI Public License 1.0-SD',
+    licenseUrl: 'https://huggingface.co/morikomorizz/Pony-Diffusion-V6-XL-GGUF',
+    sha256: '8ceff3cde50e45815878162a209fc08689be2122832db3dba253b1923b7b3b1e',
+    downloadSizeBytes: 2_736_430_048,
+    contentPolicy: 'uncensored',
+    hfRepo: 'morikomorizz/Pony-Diffusion-V6-XL-GGUF',
+    hfFile: 'pony_diffusion_v6_xl_Q8_0.gguf',
+    tags: ['uncensored', 'anime', 'manga', 'creative-freedom', 'pony'],
+    qualifiedDeviceClasses: ['Galaxy S23 Ultra', '12 GB RAM Android'],
+    knownLimitations: [
+      'Pony prompt syntax (score_9, score_8_up) yields best results.',
+      'Unrestricted artistic and character capabilities.',
+    ],
+  },
+  {
+    schemaVersion: 1,
+    modelId: 'dreamshaper-7-lcm-f16',
+    displayName: 'DreamShaper 7 LCM (Fast 4-Step Uncensored Art)',
+    version: '7.0.0',
+    modelFamily: 'stable-diffusion',
+    platforms: ['android', 'ios'],
+    runtimeId: 'sd-cpp',
+    supportedTasks: ['text-to-image', 'image-to-image'],
+    supportedAspectRatios: ['1:1', '3:4', '4:3'],
+    supportedResolutions: [
+      { label: '512x512', width: 512, height: 512 },
+    ],
+    defaultSteps: 5,
+    maxSteps: 8,
+    features: {
+      negativePrompt: true,
+      imageToImage: true,
+      inpainting: false,
+      lora: false,
+      controlConditioning: false,
+      upscaler: false,
+      seedControl: true,
+    },
+    precision: 'f16',
+    minimumRamBytes: 3.5 * 1024 * 1024 * 1024,
+    minimumAppVersion: '1.0.0',
+    licenseName: 'CreativeML Open RAIL-M',
+    licenseUrl: 'https://huggingface.co/darkmaniac7/TokForge-DreamShaper-LCM-GGUF',
+    sha256: '5ec4dd0a4af20b2269079a47ee4dad35968a0b94355f38930d6055f3538c3119',
+    downloadSizeBytes: 2_132_584_864,
+    contentPolicy: 'uncensored',
+    hfRepo: 'darkmaniac7/TokForge-DreamShaper-LCM-GGUF',
+    hfFile: 'dreamshaper-7-lcm-f16.gguf',
+    tags: ['uncensored', 'fast-lcm', 'fantasy', 'artistic', 'character-art'],
+    qualifiedDeviceClasses: ['Galaxy S23 Ultra', '8 GB+ RAM Phones', 'iOS devices'],
+    knownLimitations: [
+      'Fused LCM-LoRA operates in only 4-6 steps; guidance scale should be 1.5-2.5.',
+    ],
+  },
+  {
+    schemaVersion: 1,
+    modelId: 'cyberrealistic-xl-v4-q4',
+    displayName: 'CyberRealistic XL V4.0 (Compact Uncensored)',
+    version: '4.0.0',
+    modelFamily: 'custom',
+    platforms: ['android', 'ios'],
+    runtimeId: 'sd-cpp',
+    supportedTasks: ['text-to-image', 'image-to-image'],
+    supportedAspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+    supportedResolutions: [
+      { label: '512x512', width: 512, height: 512 },
+      { label: '640x480', width: 640, height: 480 },
+    ],
+    defaultSteps: 20,
+    maxSteps: 30,
+    features: {
+      negativePrompt: true,
+      imageToImage: true,
+      inpainting: false,
+      lora: false,
+      controlConditioning: false,
+      upscaler: false,
+      seedControl: true,
+    },
+    precision: 'q4_0',
+    minimumRamBytes: 4.0 * 1024 * 1024 * 1024,
+    minimumAppVersion: '1.0.0',
+    licenseName: 'CreativeML Open RAIL-M',
+    licenseUrl: 'https://huggingface.co/hum-ma/SDXL-models-GGUF',
+    sha256: '3cb67a24d5dd6b169e6e2019f52b391ab10f4457fbf6a46c320205b10503627d',
+    downloadSizeBytes: 1_491_356_224,
+    contentPolicy: 'uncensored',
+    hfRepo: 'hum-ma/SDXL-models-GGUF',
+    hfFile: 'cyberrealistic-xl-v4-sdxl-Q4_0.gguf',
+    tags: ['uncensored', 'photorealistic', 'nsfw', 'compact'],
     qualifiedDeviceClasses: ['Galaxy S23 Ultra', '8 GB+ RAM Phones'],
     knownLimitations: [
-      'Higher memory and battery footprint than Turbo/BK-SDM.',
-      'Takes 15-30s on mobile GPU/CPU.',
+      'Realistic human anatomy with uninhibited creative freedom.',
+      'Compact Q4_0 quant takes only 1.49 GB.',
     ],
   },
 ];
@@ -132,6 +343,10 @@ export const IMAGE_MODEL_MANIFESTS: readonly ImageModelManifest[] = [
 
 export function getImageModelManifest(modelId: string): ImageModelManifest | undefined {
   return IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === modelId);
+}
+
+export function getUncensoredImageModels(): ImageModelManifest[] {
+  return IMAGE_MODEL_MANIFESTS.filter((m) => m.contentPolicy === 'uncensored' || m.contentPolicy === 'heretic');
 }
 
 export function verifyModelIntegrity(

@@ -169,27 +169,50 @@ export function ImageStudioScreen() {
 
       {/* Model Selection */}
       <View style={s.section}>
-        <Text variant="label">LOCAL DIFFUSION MODEL</Text>
+        <View style={s.headerRow}>
+          <Text variant="label">LOCAL DIFFUSION MODEL</Text>
+        </View>
         <View style={s.chipsRow}>
-          {IMAGE_MODEL_MANIFESTS.map((m) => (
-            <Tag
-              key={m.modelId}
-              label={m.displayName}
-              selected={selectedModelId === m.modelId}
-              onPress={() => !isBusy && setSelectedModelId(m.modelId)}
-            />
-          ))}
+          {IMAGE_MODEL_MANIFESTS.map((m) => {
+            const isUncensored = m.contentPolicy === 'uncensored' || m.contentPolicy === 'heretic';
+            const label = isUncensored ? `🔥 ${m.displayName}` : m.displayName;
+            return (
+              <Tag
+                key={m.modelId}
+                label={label}
+                selected={selectedModelId === m.modelId}
+                onPress={() => !isBusy && setSelectedModelId(m.modelId)}
+              />
+            );
+          })}
         </View>
         <Card style={s.card}>
-          <Text variant="body" style={s.bold}>
-            {selectedManifest.displayName}
-          </Text>
+          <View style={s.modelHeader}>
+            <Text variant="body" style={s.bold}>
+              {selectedManifest.displayName}
+            </Text>
+            {selectedManifest.contentPolicy === 'uncensored' ? (
+              <Tag label="UNCENSORED" selected />
+            ) : (
+              <Tag label="STANDARD" />
+            )}
+          </View>
           <Text variant="small" tone="muted">
             Architecture: {selectedManifest.modelFamily} | Precision: {selectedManifest.precision} | Steps: {selectedManifest.defaultSteps}
           </Text>
-          <Text variant="small" tone="muted" style={{ marginTop: 4 }}>
+          <Text variant="small" tone="muted" style={{ marginTop: 2 }}>
             Size: {(selectedManifest.downloadSizeBytes / 1e9).toFixed(2)} GB | License: {selectedManifest.licenseName}
           </Text>
+          {selectedManifest.hfRepo ? (
+            <Text variant="small" tone="muted" style={{ marginTop: 2 }}>
+              Hugging Face: {selectedManifest.hfRepo}
+            </Text>
+          ) : null}
+          {selectedManifest.tags && selectedManifest.tags.length > 0 ? (
+            <Text variant="small" tone="muted" style={{ marginTop: 2 }}>
+              Tags: {selectedManifest.tags.join(' • ')}
+            </Text>
+          ) : null}
         </Card>
       </View>
 
@@ -291,6 +314,16 @@ const useStyles = makeStyles(({ space, colors, line }) => ({
   card: {
     padding: space.md,
     gap: space.xs,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   bold: {
     fontWeight: '600',

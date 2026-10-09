@@ -190,6 +190,10 @@ export interface ImageModelManifest {
   licenseUrl: string | null;
   sha256: string;
   downloadSizeBytes: number;
+  contentPolicy: 'standard' | 'uncensored' | 'heretic';
+  hfRepo?: string;
+  hfFile?: string;
+  tags?: string[];
   qualifiedDeviceClasses: string[];
   knownLimitations: string[];
 }
