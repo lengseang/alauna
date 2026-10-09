@@ -9,6 +9,7 @@ import {
   verifyModelIntegrity,
 } from '../src/core/imageGen/modelRegistry.ts';
 import { ImageGenerationCoordinator } from '../src/core/imageGen/coordinator.ts';
+import { synthesizeScenePngBase64 } from '../src/core/imageGen/pngSynthesizer.ts';
 import type { DeviceResourceState, GenerationRequest } from '../src/core/imageGen/types.ts';
 
 test('imageGen scenePlanner: extracts structured scene elements and preserves user intent', () => {
@@ -184,4 +185,21 @@ test('imageGen modelRegistry: registers verified uncensored on-device diffusion 
     assert.ok(m.downloadSizeBytes > 0, `Model ${m.modelId} must have non-zero size`);
   }
 });
+
+test('imageGen pngSynthesizer: synthesizes standards-compliant PNGs deterministically', () => {
+  const base64 = synthesizeScenePngBase64(64, 64, 'Cyberpunk neon street', 42);
+  assert.ok(base64.length > 0, 'Base64 output must not be empty');
+
+  // Verify PNG header in binary: 0x89 0x50 0x4E 0x47 0x0D 0x0A 0x1A 0x0A
+  const binary = atob(base64);
+  assert.equal(binary.charCodeAt(0), 137);
+  assert.equal(binary.charCodeAt(1), 80); // 'P'
+  assert.equal(binary.charCodeAt(2), 78); // 'N'
+  assert.equal(binary.charCodeAt(3), 71); // 'G'
+
+  // Determinism check: same prompt and seed yields identical bytes
+  const base64Repeat = synthesizeScenePngBase64(64, 64, 'Cyberpunk neon street', 42);
+  assert.equal(base64, base64Repeat);
+});
+
 

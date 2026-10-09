@@ -124,5 +124,9 @@ export function planGeneration(
     allowUpscale,
     riskTier,
     explanation: rationale,
+    prompt: request.prompt,
+    seed: request.seed,
+    goal: request.goal,
+    qualityMode: request.qualityMode,
   };
 }

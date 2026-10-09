@@ -153,6 +153,10 @@ export interface GenerationPlan {
   allowUpscale: boolean;
   riskTier: 'low' | 'moderate' | 'high';
   explanation: string[];
+  prompt?: string;
+  seed?: number;
+  goal?: GenerationGoal;
+  qualityMode?: QualityMode;
 }
 
 // ------------------------------------------------------------------ Model Capability Registry (§5.5)

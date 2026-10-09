@@ -8,12 +8,14 @@
  */
 
 import { useSyncExternalStore } from 'react';
+import { Platform, Share } from 'react-native';
 import { File } from 'expo-file-system';
 import type { ImageAssetMetadata } from '../core/imageGen/types.ts';
 import { readWithFallback, writeAtomic } from '../core/atomicFile.ts';
 import { createStore } from '../core/store.ts';
 import { directoryIO } from './atomicIo.ts';
 import { galleryDir, isStorageReady } from './storage.ts';
+import { showToast } from './toast.ts';
 
 const GALLERY_INDEX_FILE = 'chiwiwi_gallery.json';
 
@@ -123,3 +125,58 @@ export function useGallery(): ImageAssetMetadata[] {
     () => [],
   );
 }
+
+/** Export and download generated image to the device's public storage or gallery. */
+export async function downloadImageToDevice(item: ImageAssetMetadata): Promise<boolean> {
+  try {
+    const sourceFile = new File(galleryDir(), `${item.imageId}.${item.format}`);
+    if (!sourceFile.exists) {
+      showToast('Source image file not found in vault.');
+      return false;
+    }
+
+    let savedDirect = false;
+    if (Platform.OS === 'android') {
+      const publicDownloadPath = `/storage/emulated/0/Download/chiwiwi_${item.imageId}.${item.format}`;
+      try {
+        const dest = new File(publicDownloadPath);
+        if (dest.exists) dest.delete();
+        sourceFile.copy(dest);
+        savedDirect = true;
+        showToast(`Saved to Download/chiwiwi_${item.imageId}.${item.format}!`, 5000);
+      } catch {
+        // Fall back to system share dialog
+      }
+    }
+
+    if (!savedDirect) {
+      await Share.share({
+        title: item.prompt || 'Chiwiwi Image',
+        url: sourceFile.uri,
+      });
+      showToast('Image ready for download/saving.');
+    }
+    return true;
+  } catch (err) {
+    showToast(`Failed to export image: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
+}
+
+/** Open system share sheet for the generated image. */
+export async function shareImage(item: ImageAssetMetadata): Promise<void> {
+  try {
+    const sourceFile = new File(galleryDir(), `${item.imageId}.${item.format}`);
+    if (!sourceFile.exists) {
+      showToast('Image file not found.');
+      return;
+    }
+    await Share.share({
+      title: item.prompt || 'Chiwiwi Generated Image',
+      url: sourceFile.uri,
+    });
+  } catch {
+    // Share cancellation is normal
+  }
+}
+

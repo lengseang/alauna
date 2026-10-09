@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, SectionList, View } from 'react-native';
+import { Pressable, ScrollView, SectionList, View } from 'react-native';
 import { ALL_CAPABILITIES, CAPABILITY_INFO, IMAGE_TOOLS, MODEL_CATALOG, PARAM_BANDS, isSmallUncensored, libraryFacets, paramBand, type ModelGrade } from '../core/catalog.ts';
 import { defaultContext, recommendModel } from '../core/fit.ts';
 import { formatBytes, formatDuration, formatSpeed } from '../core/format.ts';
@@ -8,10 +8,11 @@ import { refreshDownloads, useDownloadsHub } from '../services/downloads.ts';
 import { useEngineState } from '../services/engine.ts';
 import { useSettings } from '../services/settings.ts';
 import { describeLocation, freeSpaceBytes, useStorage } from '../services/storage.ts';
-import { makeStyles } from '../theme';
+import { makeStyles, useTheme } from '../theme';
 import { Button } from './Button';
 import { Divider } from './Divider';
 import { SearchField } from './Field';
+import { Icon } from './Icon';
 import { ModelRow } from './ModelCards';
 import { Row } from './Row';
 import { Screen } from './Screen';
@@ -46,6 +47,7 @@ const GRADES: readonly ModelGrade[] = ['S', 'B', 'C'];
  */
 export function ModelsScreen() {
   const s = useStyles();
+  const { colors } = useTheme();
   const device = getDeviceProfile();
   const ram = device.totalRamBytes;
   const settings = useSettings();
@@ -110,6 +112,27 @@ export function ModelsScreen() {
         {ram ? <Tag label="Fits this phone" count={fitCount} selected={f.fits} onPress={() => set({ fits: !f.fits })} accessibilityHint="Hides models that need more memory than this phone has" /> : null}
         <Tag label="Installed" count={installedIds.length} selected={f.installed} onPress={() => set({ installed: !f.installed })} />
       </ScrollView>
+      {/* Spacious Sort Dropdown Selector */}
+      <Pressable
+        style={({ pressed }) => [
+          s.sortDropdown,
+          pressed && { opacity: 0.75 },
+        ]}
+        onPress={() => setSortOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Sort by: ${sortInfo(f.sort).label}`}
+      >
+        <View style={s.sortDropdownLeft}>
+          <Icon name="sort" size={16} color={colors.accent} />
+          <Text variant="small" tone="muted">SORT BY:</Text>
+          <Text variant="strong" numberOfLines={1} style={s.sortValue}>
+            {sortInfo(f.sort).label}
+          </Text>
+        </View>
+        <Icon name="chevron" size={14} color={colors.muted} rotate={90} />
+      </Pressable>
+
+      {/* Spacious Grouping & Matching Controls */}
       <View style={s.controls}>
         <View style={s.match}>
           <Segmented
@@ -122,8 +145,6 @@ export function ModelsScreen() {
             onChange={setGroupBy}
           />
         </View>
-      </View>
-      <View style={s.controls}>
         <View style={s.match}>
           <Segmented
             label="Match tags"
@@ -136,7 +157,6 @@ export function ModelsScreen() {
             disabled={f.caps.length < 2}
           />
         </View>
-        <Button label={`Sort: ${sortInfo(f.sort).short}`} icon="sort" variant="text" onPress={() => setSortOpen(true)} />
       </View>
     </>
   );
@@ -162,9 +182,15 @@ export function ModelsScreen() {
 
   const imageTools = (
     <View style={s.footer}>
-      <SectionHeader title="Image tools" hint="Not downloadable: llama.rn cannot run image models in this build." />
+      <SectionHeader title="Image Studio" hint="Synthesize and download images on-device with uncensored local diffusion models." />
+      <Row
+        title="Open Image Studio"
+        subtitle="Prompt generator, Hugging Face model installer, multi-stage diffusion pipeline & vault gallery."
+        value="Launch"
+        onPress={() => push('image/studio')}
+      />
       {IMAGE_TOOLS.map((tool) => (
-        <Row key={tool.id} title={`${tool.name} ${tool.uniqueTag}`} subtitle={`${tool.bestFor} ${tool.note} ${tool.ramNote}`} value="Engine unavailable" />
+        <Row key={tool.id} title={`${tool.name} ${tool.uniqueTag}`} subtitle={`${tool.bestFor} ${tool.note} ${tool.ramNote}`} value="Standalone" />
       ))}
     </View>
   );
@@ -225,9 +251,29 @@ function DownloadsLink() {
   return <Row title="Downloads" subtitle={busy ? parts.join(' · ') : 'Nothing downloading. Queue, speed and disk use live here.'} value={busy ? String(busy) : undefined} onPress={() => push('downloads')} />;
 }
 
-const useStyles = makeStyles(({ space }) => ({
+const useStyles = makeStyles(({ space, colors, line }) => ({
   chipScroll: { marginHorizontal: -space.lg, flexGrow: 0 },
   chips: { paddingHorizontal: space.lg, gap: space.sm, alignItems: 'center' },
+  sortDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderWidth: line,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
+    minHeight: 44,
+  },
+  sortDropdownLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    flex: 1,
+  },
+  sortValue: {
+    flexShrink: 1,
+  },
   controls: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   match: { flex: 1 },
   list: { paddingHorizontal: space.lg, paddingBottom: space.xxl },
