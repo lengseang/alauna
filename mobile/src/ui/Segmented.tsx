@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
-import { makeStyles } from '../theme';
+import { hit, makeStyles } from '../theme';
 import { Text } from './Text';
 
 export interface SegmentedOption<T extends string> {
@@ -52,7 +52,7 @@ export function Segmented<T extends string>({ options, value, onChange, label, d
 
 const useStyles = makeStyles(({ colors, space, line }) => ({
   frame: { flexDirection: 'row', borderWidth: line, borderColor: colors.borderStrong },
-  cell: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
+  cell: { flex: 1, minHeight: hit, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.sm },
   sep: { borderLeftWidth: line, borderLeftColor: colors.border },
   on: { backgroundColor: colors.surfaceAlt },
   pressed: { backgroundColor: colors.accentSoft },

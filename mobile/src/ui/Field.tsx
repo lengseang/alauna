@@ -91,7 +91,7 @@ export const SearchField = forwardRef<TextInput, SearchFieldProps>(function Sear
         style={[s.searchInput, type.body, { color: colors.text }]}
       />
       {value ? (
-        <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => onChangeText('')} style={s.clear}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => onChangeText('')} style={s.clear}>
           <Icon name="close" color={colors.muted} size={20} />
         </Pressable>
       ) : null}
@@ -108,5 +108,5 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
   search: { minHeight: hit, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.md, borderWidth: line, borderColor: colors.borderStrong, backgroundColor: colors.surface },
   searchFocused: { borderColor: colors.accent },
   searchInput: { flex: 1, minHeight: hit - 2, paddingVertical: space.sm },
-  clear: { width: hit, height: hit - 2, alignItems: 'center', justifyContent: 'center' },
+  clear: { minWidth: hit, minHeight: hit, width: hit, height: hit, alignItems: 'center', justifyContent: 'center' },
 }));
