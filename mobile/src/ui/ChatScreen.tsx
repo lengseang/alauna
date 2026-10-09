@@ -3,13 +3,12 @@ import { FlatList, KeyboardAvoidingView, Pressable, View, type NativeScrollEvent
 import { getModel } from '../core/catalog.ts';
 import type { ChatMessage } from '../core/chatTypes.ts';
 import * as Clipboard from 'expo-clipboard';
-import { chatStore, newChat, regenerate, renameThread, showNotice, useChatState } from '../services/chat.ts';
+import { chatStore, deleteMessage, newChat, regenerate, restoreMessages, showNotice, truncateFrom, useChatState } from '../services/chat.ts';
 import { downloads } from '../services/downloads.ts';
 import { engine } from '../services/engine.ts';
 import { useSettings } from '../services/settings.ts';
 import { makeStyles } from '../theme';
 import { ChatTopBar } from './ChatTopBar';
-import { truncateAt, withoutMessage } from './chatLogic';
 import { Composer, setComposerDraft } from './Composer';
 import { DrawerLayout } from './Drawer';
 import { EmptyChat } from './EmptyChat';
@@ -87,17 +86,12 @@ export function ChatScreen() {
   const openVoice = useCallback(() => setVoice(true), []);
   const closeVoice = useCallback(() => setVoice(false), []);
 
-  // Delete / edit&resend rewrite the open chat's messages, then save it (renameThread to the same title persists).
-  const setMessagesAndSave = (next: ChatMessage[]) => {
-    chatStore.setState((st) => ({ thread: { ...st.thread, messages: next } }));
-    const th = chatStore.getState().thread;
-    void renameThread(th.id, th.title);
-  };
   const doAction = async (kind: 'copy' | 'regen' | 'edit' | 'speak' | 'delete') => {
     const m = acts;
     setActs(null);
     if (!m) return;
-    const all = chatStore.getState().thread.messages;
+    const th = chatStore.getState().thread;
+    const all = th.messages;
     if (kind === 'copy') {
       await Clipboard.setStringAsync(m.text);
       showNotice('Copied');
@@ -115,13 +109,12 @@ export function ChatScreen() {
     if (kind === 'regen') {
       void regenerate();
     } else if (kind === 'edit') {
-      const { kept, removed } = truncateAt(all, m.id);
-      setMessagesAndSave(kept);
+      const removed = await truncateFrom(th.id, m.id);
       setComposerDraft(m.text, m.attachments ?? []);
-      if (removed.length > 1) showUndo('Removed this and later messages', () => setMessagesAndSave(all));
+      if (removed.length > 1) showUndo('Removed this and later messages', () => void restoreMessages(th.id, all));
     } else {
-      setMessagesAndSave(withoutMessage(all, m.id));
-      showUndo('Message deleted', () => setMessagesAndSave(all));
+      await deleteMessage(th.id, m.id);
+      showUndo('Message deleted', () => void restoreMessages(th.id, all));
     }
   };
 

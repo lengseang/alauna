@@ -17,6 +17,8 @@ import {
   newThread,
   titleFrom,
   toHistory,
+  truncateAt,
+  withoutMessage,
   type Attachment,
   type ChatMessage,
   type ChatThread,
@@ -94,9 +96,13 @@ function patchMessage(id: string, patch: Partial<ChatMessage>): void {
 
 async function persist(refreshList = true): Promise<void> {
   const { thread } = chatStore.getState();
-  if (thread.incognito || thread.messages.length === 0) return;
+  if (thread.incognito) return;
   try {
-    await saveThread({ ...thread, updatedAt: Date.now() });
+    if (thread.messages.length === 0) {
+      deleteThreadFile(thread.id);
+    } else {
+      await saveThread({ ...thread, updatedAt: Date.now() });
+    }
     chatStore.setState({ saveError: null });
     if (refreshList) void refreshThreadList();
   } catch (e) {
@@ -216,6 +222,54 @@ export async function setThreadPinned(id: string, pinned: boolean): Promise<bool
     return true;
   }
   const ok = (await updateThreadFile(id, (t) => ({ ...t, pinned }))) !== null;
+  await refreshThreadList();
+  return ok;
+}
+
+/** Delete one message by id from the active chat or a chat file on disk. */
+export async function deleteMessage(threadId: string, id: string): Promise<boolean> {
+  const { thread } = chatStore.getState();
+  if (thread.id === threadId) {
+    const next = withoutMessage(thread.messages, id);
+    if (next.length === thread.messages.length) return false;
+    chatStore.setState({ thread: { ...thread, messages: next } });
+    await persist();
+    return true;
+  }
+  const ok = (await updateThreadFile(threadId, (t) => ({ ...t, messages: withoutMessage(t.messages, id) }))) !== null;
+  await refreshThreadList();
+  return ok;
+}
+
+/** Truncate a thread at message id: removes message id and all following messages. Returns the removed messages (e.g. for Undo). */
+export async function truncateFrom(threadId: string, id: string): Promise<ChatMessage[]> {
+  const { thread } = chatStore.getState();
+  if (thread.id === threadId) {
+    const { kept, removed } = truncateAt(thread.messages, id);
+    if (removed.length === 0) return [];
+    chatStore.setState({ thread: { ...thread, messages: kept } });
+    await persist();
+    return removed;
+  }
+  let removed: ChatMessage[] = [];
+  const updated = await updateThreadFile(threadId, (t) => {
+    const r = truncateAt(t.messages, id);
+    removed = r.removed;
+    return { ...t, messages: r.kept };
+  });
+  await refreshThreadList();
+  return updated !== null ? removed : [];
+}
+
+/** Restore messages into a thread (used for Undo after delete or edit/resend). */
+export async function restoreMessages(threadId: string, messages: ChatMessage[]): Promise<boolean> {
+  const { thread } = chatStore.getState();
+  if (thread.id === threadId) {
+    chatStore.setState({ thread: { ...thread, messages } });
+    await persist();
+    return true;
+  }
+  const ok = (await updateThreadFile(threadId, (t) => ({ ...t, messages }))) !== null;
   await refreshThreadList();
   return ok;
 }

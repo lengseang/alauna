@@ -254,3 +254,16 @@ export function sanitizeThread(raw: unknown): ChatThread | null {
 export function isSafeThreadId(id: string): boolean {
   return /^[A-Za-z0-9_-]{3,80}$/.test(id);
 }
+
+/** Delete one message. */
+export function withoutMessage(messages: readonly ChatMessage[], id: string): ChatMessage[] {
+  return messages.filter((m) => m.id !== id);
+}
+
+/** Edit & resend: everything before `id` stays; `id` and everything after it is removed (and returned for Undo). */
+export function truncateAt(messages: readonly ChatMessage[], id: string): { kept: ChatMessage[]; removed: ChatMessage[] } {
+  const i = messages.findIndex((m) => m.id === id);
+  if (i < 0) return { kept: [...messages], removed: [] };
+  return { kept: messages.slice(0, i), removed: messages.slice(i) };
+}
+

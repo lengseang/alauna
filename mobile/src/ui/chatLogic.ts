@@ -1,5 +1,6 @@
 /** Pure helpers behind the chat screens (no React, no react-native): unit-tested in test/chatUi.test.ts. */
 import type { ChatMessage, MessageStats } from '../core/chatTypes.ts';
+export { withoutMessage, truncateAt } from '../core/chatTypes.ts';
 
 /** The stats line under a reply. Every part is a number llama.cpp measured for THIS reply; missing = left out. */
 export function statsParts(st: MessageStats): string[] {
@@ -11,18 +12,6 @@ export function statsParts(st: MessageStats): string[] {
   if (st.cachedTokens && st.cachedTokens > 0) parts.push(`${st.cachedTokens}${st.promptTokens ? `/${st.promptTokens}` : ''} cached`);
   if (st.draftTokens && st.draftTokens > 0) parts.push(`draft ${Math.round(((st.draftAccepted ?? 0) / st.draftTokens) * 100)}% accepted`);
   return parts;
-}
-
-/** Delete one message. */
-export function withoutMessage(messages: readonly ChatMessage[], id: string): ChatMessage[] {
-  return messages.filter((m) => m.id !== id);
-}
-
-/** Edit & resend: everything before `id` stays; `id` and everything after it is removed (and returned for Undo). */
-export function truncateAt(messages: readonly ChatMessage[], id: string): { kept: ChatMessage[]; removed: ChatMessage[] } {
-  const i = messages.findIndex((m) => m.id === id);
-  if (i < 0) return { kept: [...messages], removed: [] };
-  return { kept: messages.slice(0, i), removed: messages.slice(i) };
 }
 
 export type EngineLineKind = 'none' | 'not_downloaded' | 'idle' | 'loading' | 'ready' | 'generating' | 'error';

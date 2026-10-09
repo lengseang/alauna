@@ -182,6 +182,40 @@ test('threads: rename, pin (sorts first), search across messages', async () => {
   assert.match(hits[0].snippet!, /Kampot/);
 });
 
+test('threads: real deleteMessage, truncateFrom, and restoreMessages for undo', async () => {
+  chat.newChat();
+  const threadId = chat.chatStore.getState().thread.id;
+  await chat.sendMessage('First turn');
+  await chat.sendMessage('Second turn');
+  await chat.sendMessage('Third turn');
+  const ms = chat.chatStore.getState().thread.messages;
+  assert.ok(ms.length >= 3);
+  const midId = ms[1].id;
+
+  // 1. Delete middle message
+  const delOk = await chat.deleteMessage(threadId, midId);
+  assert.equal(delOk, true);
+  const afterDel = chat.chatStore.getState().thread.messages;
+  assert.equal(afterDel.some((m) => m.id === midId), false);
+
+  // 2. Undo delete
+  const restoreOk = await chat.restoreMessages(threadId, ms);
+  assert.equal(restoreOk, true);
+  assert.equal(chat.chatStore.getState().thread.messages.length, ms.length);
+
+  // 3. Truncate from middle message
+  const removed = await chat.truncateFrom(threadId, midId);
+  assert.ok(removed.length >= 2);
+  assert.equal(removed[0].id, midId);
+  const afterTrunc = chat.chatStore.getState().thread.messages;
+  assert.equal(afterTrunc.length, 1);
+  assert.equal(afterTrunc[0].id, ms[0].id);
+
+  // 4. Undo truncate
+  await chat.restoreMessages(threadId, ms);
+  assert.equal(chat.chatStore.getState().thread.messages.length, ms.length);
+});
+
 test('auto-purge at launch removes old chats, keeps pinned and the open one', async () => {
   const old = { id: 'thread_old1', title: 'Old', createdAt: 0, updatedAt: Date.now() - 90 * 86_400_000, soul: { archetype: 'empath', pad: { pleasure: 0, arousal: 0.5, dominance: 0.5 }, toneIntensity: 0.8 }, messages: [{ id: 'u', role: 'user', text: 'x', createdAt: 0, status: 'done' }] };
   fs.store.set(`${vault}/chats/thread_old1.json`, { type: 'file', content: JSON.stringify(old) });
