@@ -39,9 +39,14 @@ export interface LocalImageRuntimeAdapter {
   ): Promise<RuntimeGenerateResult>;
 }
 
+export function isNativeDiffusionEngineAvailable(): boolean {
+  // Checks if native stable-diffusion.cpp or ONNX diffusion runtime module is linked in the React Native runtime
+  return false;
+}
+
 class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
   public isAvailable(): boolean {
-    return true;
+    return isNativeDiffusionEngineAvailable();
   }
 
   public getManifest(modelId: string): ImageModelManifest | undefined {
@@ -68,6 +73,14 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
       throw this.error(
         'MODEL_NOT_INSTALLED',
         `Model weights for '${manifest.displayName}' are not downloaded yet. Please tap 'Download' in the Models tab to install it (${(manifest.downloadSizeBytes / 1e9).toFixed(2)} GB).`,
+      );
+    }
+
+    // Invariant (GEMINI.md Rule 2): Do not fake generation or spew procedural gradients without native engine
+    if (!isNativeDiffusionEngineAvailable()) {
+      throw this.error(
+        'RUNTIME_UNSUPPORTED_FEATURE',
+        `Native diffusion engine (stable-diffusion.cpp / ONNX) is not linked in this build. Model weights for '${manifest.displayName}' (${(manifest.downloadSizeBytes / 1e9).toFixed(2)} GB) are downloaded in your Vault, but executing on-device diffusion requires the native diffusion C++ engine bridge.`,
       );
     }
 

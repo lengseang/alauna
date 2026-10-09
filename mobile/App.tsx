@@ -35,6 +35,30 @@ const hideSplash = () => {
 /** The last model is auto-loaded once per launch, unless the previous run died loading it (Chat then asks first). */
 type AutoLoad = { id: string; name: string; done: boolean } | null | undefined;
 
+function BootStageView({
+  stage,
+  securityLoaded,
+  voiceLoaded,
+  auto,
+  location,
+}: {
+  stage: ReturnType<typeof useBoot>['stage'];
+  securityLoaded: boolean;
+  voiceLoaded: boolean;
+  auto: AutoLoad;
+  location: string | null;
+}) {
+  const eng = useEngineStatus();
+  const loading = auto && !auto.done && eng.modelId === auto.id && (eng.state === 'loading' || eng.state === 'warming');
+  const plan = bootSteps({
+    stage,
+    security: securityLoaded,
+    voice: voiceLoaded,
+    model: auto ? { name: auto.name, done: auto.done, progress: loading ? (eng.state === 'warming' ? 1 : eng.progress) : 0 } : null,
+  });
+  return <BootScreen steps={plan.steps} fraction={plan.fraction} location={location} />;
+}
+
 function Root() {
   const s = useStyles();
   const settings = useSettings();
@@ -42,7 +66,6 @@ function Root() {
   const boot = useBoot();
   const security = useSecurity();
   const voice = useVoicePrefs();
-  const eng = useEngineStatus();
   const device = getDeviceProfile();
   const wasGated = useRef(false);
   const [auto, setAuto] = useState<AutoLoad>(undefined);
@@ -105,18 +128,11 @@ function Root() {
     }
   }, [gated, ready]);
 
-  const loading = auto && !auto.done && eng.modelId === auto.id && (eng.state === 'loading' || eng.state === 'warming');
-  const plan = bootSteps({
-    stage: boot.stage,
-    security: security.loaded,
-    voice: voice.loaded,
-    model: auto ? { name: auto.name, done: auto.done, progress: loading ? (eng.state === 'warming' ? 1 : eng.progress) : 0 } : null,
-  });
   const location = storage.config ? describeLocation(storage.config) : null;
 
   let body: React.ReactNode;
   if (!device.supported) body = <EmptyState brand title="This phone cannot run CHIWIWI" body={device.unsupportedReason ?? 'This device is not supported.'} />;
-  else if (!dataReady || !security.loaded) body = <BootScreen steps={plan.steps} fraction={plan.fraction} location={location} />;
+  else if (!dataReady || !security.loaded) body = <BootStageView stage={boot.stage} securityLoaded={security.loaded} voiceLoaded={voice.loaded} auto={auto} location={location} />;
   else if (!ready) body = <OnboardingScreen />;
   else body = <RouteStack />;
 

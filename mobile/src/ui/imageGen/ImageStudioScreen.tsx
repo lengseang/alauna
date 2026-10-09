@@ -24,6 +24,7 @@ import {
   useImageModelStates,
 } from '../../services/imageModelManager.ts';
 import { useImageService } from '../../services/imageService.ts';
+import { isNativeDiffusionEngineAvailable } from '../../services/imageRuntime.ts';
 import { showToast } from '../../services/toast.ts';
 import { formatBytes, formatSpeed } from '../../core/format.ts';
 import { Button } from '../Button';
@@ -143,6 +144,11 @@ export function ImageStudioScreen() {
     if (!isSelectedModelInstalled) {
       showToast('Selected model is not downloaded. Go to Models tab to install it.');
       setTab('models');
+      return;
+    }
+
+    if (!isNativeDiffusionEngineAvailable()) {
+      showToast('Native diffusion engine (stable-diffusion.cpp) is required to run on device. Weights are preserved in Vault.', 4000);
       return;
     }
 
@@ -295,16 +301,26 @@ export function ImageStudioScreen() {
                   ? `Generating (${formatTimer(elapsedSeconds)})...`
                   : !isSelectedModelInstalled
                   ? 'Download Model to Generate'
+                  : !isNativeDiffusionEngineAvailable()
+                  ? 'Awaiting Native Diffusion Bridge'
                   : 'Imagine / Generate Image'
               }
-              variant="primary"
+              variant={!isNativeDiffusionEngineAvailable() && isSelectedModelInstalled ? 'quiet' : 'primary'}
               onPress={
                 !isSelectedModelInstalled
                   ? () => handleDownloadModel(selectedManifest)
                   : handleGenerate
               }
-              disabled={isGenerating || (!prompt.trim() && isSelectedModelInstalled)}
+              disabled={isGenerating || (!prompt.trim() && isSelectedModelInstalled && isNativeDiffusionEngineAvailable())}
             />
+
+            {!isNativeDiffusionEngineAvailable() && isSelectedModelInstalled && (
+              <View style={{ marginTop: 10 }}>
+                <Notice tone="quiet" title="Native Diffusion Engine Status">
+                  {`Model weights for ${selectedManifest.displayName} are downloaded in your Vault. On-device execution requires the native stable-diffusion.cpp runtime bridge.`}
+                </Notice>
+              </View>
+            )}
           </View>
 
           {/* Real-time Inference Progress & Background Execution Status */}
