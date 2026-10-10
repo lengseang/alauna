@@ -9,11 +9,15 @@
  * is dropped in with `registerLocalDiffusionEngine()`; every progress number then comes from that engine.
  */
 
+import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';
+import { File, Paths } from 'expo-file-system';
+import { uriToPath } from '../core/paths.ts';
 import type {
   GenerationPlan,
   ImageGenerationError,
   ImageModelManifest,
   LocalDiffusionEngine,
+  LocalDiffusionParams,
 } from '../core/imageGen/types.ts';
 import { getImageModelManifest } from '../core/imageGen/modelRegistry.ts';
 import { isStorageReady } from './storage.ts';
@@ -38,8 +42,106 @@ export interface LocalImageRuntimeAdapter {
   ): Promise<RuntimeGenerateResult>;
 }
 
-/** The linked engine. Null until a real native diffusion engine is registered (none is in this build). */
-let linkedEngine: LocalDiffusionEngine | null = null;
+const DiffusionModule = (NativeModules as Record<string, any>)?.DiffusionModule;
+
+class AndroidDiffusionEngine implements LocalDiffusionEngine {
+  private currentModelPath: string | null = null;
+
+  public async load(modelPath: string): Promise<void> {
+    if (!DiffusionModule) {
+      throw new Error('Native DiffusionModule is not available in this build.');
+    }
+    this.currentModelPath = modelPath;
+  }
+
+  public async generate(
+    params: LocalDiffusionParams,
+    onProgress: (step: number, totalSteps: number) => void,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    if (!DiffusionModule) {
+      throw new Error('Native DiffusionModule is not available in this build.');
+    }
+    if (!this.currentModelPath) {
+      throw new Error('No model loaded in diffusion engine.');
+    }
+
+    const imageId = `diff_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const outFile = new File(Paths.cache, `${imageId}.png`);
+    if (outFile.exists) outFile.delete();
+
+    const rawOutputPath = uriToPath(outFile.uri);
+    const rawModelPath = uriToPath(this.currentModelPath);
+
+    const sub = DeviceEventEmitter.addListener(
+      'onDiffusionProgress',
+      (data: { step?: number; totalSteps?: number; timeSec?: number }) => {
+        const curStep = data?.step ?? 0;
+        const total = data?.totalSteps ?? params.steps;
+        onProgress(curStep, total);
+      },
+    );
+
+    const onAbort = () => {
+      try {
+        DiffusionModule.cancelGeneration();
+      } catch {
+        // safe cancellation ignore
+      }
+    };
+
+    if (signal) {
+      signal.addEventListener('abort', onAbort);
+    }
+
+    try {
+      await DiffusionModule.generateImage({
+        modelPath: rawModelPath,
+        prompt: params.prompt,
+        negativePrompt: params.negative || '',
+        width: params.width,
+        height: params.height,
+        steps: params.steps,
+        cfgScale: params.cfg,
+        seed: params.seed != null && params.seed >= 0 ? params.seed : -1,
+        outputPath: rawOutputPath,
+        threads: 4,
+      });
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      if (err?.code === 'ERR_WORKER_DIED') {
+        throw new Error('DEVICE_MEMORY_EXHAUSTED: Diffusion worker was terminated by Android OS due to device RAM limits.');
+      }
+      throw new Error(msg);
+    } finally {
+      sub.remove();
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+    }
+
+    if (!outFile.exists) {
+      throw new Error('Diffusion generation completed but output image was not found.');
+    }
+
+    return outFile.uri;
+  }
+
+  public async release(): Promise<void> {
+    if (DiffusionModule?.cancelGeneration) {
+      try {
+        await DiffusionModule.cancelGeneration();
+      } catch {
+        // safe release ignore
+      }
+    }
+    this.currentModelPath = null;
+  }
+}
+
+/** The linked engine. Automatically wired to AndroidDiffusionEngine when native bridge is present. */
+let linkedEngine: LocalDiffusionEngine | null =
+  Platform.OS === 'android' && Boolean(DiffusionModule) ? new AndroidDiffusionEngine() : null;
 
 export function registerLocalDiffusionEngine(engine: LocalDiffusionEngine | null): void {
   linkedEngine = engine;

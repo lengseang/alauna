@@ -28,8 +28,8 @@ if (-not (Test-Path $apkSource)) {
     exit 1
 }
 
-$apkDestMobile = "D:\1111-Works\CHIWIWI\mobile\chiwiwi-v0.05.apk"
-$apkDestRoot = "D:\1111-Works\CHIWIWI\chiwiwi-v0.05.apk"
+$apkDestMobile = "D:\1111-Works\CHIWIWI\mobile\chiwiwi-v0.07.apk"
+$apkDestRoot = "D:\1111-Works\CHIWIWI\chiwiwi-v0.07.apk"
 
 Write-Host "[2/3] Copying APK to destination releases..."
 Copy-Item -Path $apkSource -Destination $apkDestMobile -Force
@@ -42,9 +42,16 @@ $sha256 = (Get-FileHash -Path $apkDestMobile -Algorithm SHA256).Hash
 
 Write-Host "------------------------------------------"
 Write-Host "APK BUILD SUCCESSFUL"
-Write-Host "File:       chiwiwi-v0.05.apk"
+Write-Host "File:       chiwiwi-v0.07.apk"
 Write-Host "Size:       $fileSizeMb MB ($($fileItem.Length) bytes)"
 Write-Host "SHA256:     $sha256"
 Write-Host "Mobile Path: $apkDestMobile"
 Write-Host "Root Path:   $apkDestRoot"
 Write-Host "------------------------------------------"
+
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead($apkDestMobile)
+$soEntries = $zip.Entries | Where-Object { $_.FullName -like "*.so" }
+Write-Host "Native libraries bundled in APK:"
+$soEntries | ForEach-Object { Write-Host " - $($_.FullName) ($([math]::Round($_.Length / 1MB, 2)) MB)" }
+$zip.Dispose()
