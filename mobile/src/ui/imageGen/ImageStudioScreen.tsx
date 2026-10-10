@@ -27,6 +27,7 @@ import { useImageService } from '../../services/imageService.ts';
 import { isNativeDiffusionEngineAvailable } from '../../services/imageRuntime.ts';
 import { showToast } from '../../services/toast.ts';
 import { formatBytes, formatSpeed } from '../../core/format.ts';
+import type { ImageAssetMetadata } from '../../core/imageGen/types.ts';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { Divider } from '../Divider';
@@ -38,6 +39,7 @@ import { Screen } from '../Screen';
 import { Segmented } from '../Segmented';
 import { Tag } from '../Tag';
 import { Text } from '../Text';
+import { ImageViewerModal } from './ImageViewerModal';
 
 type StudioTab = 'generate' | 'configure' | 'models' | 'gallery';
 
@@ -93,6 +95,7 @@ export function ImageStudioScreen() {
   );
   const [seedInput, setSeedInput] = useState<string>('');
   const [modelFilter, setModelFilter] = useState<'all' | 'uncensored' | 'fast' | 'installed'>('all');
+  const [viewerImage, setViewerImage] = useState<ImageAssetMetadata | null>(null);
 
   // Initialize storage index and model status check on mount
   useEffect(() => {
@@ -375,7 +378,24 @@ export function ImageStudioScreen() {
               </View>
 
               <Card style={s.galleryCard}>
-                <Image source={{ uri: latestImage.absolutePath }} style={s.previewImage} resizeMode="cover" />
+                <Pressable
+                  onPress={() => setViewerImage(latestImage)}
+                  accessibilityLabel="Tap to view full screen image"
+                >
+                  <Image
+                    source={{ uri: latestImage.absolutePath }}
+                    style={[
+                      s.previewImage,
+                      {
+                        aspectRatio:
+                          latestImage.width > 0 && latestImage.height > 0
+                            ? latestImage.width / latestImage.height
+                            : 1,
+                      },
+                    ]}
+                    resizeMode="contain"
+                  />
+                </Pressable>
                 <View style={s.galleryInfo}>
                   <Text variant="strong" numberOfLines={2}>
                     {latestImage.prompt}
@@ -387,8 +407,13 @@ export function ImageStudioScreen() {
 
                   <View style={s.resultActions}>
                     <Button
-                      label="Download to Device"
+                      label="View Full"
                       variant="primary"
+                      onPress={() => setViewerImage(latestImage)}
+                    />
+                    <Button
+                      label="Download to Device"
+                      variant="quiet"
                       onPress={() => handleSaveToDevice(latestImage)}
                     />
                     <Button label="Share" variant="quiet" onPress={() => handleShare(latestImage)} />
@@ -662,7 +687,24 @@ export function ImageStudioScreen() {
             <View style={s.galleryGrid}>
               {gallery.map((item) => (
                 <Card key={item.imageId} style={s.galleryCard}>
-                  <Image source={{ uri: item.absolutePath }} style={s.galleryImage} resizeMode="cover" />
+                  <Pressable
+                    onPress={() => setViewerImage(item)}
+                    accessibilityLabel="Tap to view full screen image"
+                  >
+                    <Image
+                      source={{ uri: item.absolutePath }}
+                      style={[
+                        s.galleryImage,
+                        {
+                          aspectRatio:
+                            item.width > 0 && item.height > 0
+                              ? item.width / item.height
+                              : 1,
+                        },
+                      ]}
+                      resizeMode="contain"
+                    />
+                  </Pressable>
                   <View style={s.galleryInfo}>
                     <Text variant="strong" numberOfLines={2}>
                       {item.prompt}
@@ -674,8 +716,13 @@ export function ImageStudioScreen() {
 
                     <View style={s.galleryButtonRow}>
                       <Button
-                        label="Download"
+                        label="View Full"
                         variant="primary"
+                        onPress={() => setViewerImage(item)}
+                      />
+                      <Button
+                        label="Download"
+                        variant="quiet"
                         onPress={() => handleSaveToDevice(item)}
                       />
                       <Button label="Share" variant="quiet" onPress={() => handleShare(item)} />
@@ -700,6 +747,13 @@ export function ImageStudioScreen() {
           )}
         </View>
       )}
+
+      {/* Full-Screen Image Lightbox Modal */}
+      <ImageViewerModal
+        image={viewerImage}
+        visible={Boolean(viewerImage)}
+        onClose={() => setViewerImage(null)}
+      />
     </Screen>
   );
 }
@@ -849,12 +903,12 @@ const useStyles = makeStyles(({ space, colors, line }) => ({
   },
   previewImage: {
     width: '100%',
-    height: 260,
+    maxHeight: 480,
     backgroundColor: colors.surfaceAlt,
   },
   galleryImage: {
     width: '100%',
-    height: 220,
+    maxHeight: 420,
     backgroundColor: colors.surfaceAlt,
   },
   galleryInfo: {

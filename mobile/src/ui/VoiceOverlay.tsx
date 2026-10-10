@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { getVoicePersona } from '../core/voicePersonas.ts';
 import { chatStore } from '../services/chat.ts';
 import { getVoicePrefs, useVoicePrefs } from '../services/voice/prefs.ts';
 import {
   downloadSpeechModel,
-  speechModelStore,
   useSpeechModels,
 } from '../services/voice/speechModels.ts';
 import { openAppSettings } from '../services/voice/stt.ts';
@@ -18,7 +18,7 @@ import {
   useVoiceMode,
   type VoiceFix,
 } from '../services/voice/voiceMode.ts';
-import { makeStyles } from '../theme';
+import { makeStyles, useTheme } from '../theme';
 import { Button } from './Button';
 import { IconButton } from './IconButton';
 import { ProgressBar } from './ProgressBar';
@@ -38,15 +38,17 @@ const PHASE_LABEL = {
 
 /**
  * ChatGPT-style immersive voice interaction overlay:
- * - Fluid audio-reactive Voice Orb (center) that pulses, rotates, and radiates soundwaves
- * - Real-time live transcript for both user input and streaming AI replies
- * - Integrated session turn history view (synchronized with chatStore)
- * - Quick Voice Model / Persona selector sheet with Normal, Girlfriend/Boyfriend & 18+ Adult styles
- * - Interrupt speech by tapping the orb or the bottom button
+ * - Fluid audio-reactive Voice Orb (center) bouncing dynamically with vocal pitch & volume
+ * - Sun shine neon effect for light mode (Helios) & Moon light neon effect for dark mode (Nyx)
+ * - Ambient backdrop blur with celestial radial corona
+ * - Clean floating typography transcript (no divs/boxes, floating text directly on canvas)
+ * - Session turn history toggle (synchronized with chatStore)
+ * - Voice Model / Persona selector sheet with adult 18+ and girlfriend/boyfriend options
  */
 export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const s = useStyles();
   const insets = useSafeAreaInsets();
+  const { isDark } = useTheme();
   const v = useVoiceMode();
   const prefs = useVoicePrefs();
   const speechModels = useSpeechModels();
@@ -121,6 +123,32 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={close} statusBarTranslucent>
       <View style={[s.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
+        {/* Dynamic Celestial Backdrop Aura (Sun shine light / Moon light dark) */}
+        <View pointerEvents="none" style={s.ambientBackdrop}>
+          <Svg width="100%" height="100%">
+            <Defs>
+              <RadialGradient id="bgAura" cx="50%" cy="40%" rx="60%" ry="50%">
+                <Stop
+                  offset="0%"
+                  stopColor={isDark ? '#0284C7' : '#F59E0B'}
+                  stopOpacity={isDark ? '0.22' : '0.18'}
+                />
+                <Stop
+                  offset="60%"
+                  stopColor={isDark ? '#0369A1' : '#FCD34D'}
+                  stopOpacity={isDark ? '0.08' : '0.05'}
+                />
+                <Stop
+                  offset="100%"
+                  stopColor={isDark ? '#0284C7' : '#F59E0B'}
+                  stopOpacity="0"
+                />
+              </RadialGradient>
+            </Defs>
+            <Circle cx="50%" cy="40%" r="55%" fill="url(#bgAura)" />
+          </Svg>
+        </View>
+
         {/* Top Control Bar */}
         <View style={s.topBar}>
           <Pressable
@@ -142,7 +170,7 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
         <View style={s.centerStage}>
           <VoiceOrb
             phase={v.phase}
-            size={170}
+            size={180}
             onPress={handleOrbPress}
             label={status}
           />
@@ -158,7 +186,7 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
             ) : null}
           </View>
 
-          {/* Error handling card */}
+          {/* Error handling card if unavailable */}
           {v.phase === 'error' ? (
             <View style={s.errorBox}>
               <Text style={s.errorText}>{v.error ?? 'Voice mode could not start.'}</Text>
@@ -181,15 +209,15 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
               ) : null}
             </View>
           ) : (
-            /* Live Transcript & History Area */
+            /* Clean Floating Typography Live Transcript (No divs/boxes) */
             <View style={s.transcriptWrapper}>
               <View style={s.transcriptHeader}>
                 <Text tone="muted" style={s.transcriptHeaderTitle}>
-                  {showHistory ? 'Conversation History' : 'Live Transcript'}
+                  {showHistory ? 'CONVERSATION HISTORY' : 'LIVE TRANSCRIPT'}
                 </Text>
                 <Pressable onPress={() => setShowHistory((prev) => !prev)}>
                   <Text tone="accent" style={s.toggleHistoryText}>
-                    {showHistory ? 'Show Current' : `History (${chatMessages.length})`}
+                    {showHistory ? 'LIVE VIEW' : `HISTORY (${chatMessages.length})`}
                   </Text>
                 </Pressable>
               </View>
@@ -198,7 +226,7 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
                 ref={scrollRef}
                 style={s.transcriptScroll}
                 contentContainerStyle={s.transcriptContent}
-                showsVerticalScrollIndicator
+                showsVerticalScrollIndicator={false}
               >
                 {showHistory ? (
                   chatMessages.length === 0 ? (
@@ -207,44 +235,38 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
                     </Text>
                   ) : (
                     chatMessages.map((m) => (
-                      <View
-                        key={m.id}
-                        style={[
-                          s.bubble,
-                          m.role === 'user' ? s.bubbleUser : s.bubbleAssistant,
-                        ]}
-                      >
+                      <View key={m.id} style={s.floatingRow}>
                         <Text
-                          style={s.roleTag}
+                          style={s.floatingRole}
                           tone={m.role === 'user' ? 'muted' : 'accent'}
                         >
-                          {m.role === 'user' ? 'You' : persona?.name ?? 'AI'}
+                          {m.role === 'user' ? 'YOU' : persona?.name?.toUpperCase() ?? 'AI'}
                         </Text>
-                        <Text style={s.messageText}>{m.text}</Text>
+                        <Text style={s.floatingText}>{m.text}</Text>
                       </View>
                     ))
                   )
                 ) : (
                   <>
                     {v.heard ? (
-                      <View style={[s.bubble, s.bubbleUser]}>
-                        <Text style={s.roleTag} tone="muted">You</Text>
-                        <Text style={s.messageText}>{v.heard}</Text>
+                      <View style={s.floatingRow}>
+                        <Text style={s.floatingRole} tone="muted">YOU</Text>
+                        <Text style={s.floatingText}>{v.heard}</Text>
                       </View>
                     ) : null}
 
                     {v.reply ? (
-                      <View style={[s.bubble, s.bubbleAssistant]}>
-                        <Text style={s.roleTag} tone="accent">
-                          {persona?.name ?? 'AI'}
+                      <View style={s.floatingRow}>
+                        <Text style={s.floatingRole} tone="accent">
+                          {persona?.name?.toUpperCase() ?? 'AI'}
                         </Text>
-                        <Text style={s.messageText}>{v.reply}</Text>
+                        <Text style={s.floatingText}>{v.reply}</Text>
                       </View>
                     ) : null}
 
                     {!v.heard && !v.reply ? (
                       <Text tone="muted" style={s.emptyHint}>
-                        Speak clearly into the microphone. Voice replies will appear here.
+                        Speak naturally. Transcripts will float here live.
                       </Text>
                     ) : null}
                   </>
@@ -292,10 +314,18 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
     paddingHorizontal: space.lg,
     justifyContent: 'space-between',
   },
+  ambientBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    zIndex: 10,
   },
   personaPill: {
     flexDirection: 'row',
@@ -318,16 +348,17 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: space.md,
+    paddingVertical: space.sm,
     gap: space.md,
   },
   phaseContainer: {
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
   },
   statusText: {
     fontSize: 18,
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
   tapHint: {
     fontSize: 12,
@@ -347,57 +378,47 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
   },
   transcriptWrapper: {
     width: '100%',
-    maxHeight: 250,
-    backgroundColor: colors.surface,
-    borderWidth: line,
-    borderColor: colors.border,
-    padding: space.md,
+    maxHeight: 230,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    // Clean borderless container — floating text directly on ambient canvas
   },
   transcriptHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: space.sm,
-    borderBottomWidth: line,
-    borderBottomColor: colors.border,
     paddingBottom: space.xs,
+    opacity: 0.8,
   },
   transcriptHeaderTitle: {
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  toggleHistoryText: {
-    fontSize: 12,
+    fontSize: 11,
+    letterSpacing: 1,
     fontWeight: '600',
   },
-  transcriptScroll: {
-    maxHeight: 190,
-  },
-  transcriptContent: {
-    gap: space.sm,
-  },
-  bubble: {
-    padding: space.sm,
-    borderLeftWidth: 3,
-    gap: 2,
-  },
-  bubbleUser: {
-    backgroundColor: colors.bg,
-    borderLeftColor: colors.borderStrong,
-  },
-  bubbleAssistant: {
-    backgroundColor: colors.bg,
-    borderLeftColor: colors.accent,
-  },
-  roleTag: {
+  toggleHistoryText: {
     fontSize: 11,
     fontWeight: '700',
-    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  messageText: {
-    fontSize: 14,
-    lineHeight: 20,
+  transcriptScroll: {
+    maxHeight: 180,
+  },
+  transcriptContent: {
+    gap: space.md,
+  },
+  floatingRow: {
+    gap: 2,
+    // Pure typography — no background divs or box borders
+  },
+  floatingRole: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  floatingText: {
+    fontSize: 15,
+    lineHeight: 22,
   },
   emptyHint: {
     textAlign: 'center',
@@ -409,5 +430,6 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
     justifyContent: 'center',
     gap: space.md,
     paddingTop: space.sm,
+    zIndex: 10,
   },
 }));

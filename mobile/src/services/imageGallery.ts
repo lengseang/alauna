@@ -8,9 +8,10 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import { Platform, Share } from 'react-native';
+import { NativeModules, Platform, Share } from 'react-native';
 import { File } from 'expo-file-system';
 import type { ImageAssetMetadata } from '../core/imageGen/types.ts';
+import { uriToPath } from '../core/paths.ts';
 import { readWithFallback, writeAtomic } from '../core/atomicFile.ts';
 import { createStore } from '../core/store.ts';
 import { directoryIO } from './atomicIo.ts';
@@ -155,27 +156,19 @@ export async function downloadImageToDevice(item: ImageAssetMetadata): Promise<b
       return false;
     }
 
-    let savedDirect = false;
-    if (Platform.OS === 'android') {
-      const publicDownloadPath = `/storage/emulated/0/Download/chiwiwi_${item.imageId}.${item.format}`;
-      try {
-        const dest = new File(publicDownloadPath);
-        if (dest.exists) dest.delete();
-        sourceFile.copy(dest);
-        savedDirect = true;
-        showToast(`Saved to Download/chiwiwi_${item.imageId}.${item.format}!`, 5000);
-      } catch {
-        // Fall back to system share dialog
-      }
+    const DiffusionModule = (NativeModules as Record<string, any>)?.DiffusionModule;
+    if (Platform.OS === 'android' && DiffusionModule?.saveToGallery) {
+      const rawPath = uriToPath(sourceFile.uri);
+      await DiffusionModule.saveToGallery(rawPath);
+      showToast('Saved to Pictures/Chiwiwi in device gallery!', 4000);
+      return true;
     }
 
-    if (!savedDirect) {
-      await Share.share({
-        title: item.prompt || 'Chiwiwi Image',
-        url: sourceFile.uri,
-      });
-      showToast('Image ready for download/saving.');
-    }
+    await Share.share({
+      title: item.prompt || 'Chiwiwi Image',
+      url: sourceFile.uri,
+    });
+    showToast('Image shared for saving.');
     return true;
   } catch (err) {
     showToast(`Failed to export image: ${err instanceof Error ? err.message : String(err)}`);
@@ -191,6 +184,14 @@ export async function shareImage(item: ImageAssetMetadata): Promise<void> {
       showToast('Image file not found.');
       return;
     }
+
+    const DiffusionModule = (NativeModules as Record<string, any>)?.DiffusionModule;
+    if (Platform.OS === 'android' && DiffusionModule?.shareImage) {
+      const rawPath = uriToPath(sourceFile.uri);
+      await DiffusionModule.shareImage(rawPath);
+      return;
+    }
+
     await Share.share({
       title: item.prompt || 'Chiwiwi Generated Image',
       url: sourceFile.uri,

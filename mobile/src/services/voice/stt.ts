@@ -53,6 +53,43 @@ export function useStt(): SttState {
   return useSyncExternalStore(sttStore.subscribe, sttStore.getState);
 }
 
+export interface AudioMeterState {
+  volume: number; // 0..1 normalized loudness
+  pitch: number;  // 0..1 estimated pitch frequency
+}
+
+export const audioMeterStore = createStore<AudioMeterState>({ volume: 0, pitch: 0 });
+
+export function useAudioMeter(): AudioMeterState {
+  return useSyncExternalStore(audioMeterStore.subscribe, audioMeterStore.getState);
+}
+
+function calculateAudioMeter(bytes: Uint8Array): { volume: number; pitch: number } {
+  if (!bytes || bytes.length < 2) return { volume: 0, pitch: 0 };
+  const samples = Math.floor(bytes.length / 2);
+  let sumSquares = 0;
+  let zeroCrossings = 0;
+  let prevSample = 0;
+
+  for (let i = 0; i < bytes.length - 1; i += 2) {
+    let sample = bytes[i] | (bytes[i + 1] << 8);
+    if (sample >= 32768) sample -= 65536;
+    sumSquares += sample * sample;
+
+    if ((prevSample < 0 && sample >= 0) || (prevSample >= 0 && sample < 0)) {
+      zeroCrossings++;
+    }
+    prevSample = sample;
+  }
+
+  const rms = Math.sqrt(sumSquares / samples);
+  const volume = Math.min(1, Math.max(0, rms / 8000));
+  const zcr = samples > 0 ? zeroCrossings / samples : 0;
+  const pitch = Math.min(1, Math.max(0, zcr * 3.5));
+
+  return { volume, pitch };
+}
+
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const fail = (reason: SttFailure, msg: string): SttResult => ({ ok: false, reason, message: msg });
 
@@ -191,15 +228,47 @@ export async function startListening(h: ListenHandlers, prefs: VoicePrefs = getV
   if (!native) return fail('no_engine', WHISPER_JS_MISSING);
   const { realtime } = native;
   const spec = getSpeechModel(sttStore.getState().loadedModelId)!;
+
+  // Intercept raw mic PCM frames to drive the reactive VoiceOrb bounce & meter
+  const rawMic = mic;
+  const wrappedMic = {
+    initialize: (cfg: any) => rawMic.initialize(cfg),
+    start: () => rawMic.start(),
+    stop: () => {
+      audioMeterStore.setState({ volume: 0, pitch: 0 });
+      return rawMic.stop();
+    },
+    isRecording: () => rawMic.isRecording(),
+    onData: (cb: any) => {
+      rawMic.onData((data: any) => {
+        if (data?.data) {
+          try {
+            const meter = calculateAudioMeter(data.data);
+            audioMeterStore.setState(meter);
+          } catch {
+            // safe meter calculation ignore
+          }
+        }
+        cb(data);
+      });
+    },
+    onError: (cb: any) => rawMic.onError(cb),
+    onStatusChange: (cb: any) => rawMic.onStatusChange(cb),
+    release: () => {
+      audioMeterStore.setState({ volume: 0, pitch: 0 });
+      return rawMic.release();
+    },
+  };
+
   const t = new realtime.RealtimeTranscriber(
-    { whisperContext: ctx, vadContext: new realtime.RingBufferVad(vadCtx, { vadOptions: vadOptionsFor(prefs) }), audioStream: mic },
+    { whisperContext: ctx, vadContext: new realtime.RingBufferVad(vadCtx, { vadOptions: vadOptionsFor(prefs) }), audioStream: wrappedMic },
     {
       audioSliceSec: 30,
       promptPreviousSlices: false, // every utterance is its own message; chaining makes whisper repeat itself
       realtimeProcessingPauseMs: 500,
       transcribeOptions: { language: whisperLanguage(spec, prefs) },
-      // 7 = VOICE_COMMUNICATION (echo cancellation, so the assistant's own voice does not trigger barge-in); 6 = VOICE_RECOGNITION.
-      audioStreamConfig: { sampleRate: 16000, channels: 1, bitsPerSample: 16, audioSource: prefs.bargeIn ? 7 : 6 },
+      // 6 = VOICE_RECOGNITION (standard Android recognition mic with noise suppression on Galaxy & Snapdragon)
+      audioStreamConfig: { sampleRate: 16000, channels: 1, bitsPerSample: 16, audioSource: 6 },
     },
     {
       onVad: (ev) => {
@@ -225,6 +294,7 @@ export async function startListening(h: ListenHandlers, prefs: VoicePrefs = getV
 }
 
 export async function stopListening(): Promise<void> {
+  audioMeterStore.setState({ volume: 0, pitch: 0 });
   const t = transcriber;
   transcriber = null;
   sttStore.setState({ listening: false });
