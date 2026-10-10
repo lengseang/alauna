@@ -17,14 +17,15 @@ export interface IconButtonProps {
   /** Glyph color override (default text; muted for secondary chrome). */
   color?: string;
   accessibilityHint?: string;
+  haptics?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
 /** 48x48 square icon target with a mandatory accessibility label. Taps are debounced (250ms). */
-export function IconButton({ icon, label, onPress, tone = 'default', selected, disabled, color, accessibilityHint, style }: IconButtonProps) {
-  const { colors } = useTheme();
+export function IconButton({ icon, label, onPress, tone = 'default', selected, disabled, color, accessibilityHint, haptics = true, style }: IconButtonProps) {
+  const { colors, haptics: themeHaptics } = useTheme();
   const s = useStyles();
-  const { execute } = useGuardedAction(async () => void (await onPress()), { debounceMs: 250, enableHaptics: false });
+  const { execute } = useGuardedAction(async () => void (await onPress()), { debounceMs: 250, enableHaptics: haptics && themeHaptics });
   const filled = tone === 'filled';
   const fg = filled ? (disabled ? colors.muted : colors.onAccent) : selected ? colors.accent : (color ?? colors.text);
   return (

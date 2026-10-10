@@ -2,6 +2,7 @@ import React from 'react';
 import { Image, Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import type { ImageAssetMetadata } from '../../core/imageGen/types.ts';
 import { formatBytes } from '../../core/format.ts';
 import { downloadImageToDevice, shareImage } from '../../services/imageGallery.ts';
@@ -28,6 +29,7 @@ export function ImageViewerModal({ image, visible, onClose, onRegenerate }: Imag
 
   const handleCopyPrompt = async () => {
     if (!image.prompt) return;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     await Clipboard.setStringAsync(image.prompt);
     showToast('Prompt copied to clipboard!');
   };
@@ -115,6 +117,7 @@ export function ImageViewerModal({ image, visible, onClose, onRegenerate }: Imag
                 label="Regenerate"
                 variant="primary"
                 onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
                   onRegenerate(image);
                   onClose();
                 }}
@@ -195,7 +198,7 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
   promptText: {
     color: colors.text,
     lineHeight: 20,
-    fontSize: 13,
+    fontSize: 14,
   },
   metaText: {
     marginTop: space.xs,

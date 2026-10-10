@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { makeStyles, useTheme } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { Text } from './Text';
@@ -24,7 +25,7 @@ export interface TagProps {
  * Wrap a group in <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>.
  */
 export function Tag({ label, onPress, selected, tone = 'default', icon, count, accessibilityHint }: TagProps) {
-  const { colors } = useTheme();
+  const { colors, haptics } = useTheme();
   const s = useStyles();
   const fg = onPress ? colors.text : tone === 'accent' ? colors.accent : tone === 'danger' ? colors.danger : colors.muted;
   const glyph = onPress && selected ? 'check' : icon;
@@ -42,6 +43,12 @@ export function Tag({ label, onPress, selected, tone = 'default', icon, count, a
     </>
   );
   if (!onPress) return <View style={[s.base, s.static, tone === 'accent' && s.accentEdge, tone === 'danger' && s.dangerEdge]}>{body}</View>;
+  const handlePress = () => {
+    if (haptics) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    onPress();
+  };
   return (
     <Pressable
       accessibilityRole="checkbox"
@@ -49,7 +56,7 @@ export function Tag({ label, onPress, selected, tone = 'default', icon, count, a
       accessibilityHint={accessibilityHint}
       accessibilityState={{ checked: !!selected }}
       hitSlop={{ top: 6, bottom: 6 }}
-      onPress={onPress}
+      onPress={handlePress}
       style={({ pressed }) => [s.base, s.chip, selected && s.on, pressed && s.pressed]}
     >
       {body}

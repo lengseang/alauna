@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import {
   listVoicePersonas,
   VOICE_PERSONAS,
@@ -44,6 +45,7 @@ export function VoicePersonaSheet({ visible, onClose }: VoicePersonaSheetProps) 
   };
 
   const handleSelect = (persona: VoicePersona) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     updateVoicePrefs({
       personaId: persona.id,
       ttsPitch: persona.pitch,

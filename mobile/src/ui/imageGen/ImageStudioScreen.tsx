@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, TextInput, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { makeStyles, useTheme } from '../../theme';
 import type {
   AspectRatio,
@@ -113,6 +114,12 @@ export function ImageStudioScreen() {
     refreshImageModelStatuses();
   }, []);
 
+  useEffect(() => {
+    if (activeJob?.status === 'completed') {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+  }, [activeJob?.status]);
+
   const selectedManifest =
     IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === selectedModelId) ?? IMAGE_MODEL_MANIFESTS[0];
   const selectedModelState = modelStates[selectedModelId];
@@ -221,10 +228,12 @@ export function ImageStudioScreen() {
       showToast('Enter a short prompt idea first to enhance.');
       return;
     }
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setIsEnhancing(true);
     try {
       const res = await enhancePromptWithLLM(engine, prompt, goal);
       if (res.ok && res.positivePrompt) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         setPrompt(res.positivePrompt);
         if (res.negativePrompt && !negativePrompt.trim()) {
           setNegativePrompt(res.negativePrompt);
@@ -240,6 +249,7 @@ export function ImageStudioScreen() {
 
   const handleRegenerateFromImage = (item: ImageAssetMetadata | null) => {
     if (!item) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     setPrompt(item.prompt || '');
     if (item.negativePrompt) {
       setNegativePrompt(item.negativePrompt);

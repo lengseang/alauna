@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
-import { hit, makeStyles } from '../theme';
+import * as Haptics from 'expo-haptics';
+import { hit, makeStyles, useTheme } from '../theme';
 import { Text } from './Text';
 
 export interface SegmentedOption<T extends string> {
@@ -24,6 +25,7 @@ export interface SegmentedProps<T extends string> {
  */
 export function Segmented<T extends string>({ options, value, onChange, label, disabled }: SegmentedProps<T>) {
   const s = useStyles();
+  const { haptics } = useTheme();
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={[s.frame, disabled && s.disabled]}>
       {options.map((o, i) => {
@@ -36,7 +38,14 @@ export function Segmented<T extends string>({ options, value, onChange, label, d
             accessibilityState={{ checked: on, disabled: !!disabled }}
             disabled={disabled}
             hitSlop={{ top: 2, bottom: 2 }}
-            onPress={() => !on && onChange(o.value)}
+            onPress={() => {
+              if (!on) {
+                if (haptics) {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+                }
+                onChange(o.value);
+              }
+            }}
             style={({ pressed }) => [s.cell, i > 0 && s.sep, on && s.on, pressed && !on && s.pressed]}
           >
             {on ? <View style={s.lintel} /> : null}
