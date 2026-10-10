@@ -56,7 +56,7 @@ class AndroidDiffusionEngine implements LocalDiffusionEngine {
 
   public async generate(
     params: LocalDiffusionParams,
-    onProgress: (step: number, totalSteps: number) => void,
+    onProgress: (step: number, totalSteps: number, stage?: string) => void,
     signal?: AbortSignal,
   ): Promise<string> {
     if (!DiffusionModule) {
@@ -75,10 +75,11 @@ class AndroidDiffusionEngine implements LocalDiffusionEngine {
 
     const sub = DeviceEventEmitter.addListener(
       'onDiffusionProgress',
-      (data: { step?: number; totalSteps?: number; timeSec?: number }) => {
+      (data: { step?: number; totalSteps?: number; timeSec?: number; stage?: string }) => {
         const curStep = data?.step ?? 0;
         const total = data?.totalSteps ?? params.steps;
-        onProgress(curStep, total);
+        const stage = data?.stage ?? (total > 100 ? 'loading_weights' : 'denoising');
+        onProgress(curStep, total, stage);
       },
     );
 
@@ -104,8 +105,9 @@ class AndroidDiffusionEngine implements LocalDiffusionEngine {
         steps: params.steps,
         cfgScale: params.cfg,
         seed: params.seed != null && params.seed >= 0 ? params.seed : -1,
+        sampleMethod: params.sampler ?? 'auto',
         outputPath: rawOutputPath,
-        threads: 4,
+        threads: 5,
       });
     } catch (err: any) {
       const msg = err?.message || String(err);
@@ -219,8 +221,17 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
           height: plan.resolution.height,
           seed: plan.seed,
           cfg: plan.guidanceScale,
+          sampler: plan.scheduler === 'lcm' ? 'lcm' : plan.scheduler === 'euler_ancestral' ? 'euler_a' : 'dpmpp2m',
         },
-        (step, total) => onProgress(Math.min(99, Math.round((step / Math.max(1, total)) * 100)), `Denoising step ${step}/${total}`),
+        (step, total, stage) => {
+          if (stage === 'loading_weights' || total > 100) {
+            const pct = Math.min(99, Math.round((step / Math.max(1, total)) * 100));
+            onProgress(pct, `Loading neural weights (${step}/${total} layers)`);
+          } else {
+            const pct = Math.min(99, Math.round((step / Math.max(1, total)) * 100));
+            onProgress(pct, `Synthesizing image (Step ${step}/${total})`);
+          }
+        },
         this.abort.signal,
       );
     } catch (e) {

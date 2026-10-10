@@ -224,3 +224,83 @@ test('imageGen modelRegistry: classifies All-in-One vs Modular UNet models hones
   assert.equal(verifyModelIntegrity(anythingV5, anythingV5.downloadSizeBytes, anythingV5.sha256).valid, true);
   assert.equal(verifyModelIntegrity(meinaHentai, meinaHentai.downloadSizeBytes, meinaHentai.sha256).valid, true);
 });
+
+test('imageGen adaptivePlanner: configures DPM++ 2M Karras as default and LCM for fast models', () => {
+  const sd15 = getImageModelManifest('stable-diffusion-v1.5-q4')!;
+  const lcm = getImageModelManifest('dreamshaper-7-lcm-f16')!;
+  const nominalDevice: DeviceResourceState = {
+    totalRamBytes: 12 * 1024 * 1024 * 1024,
+    thermalState: 'nominal',
+  };
+
+  // Case 1: Standard model defaults to DPM++ 2M Karras with accelerated 14-18 step convergence
+  const reqStandard: GenerationRequest = {
+    requestVersion: 1,
+    prompt: 'Portrait of a warrior',
+    goal: 'character',
+    qualityMode: 'quality',
+    aspectRatio: '1:1',
+    refinementPolicy: 'never',
+  };
+  const planStandard = planGeneration(reqStandard, sd15, nominalDevice);
+  assert.equal(planStandard.scheduler, 'dpmpp2m_karras');
+  assert.equal(planStandard.steps, 18, 'Quality mode with DPM++ 2M should cap at 18 steps');
+  assert.equal(planStandard.resolution.width, 512, '1:1 large should be 512x512 to prevent O(N^2) memory paging');
+  assert.equal(planStandard.resolution.height, 512);
+
+  // Case 2: Fast LCM model automatically selects LCM scheduler with 4 steps
+  const reqLcm: GenerationRequest = {
+    requestVersion: 1,
+    prompt: 'Ethereal dragon flying over mountains',
+    goal: 'illustration',
+    qualityMode: 'balanced',
+    aspectRatio: '1:1',
+    refinementPolicy: 'never',
+  };
+  const planLcm = planGeneration(reqLcm, lcm, nominalDevice);
+  assert.equal(planLcm.scheduler, 'lcm');
+  assert.equal(planLcm.steps, 4, 'LCM model in balanced mode should use 4 steps');
+  assert.equal(planLcm.guidanceScale, 1.5, 'LCM model should use low guidance scale 1.5');
+
+  // Case 3: Explicit sampler override for classic Euler Ancestral
+  const reqEuler: GenerationRequest = {
+    ...reqStandard,
+    sampler: 'euler_a',
+  };
+  const planEuler = planGeneration(reqEuler, sd15, nominalDevice);
+  assert.equal(planEuler.scheduler, 'euler_ancestral');
+  assert.equal(planEuler.steps, 25);
+});
+
+test('imageGen adaptivePlanner: all resolution tiers are divisible by 8 for VAE / UNet alignment', () => {
+  const sd15 = getImageModelManifest('stable-diffusion-v1.5-q4')!;
+  const nominalDevice: DeviceResourceState = {
+    totalRamBytes: 12 * 1024 * 1024 * 1024,
+    thermalState: 'nominal',
+  };
+  const ratios: ('1:1' | '3:4' | '4:3' | '9:16' | '16:9')[] = ['1:1', '3:4', '4:3', '9:16', '16:9'];
+  const modes: ('fast' | 'balanced' | 'quality')[] = ['fast', 'balanced', 'quality'];
+
+  for (const aspectRatio of ratios) {
+    for (const qualityMode of modes) {
+      const plan = planGeneration(
+        {
+          requestVersion: 1,
+          prompt: 'test',
+          goal: 'general',
+          qualityMode,
+          aspectRatio,
+          refinementPolicy: 'never',
+        },
+        sd15,
+        nominalDevice,
+      );
+      assert.equal(plan.resolution.width % 8, 0, `${aspectRatio} ${qualityMode} width must be divisible by 8`);
+      assert.equal(plan.resolution.height % 8, 0, `${aspectRatio} ${qualityMode} height must be divisible by 8`);
+      // Ensure maximum pixel area never exceeds 512*768 = 393,216 to protect on-device RAM
+      const pixelArea = plan.resolution.width * plan.resolution.height;
+      assert.ok(pixelArea <= 400_000, `Pixel area ${pixelArea} should remain bounded for mobile CPU`);
+    }
+  }
+});
+

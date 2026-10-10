@@ -36,6 +36,7 @@ export interface GenerationRequest {
   negativePrompt?: string;
   referenceImageId?: string;
   refinementPolicy: RefinementPolicy;
+  sampler?: 'auto' | 'dpmpp2m' | 'lcm' | 'euler_a';
 }
 
 // ------------------------------------------------------------------ Generation Status & Job
@@ -273,6 +274,8 @@ export interface LocalDiffusionParams {
   seed?: number;
   /** Classifier-free guidance scale. */
   cfg: number;
+  /** Optional sampling method override (e.g. 'dpmpp2m', 'lcm', 'euler_a'). */
+  sampler?: string;
 }
 
 /**
@@ -284,7 +287,7 @@ export interface LocalDiffusionEngine {
   load(modelPath: string): Promise<void>;
   generate(
     params: LocalDiffusionParams,
-    onProgress: (step: number, totalSteps: number) => void,
+    onProgress: (step: number, totalSteps: number, stage?: string) => void,
     signal?: AbortSignal,
   ): Promise<string>;
   release(): Promise<void>;

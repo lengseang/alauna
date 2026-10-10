@@ -42,6 +42,7 @@ object NativeDiffusion {
         steps: Int,
         cfgScale: Float,
         seed: Long,
+        sampleMethod: String?,
         outputPath: String,
         progressCallback: ProgressCallback?
     ): Boolean

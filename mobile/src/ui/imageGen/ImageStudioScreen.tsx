@@ -89,6 +89,7 @@ export function ImageStudioScreen() {
   const [goal, setGoal] = useState<GenerationGoal>('general');
   const [qualityMode, setQualityMode] = useState<QualityMode>('balanced');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
+  const [sampler, setSampler] = useState<'auto' | 'dpmpp2m' | 'lcm' | 'euler_a'>('auto');
   const [selectedModelId, setSelectedModelId] = useState<string>(
     IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'anything-v5-q4')?.modelId ??
       IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'dreamshaper-7-lcm-f16')?.modelId ??
@@ -177,6 +178,7 @@ export function ImageStudioScreen() {
       qualityMode,
       modelId: selectedModelId,
       aspectRatio,
+      sampler,
       seed: Number.isFinite(parsedSeed) ? parsedSeed : undefined,
       refinementPolicy: qualityMode === 'fast' ? 'never' : 'if-beneficial',
     };
@@ -506,6 +508,23 @@ export function ImageStudioScreen() {
             />
           </View>
 
+          {/* Diffusion Sampler */}
+          <View style={s.section}>
+            <Text variant="label">DIFFUSION SAMPLER</Text>
+            <Segmented
+              label="Diffusion Sampler"
+              options={[
+                { value: 'auto', label: 'Auto (DPM++ 2M)' },
+                { value: 'dpmpp2m', label: 'DPM++ 2M Karras' },
+                { value: 'lcm', label: 'LCM (4-Step)' },
+                { value: 'euler_a', label: 'Euler A' },
+              ]}
+              value={sampler}
+              onChange={(v) => !isGenerating && setSampler(v as any)}
+              disabled={isGenerating}
+            />
+          </View>
+
           {/* Negative Prompt */}
           <View style={s.section}>
             <Text variant="label">NEGATIVE PROMPT (OPTIONAL)</Text>
@@ -624,6 +643,9 @@ export function ImageStudioScreen() {
                       ) : (
                         <Tag label="ALL-IN-ONE" selected tone="accent" />
                       )}
+                      {manifest.tags && manifest.tags.includes('fast-lcm') ? (
+                        <Tag label="4-STEP FAST" selected tone="accent" />
+                      ) : null}
                       {isUncensored ? <Tag label="UNCENSORED" selected tone="accent" /> : <Tag label="STANDARD" />}
                       {isSelected ? <Tag label="ACTIVE" selected /> : null}
                     </View>

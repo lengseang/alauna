@@ -18,11 +18,11 @@ import type {
 // ------------------------------------------------------------------ Resolution Resolution Table
 
 const ASPECT_RATIO_DIMENSIONS: Record<AspectRatio, { small: [number, number]; medium: [number, number]; large: [number, number] }> = {
-  '1:1': { small: [384, 384], medium: [512, 512], large: [768, 768] },
-  '3:4': { small: [384, 512], medium: [480, 640], large: [576, 768] },
-  '4:3': { small: [512, 384], medium: [640, 480], large: [768, 576] },
-  '9:16': { small: [288, 512], medium: [432, 768], large: [576, 1024] },
-  '16:9': { small: [512, 288], medium: [768, 432], large: [1024, 576] },
+  '1:1': { small: [384, 384], medium: [512, 512], large: [512, 512] },
+  '3:4': { small: [384, 512], medium: [448, 576], large: [480, 640] },
+  '4:3': { small: [512, 384], medium: [576, 448], large: [640, 480] },
+  '9:16': { small: [288, 512], medium: [360, 640], large: [384, 672] },
+  '16:9': { small: [512, 288], medium: [640, 360], large: [672, 384] },
 };
 
 // ------------------------------------------------------------------ Adaptive Planner Function
@@ -66,27 +66,53 @@ export function planGeneration(
     }
   }
 
-  // 3. Step count calculation
+  // 3. Step count and sampler calculation
   let steps: number;
-  let guidanceScale = 7.5;
+  let guidanceScale = 7.0;
+  let scheduler = 'dpmpp2m_karras';
 
-  if (manifest.modelFamily === 'sd-turbo') {
-    // Turbo models converge in 1-4 steps
-    steps = effectiveMode === 'fast' ? 1 : effectiveMode === 'balanced' ? 2 : 4;
-    guidanceScale = 1.0; // Turbo does not use heavy CFG
-    rationale.push(`Turbo model architecture: using ${steps} steps with guidance scale 1.0.`);
+  const isFastModel = manifest.modelFamily === 'sd-turbo' || (manifest.tags && manifest.tags.includes('fast-lcm'));
+
+  if (isFastModel) {
+    // Turbo and LCM models converge in 2-4 steps
+    steps = effectiveMode === 'fast' ? 2 : effectiveMode === 'balanced' ? 4 : Math.min(6, manifest.maxSteps);
+    guidanceScale = 1.5;
+    scheduler = 'lcm';
+    rationale.push(`Few-step distilled model architecture: using ${steps} steps with LCM solver.`);
   } else {
-    // Standard diffusion
-    if (effectiveMode === 'fast') {
-      steps = Math.min(15, manifest.defaultSteps);
-    } else if (effectiveMode === 'quality') {
-      steps = Math.min(30, manifest.maxSteps);
+    // Standard diffusion models
+    if (request.sampler === 'euler_a') {
+      scheduler = 'euler_ancestral';
+      if (effectiveMode === 'fast') {
+        steps = Math.min(15, manifest.defaultSteps);
+      } else if (effectiveMode === 'quality') {
+        steps = Math.min(25, manifest.maxSteps);
+      } else {
+        steps = Math.min(20, manifest.defaultSteps);
+      }
+      guidanceScale = 7.5;
+      rationale.push(`Euler Ancestral sampler: using ${steps} steps.`);
+    } else if (request.sampler === 'lcm') {
+      scheduler = 'lcm';
+      steps = effectiveMode === 'fast' ? 4 : effectiveMode === 'balanced' ? 6 : 8;
+      guidanceScale = 2.0;
+      rationale.push(`LCM solver selected: using ${steps} steps.`);
     } else {
-      steps = manifest.defaultSteps;
+      // DPM++ 2M Karras (default high-speed / high-fidelity solver): converges in 10-18 steps
+      scheduler = 'dpmpp2m_karras';
+      if (effectiveMode === 'fast') {
+        steps = 10;
+      } else if (effectiveMode === 'quality') {
+        steps = Math.min(18, manifest.maxSteps);
+      } else {
+        steps = 14;
+      }
+      guidanceScale = 7.0;
+      rationale.push(`DPM++ 2M Karras solver: using ${steps} steps for accelerated high-fidelity convergence.`);
     }
 
     if (device.thermalState === 'serious') {
-      steps = Math.max(10, Math.floor(steps * 0.7));
+      steps = Math.max(8, Math.floor(steps * 0.7));
       rationale.push('Reduced inference steps by 30% due to device thermal conditions.');
     }
   }
@@ -116,7 +142,7 @@ export function planGeneration(
     aspectRatio: request.aspectRatio,
     steps,
     guidanceScale,
-    scheduler: 'euler_ancestral',
+    scheduler,
     precision: manifest.precision,
     batchSize: 1, // Single job invariant (§2.2)
     useDraftThenRefine: allowRefinement && request.refinementPolicy === 'if-beneficial',

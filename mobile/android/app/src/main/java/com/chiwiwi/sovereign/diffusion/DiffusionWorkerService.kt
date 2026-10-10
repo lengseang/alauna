@@ -34,6 +34,8 @@ class DiffusionWorkerService : Service() {
         const val KEY_STEP = "step"
         const val KEY_TOTAL_STEPS = "totalSteps"
         const val KEY_TIME_SEC = "timeSec"
+        const val KEY_STAGE = "stage"
+        const val KEY_SAMPLE_METHOD = "sampleMethod"
         const val KEY_ERROR_MSG = "errorMsg"
     }
 
@@ -99,7 +101,9 @@ class DiffusionWorkerService : Service() {
         val seed = data.getLong(KEY_SEED, -1L)
         val outputPath = data.getString(KEY_OUTPUT_PATH) ?: ""
         val modelPath = data.getString(KEY_MODEL_PATH)
-        val threads = data.getInt(KEY_THREADS, 4)
+        val defaultThreads = maxOf(4, minOf(5, Runtime.getRuntime().availableProcessors()))
+        val threads = data.getInt(KEY_THREADS, defaultThreads)
+        val sampleMethod = data.getString(KEY_SAMPLE_METHOD) ?: "auto"
 
         executor.execute {
             try {
@@ -120,7 +124,7 @@ class DiffusionWorkerService : Service() {
                         sendError(replyTo, "No diffusion model specified or loaded")
                         return@execute
                     }
-                    Log.i(TAG, "Loading model on-demand: $targetModel")
+                    Log.i(TAG, "Loading model on-demand: $targetModel with $threads threads")
                     ctxHandle = NativeDiffusion.nativeInit(targetModel, threads)
                     currentModelPath = targetModel
                 }
@@ -140,6 +144,8 @@ class DiffusionWorkerService : Service() {
                             pData.putInt(KEY_STEP, step)
                             pData.putInt(KEY_TOTAL_STEPS, totalSteps)
                             pData.putFloat(KEY_TIME_SEC, timeSec)
+                            val stage = if (totalSteps > 100) "loading_weights" else "denoising"
+                            pData.putString(KEY_STAGE, stage)
                             pMsg.data = pData
                             try {
                                 replyTo.send(pMsg)
@@ -150,7 +156,7 @@ class DiffusionWorkerService : Service() {
                     }
                 }
 
-                Log.i(TAG, "Executing native generation...")
+                Log.i(TAG, "Executing native generation (method=$sampleMethod, steps=$steps, threads=$threads)...")
                 val success = NativeDiffusion.nativeGenerate(
                     ctxHandle = ctxHandle,
                     prompt = prompt,
@@ -160,6 +166,7 @@ class DiffusionWorkerService : Service() {
                     steps = steps,
                     cfgScale = cfgScale,
                     seed = seed,
+                    sampleMethod = sampleMethod,
                     outputPath = outputPath,
                     progressCallback = progressCallback
                 )

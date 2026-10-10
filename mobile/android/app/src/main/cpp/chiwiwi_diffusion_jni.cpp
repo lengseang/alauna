@@ -96,10 +96,12 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeInit(
     sd_ctx_params_t params;
     sd_ctx_params_init(&params);
     params.model_path = modelPath;
-    params.n_threads = nThreads > 0 ? nThreads : 4;
+    params.n_threads = nThreads > 0 ? nThreads : 5; // 5 threads targets 1 Prime + 4 Performance cores on Snapdragon 8 Gen 2
     params.wtype = SD_TYPE_COUNT; // Auto-detect quantization
     params.rng_type = CPU_RNG;
     params.enable_mmap = true;
+    params.flash_attn = true; // Enable flash attention for memory efficiency
+    params.diffusion_flash_attn = true; // Enable diffusion flash attention to accelerate UNet attention
 
     // Check companion files in the model's directory (for modular SDXL/Pony models)
     std::string clipLPath, clipGPath, t5xxlPath, vaePath;
@@ -185,6 +187,7 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeGenerate(
     jint steps,
     jfloat cfgScale,
     jlong seed,
+    jstring jSampleMethod,
     jstring jOutputPath,
     jobject jProgressCallback
 ) {
@@ -197,6 +200,11 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeGenerate(
     const char* prompt = env->GetStringUTFChars(jPrompt, nullptr);
     const char* negativePrompt = jNegativePrompt ? env->GetStringUTFChars(jNegativePrompt, nullptr) : "";
     const char* outputPath = env->GetStringUTFChars(jOutputPath, nullptr);
+    const char* sampleMethodCStr = jSampleMethod ? env->GetStringUTFChars(jSampleMethod, nullptr) : nullptr;
+    std::string methodStr = sampleMethodCStr ? sampleMethodCStr : "auto";
+    if (sampleMethodCStr) {
+        env->ReleaseStringUTFChars(jSampleMethod, sampleMethodCStr);
+    }
 
     ProgressCallbackContext cbCtx{};
     if (jProgressCallback) {
@@ -216,14 +224,33 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeGenerate(
     gen_params.negative_prompt = negativePrompt;
     gen_params.width = width > 0 ? width : 512;
     gen_params.height = height > 0 ? height : 512;
-    gen_params.sample_params.sample_steps = steps > 0 ? steps : 4;
-    gen_params.sample_params.sample_method = EULER_A_SAMPLE_METHOD;
-    gen_params.sample_params.guidance.txt_cfg = cfgScale > 0.0f ? cfgScale : 1.5f;
+    gen_params.sample_params.sample_steps = steps > 0 ? steps : 14;
+
+    // Intelligent mobile sampler & scheduler selection:
+    // DPM++ 2M Karras achieves convergence in 12-15 steps (2x faster than Euler_a at 30 steps with sharper quality).
+    // LCM solver achieves convergence in 2-4 steps for distilled/LCM-LoRA models.
+    if (methodStr == "lcm" || (methodStr == "auto" && gen_params.sample_params.sample_steps <= 6)) {
+        gen_params.sample_params.sample_method = LCM_SAMPLE_METHOD;
+        gen_params.sample_params.scheduler = LCM_SCHEDULER;
+    } else if (methodStr == "euler_a") {
+        gen_params.sample_params.sample_method = EULER_A_SAMPLE_METHOD;
+        gen_params.sample_params.scheduler = DISCRETE_SCHEDULER;
+    } else if (methodStr == "euler") {
+        gen_params.sample_params.sample_method = EULER_SAMPLE_METHOD;
+        gen_params.sample_params.scheduler = DISCRETE_SCHEDULER;
+    } else {
+        // High-performance default: DPM++ 2M Karras
+        gen_params.sample_params.sample_method = DPMPP2M_SAMPLE_METHOD;
+        gen_params.sample_params.scheduler = KARRAS_SCHEDULER;
+    }
+
+    gen_params.sample_params.guidance.txt_cfg = cfgScale > 0.0f ? cfgScale : 7.0f;
     gen_params.seed = seed >= 0 ? seed : -1;
     gen_params.batch_count = 1;
 
-    LOGI("Starting generate_image: %dx%d, steps=%d, cfg=%.2f, seed=%lld",
+    LOGI("Starting generate_image: %dx%d, steps=%d, method=%d, scheduler=%d, cfg=%.2f, seed=%lld",
          gen_params.width, gen_params.height, gen_params.sample_params.sample_steps,
+         (int)gen_params.sample_params.sample_method, (int)gen_params.sample_params.scheduler,
          gen_params.sample_params.guidance.txt_cfg, (long long)gen_params.seed);
 
     sd_image_t* raw_images = nullptr;

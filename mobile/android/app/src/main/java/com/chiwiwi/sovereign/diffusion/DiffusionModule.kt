@@ -42,11 +42,13 @@ class DiffusionModule(private val reactContext: ReactApplicationContext) :
                     val step = data.getInt(DiffusionWorkerService.KEY_STEP)
                     val totalSteps = data.getInt(DiffusionWorkerService.KEY_TOTAL_STEPS)
                     val timeSec = data.getFloat(DiffusionWorkerService.KEY_TIME_SEC)
+                    val stage = data.getString(DiffusionWorkerService.KEY_STAGE) ?: if (totalSteps > 100) "loading_weights" else "denoising"
 
                     val params = Arguments.createMap().apply {
                         putInt("step", step)
                         putInt("totalSteps", totalSteps)
                         putDouble("timeSec", timeSec.toDouble())
+                        putString("stage", stage)
                     }
                     sendEvent(EVENT_PROGRESS, params)
                 }
@@ -150,6 +152,7 @@ class DiffusionModule(private val reactContext: ReactApplicationContext) :
         val cfgScale = if (options.hasKey("cfgScale")) options.getDouble("cfgScale").toFloat() else 1.5f
         val seed = if (options.hasKey("seed")) options.getDouble("seed").toLong() else -1L
         val threads = if (options.hasKey("threads")) options.getInt("threads") else 4
+        val sampleMethod = if (options.hasKey("sampleMethod")) options.getString("sampleMethod") else "auto"
 
         val msg = Message.obtain(null, DiffusionWorkerService.MSG_GENERATE)
         msg.replyTo = replyMessenger
@@ -165,6 +168,7 @@ class DiffusionModule(private val reactContext: ReactApplicationContext) :
             putFloat(DiffusionWorkerService.KEY_CFG_SCALE, cfgScale)
             putLong(DiffusionWorkerService.KEY_SEED, seed)
             putInt(DiffusionWorkerService.KEY_THREADS, threads)
+            putString(DiffusionWorkerService.KEY_SAMPLE_METHOD, sampleMethod)
         }
         msg.data = bundle
 
