@@ -137,6 +137,7 @@ export interface DeviceResourceState {
   thermalState: 'nominal' | 'fair' | 'serious' | 'critical';
   batteryLevel?: number; // 0..1
   isLowPowerMode?: boolean;
+  benchmarkMsPerStep?: number;
 }
 
 export interface GenerationPlan {

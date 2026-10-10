@@ -111,8 +111,17 @@ export function planGeneration(
       rationale.push(`DPM++ 2M Karras solver: using ${steps} steps for accelerated high-fidelity convergence.`);
     }
 
+    if (device.benchmarkMsPerStep && device.benchmarkMsPerStep > 0) {
+      const targetTimeSec = effectiveMode === 'fast' ? 25 : effectiveMode === 'quality' ? 75 : 45;
+      const budgetSteps = Math.round((targetTimeSec * 1000) / device.benchmarkMsPerStep);
+      steps = Math.min(manifest.maxSteps, Math.max(4, budgetSteps));
+      rationale.push(
+        `Hardware benchmark calibrated: ${steps} steps budgeted for ~${targetTimeSec}s at ${(device.benchmarkMsPerStep / 1000).toFixed(2)}s/step.`,
+      );
+    }
+
     if (device.thermalState === 'serious') {
-      steps = Math.max(8, Math.floor(steps * 0.7));
+      steps = Math.max(4, Math.floor(steps * 0.7));
       rationale.push('Reduced inference steps by 30% due to device thermal conditions.');
     }
   }

@@ -23,6 +23,7 @@ import { getImageModelManifest } from '../core/imageGen/modelRegistry.ts';
 import { isStorageReady } from './storage.ts';
 import { getInstalledModelPath, isImageModelInstalled } from './imageModelManager.ts';
 import { importGalleryImage } from './imageGallery.ts';
+import { recordGenerationBenchmark } from './imageBenchmarkService.ts';
 
 export interface RuntimeGenerateResult {
   imageId: string;
@@ -271,6 +272,16 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
     } catch (e) {
       throw this.error('OUTPUT_SAVE_FAILED', e instanceof Error ? e.message : String(e));
     }
+
+    // Record real on-device hardware performance for dynamic planner calibration
+    void recordGenerationBenchmark(
+      manifest.modelId,
+      { width: plan.resolution.width, height: plan.resolution.height },
+      plan.steps,
+      durationMs,
+      'cpu',
+    );
+
     onProgress(100, `Complete in ${(durationMs / 1000).toFixed(1)}s.`);
 
     return {

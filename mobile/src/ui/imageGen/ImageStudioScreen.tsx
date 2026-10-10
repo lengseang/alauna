@@ -26,6 +26,7 @@ import {
   useImageModelStates,
 } from '../../services/imageModelManager.ts';
 import { useImageService } from '../../services/imageService.ts';
+import { initImageBenchmarks, useImageBenchmarks } from '../../services/imageBenchmarkService.ts';
 import { isNativeDiffusionEngineAvailable } from '../../services/imageRuntime.ts';
 import { showToast } from '../../services/toast.ts';
 import { formatBytes, formatSpeed } from '../../core/format.ts';
@@ -103,9 +104,12 @@ export function ImageStudioScreen() {
   const [viewerImage, setViewerImage] = useState<ImageAssetMetadata | null>(null);
   const [isEnhancing, setIsEnhancing] = useState(false);
 
-  // Initialize storage index and model status check on mount
+  const benchmarks = useImageBenchmarks();
+
+  // Initialize storage index, benchmarks, and model status check on mount
   useEffect(() => {
     void initGallery();
+    void initImageBenchmarks();
     refreshImageModelStatuses();
   }, []);
 
@@ -320,6 +324,11 @@ export function ImageStudioScreen() {
                 {isSelectedModelInstalled
                   ? `Installed · ${(selectedManifest.downloadSizeBytes / 1e9).toFixed(2)} GB on vault`
                   : 'Weights not installed (tap to download)'}
+              </Text>
+              <Text variant="small" tone={benchmarks[selectedManifest.modelId] ? 'accent' : 'muted'}>
+                {benchmarks[selectedManifest.modelId]
+                  ? `⚡ Speed: ${(benchmarks[selectedManifest.modelId]!.msPerStep / 1000).toFixed(2)}s/step`
+                  : '⚡ Speed: Not measured yet'}
               </Text>
               <Text variant="small" tone="muted">
                 Aspect ratio: {aspectRatio}
@@ -716,6 +725,12 @@ export function ImageStudioScreen() {
                     <Text variant="small" tone="muted">
                       Default Steps: {manifest.defaultSteps} | Max: {manifest.maxSteps} | License:{' '}
                       {manifest.licenseName}
+                    </Text>
+                    <Text variant="small" tone={benchmarks[manifest.modelId] ? 'accent' : 'muted'}>
+                      Hardware Speed:{' '}
+                      {benchmarks[manifest.modelId]
+                        ? `${(benchmarks[manifest.modelId]!.msPerStep / 1000).toFixed(2)}s/step (${(benchmarks[manifest.modelId]!.durationMs / 1000).toFixed(1)}s for ${benchmarks[manifest.modelId]!.steps} steps)`
+                        : 'Not measured yet'}
                     </Text>
                     {manifest.hfRepo ? (
                       <Text variant="small" tone="muted">

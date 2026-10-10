@@ -15,6 +15,7 @@ import type {
   GenerationRequest,
 } from '../core/imageGen/types.ts';
 import { imageCoordinator } from '../core/imageGen/coordinator.ts';
+import { getBenchmarkForModel } from './imageBenchmarkService.ts';
 import { nativeImageRuntime } from './imageRuntime.ts';
 import { showToast } from './toast.ts';
 
@@ -76,8 +77,15 @@ export async function startImageGeneration(
 
   serviceStore.setState({ elapsedSeconds: 0, error: undefined });
 
+  const effectiveDeviceState: DeviceResourceState = {
+    ...deviceState,
+    benchmarkMsPerStep:
+      deviceState.benchmarkMsPerStep ??
+      getBenchmarkForModel(request.modelId ?? 'sd-turbo-q4')?.msPerStep,
+  };
+
   try {
-    const job = await imageCoordinator.submitRequest(request, deviceState, async (plan, onProgress) => {
+    const job = await imageCoordinator.submitRequest(request, effectiveDeviceState, async (plan, onProgress) => {
       return await nativeImageRuntime.generate(plan, onProgress);
     });
     return job;
