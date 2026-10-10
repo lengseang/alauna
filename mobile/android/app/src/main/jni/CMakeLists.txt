@@ -18,6 +18,15 @@ set(GGML_OPENMP OFF CACHE BOOL "Disable OpenMP" FORCE)
 set(GGML_CPU_ARM_ARCH "armv8.2-a+fp16+dotprod+i8mm" CACHE STRING "ggml: CPU architecture for ARM" FORCE)
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
+
+add_compile_options(
+    -O3
+    -DNDEBUG
+    -ffast-math
+    -march=armv8.2-a+fp16+dotprod+i8mm
+)
 
 add_subdirectory(../cpp/sd ${CMAKE_CURRENT_BINARY_DIR}/sd_build)
 

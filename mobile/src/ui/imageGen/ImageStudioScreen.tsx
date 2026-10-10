@@ -95,9 +95,9 @@ export function ImageStudioScreen() {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [sampler, setSampler] = useState<'auto' | 'dpmpp2m' | 'lcm' | 'euler_a'>('auto');
   const [selectedModelId, setSelectedModelId] = useState<string>(
-    IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'anything-v5-q4')?.modelId ??
+    IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'sd-turbo-q4')?.modelId ??
       IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'dreamshaper-7-lcm-f16')?.modelId ??
-      IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'sd-turbo-q4')?.modelId ??
+      IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'anything-v5-q4')?.modelId ??
       IMAGE_MODEL_MANIFESTS[0].modelId,
   );
   const [seedInput, setSeedInput] = useState<string>('');

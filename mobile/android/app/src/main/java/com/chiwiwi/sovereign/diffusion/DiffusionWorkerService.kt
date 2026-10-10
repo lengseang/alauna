@@ -136,6 +136,7 @@ class DiffusionWorkerService : Service() {
         }
 
         executor.execute {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_FOREGROUND)
             if (!NativeDiffusion.ensureLoaded()) {
                 Log.e(TAG, "Native diffusion library could not be loaded: ${NativeDiffusion.getLoadError()?.message}")
                 return@execute
@@ -169,6 +170,7 @@ class DiffusionWorkerService : Service() {
         val sampleMethod = data.getString(KEY_SAMPLE_METHOD) ?: "auto"
 
         executor.execute {
+            Process.setThreadPriority(Process.THREAD_PRIORITY_FOREGROUND)
             val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
             val lock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "chiwiwi:diffusion_synthesis")
             try {

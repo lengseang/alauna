@@ -8,11 +8,13 @@
 #include <filesystem>
 #include <sched.h>
 #include <unistd.h>
+#include <sys/resource.h>
 #include <cerrno>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 #include "stable-diffusion.h"
+#include "core/ggml_extend_backend.h"
 
 #define LOG_TAG "ChiwiwiDiffusion"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -22,6 +24,7 @@
 #define CHIWIWI_EXPORT extern "C" __attribute__((visibility("default"))) JNIEXPORT
 
 static void set_big_core_affinity() {
+    setpriority(PRIO_PROCESS, 0, -10);
     int num_cores = (int)sysconf(_SC_NPROCESSORS_CONF);
     if (num_cores >= 8) {
         cpu_set_t cpuset;
@@ -124,6 +127,9 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeInit(
     params.enable_mmap = true;
     params.flash_attn = true; // Enable flash attention for memory efficiency
     params.diffusion_flash_attn = true; // Enable diffusion flash attention to accelerate UNet attention
+    params.diffusion_conv_direct = true; // Direct 2D convolution without im2col tensor bloat
+    params.vae_conv_direct = true; // Direct VAE convolution without im2col tensor bloat
+    params.disable_segmented_compute = true; // Monolithic graph execution avoids re-slicing and re-planning UNet
 
     // Check companion files in the model's directory (for modular SDXL/Pony models)
     std::string clipLPath, clipGPath, t5xxlPath, vaePath;
@@ -343,6 +349,7 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeRelease(
         LOGI("Releasing sd_ctx: %p", ctx);
         free_sd_ctx(ctx);
     }
+    sd_backend_cpu_free_threadpool();
 }
 
 JNIEXPORT jstring JNICALL
