@@ -6,6 +6,9 @@
 #include <cstring>
 #include <mutex>
 #include <filesystem>
+#include <sched.h>
+#include <unistd.h>
+#include <cerrno>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -17,6 +20,24 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 #define CHIWIWI_EXPORT extern "C" __attribute__((visibility("default"))) JNIEXPORT
+
+static void set_big_core_affinity() {
+    int num_cores = (int)sysconf(_SC_NPROCESSORS_CONF);
+    if (num_cores >= 8) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        // Exclude 3 LITTLE efficiency cores (cores 0..2 Cortex-A510).
+        // Pin to high-frequency Performance and Prime cores (cores 3..7 Cortex-A710/A715/Cortex-X3).
+        for (int i = 3; i < num_cores; ++i) {
+            CPU_SET(i, &cpuset);
+        }
+        if (sched_setaffinity(0, sizeof(cpu_set_t), &cpuset) == 0) {
+            LOGI("Diffusion thread affinity locked to performance cores (3..%d)", num_cores - 1);
+        } else {
+            LOGW("Could not set performance core affinity: %s", strerror(errno));
+        }
+    }
+}
 
 static JavaVM* g_jvm = nullptr;
 static std::string g_last_error;
@@ -92,6 +113,7 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeInit(
     const char* modelPath = env->GetStringUTFChars(jModelPath, nullptr);
     sd_set_log_callback(log_callback, nullptr);
 
+    set_big_core_affinity();
     set_last_error(nullptr);
     sd_ctx_params_t params;
     sd_ctx_params_init(&params);
@@ -196,6 +218,8 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeGenerate(
         LOGE("nativeGenerate called with null context");
         return JNI_FALSE;
     }
+
+    set_big_core_affinity();
 
     const char* prompt = env->GetStringUTFChars(jPrompt, nullptr);
     const char* negativePrompt = jNegativePrompt ? env->GetStringUTFChars(jNegativePrompt, nullptr) : "";

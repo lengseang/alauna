@@ -1,7 +1,12 @@
 package com.chiwiwi.sovereign.diffusion
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.*
 import android.util.Log
 import java.util.concurrent.ExecutorService
@@ -42,6 +47,64 @@ class DiffusionWorkerService : Service() {
     private var currentModelPath: String? = null
     private var ctxHandle: Long = 0L
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private val NOTIFICATION_ID = 40401
+    private val CHANNEL_ID = "chiwiwi_diffusion_channel"
+
+    private fun ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java) ?: return
+            if (manager.getNotificationChannel(CHANNEL_ID) == null) {
+                val channel = NotificationChannel(
+                    CHANNEL_ID,
+                    "Chiwiwi Diffusion Engine",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "On-device AI image synthesis"
+                    setShowBadge(false)
+                }
+                manager.createNotificationChannel(channel)
+            }
+        }
+    }
+
+    private fun updateForegroundNotification(content: String) {
+        ensureNotificationChannel()
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
+        val notification = builder
+            .setContentTitle("Chiwiwi Image Studio")
+            .setContentText(content)
+            .setSmallIcon(android.R.drawable.ic_menu_gallery)
+            .setOngoing(true)
+            .build()
+
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to start foreground service: ${t.message}")
+        }
+    }
+
+    private fun removeForegroundNotification() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "Failed to stop foreground: ${t.message}")
+        }
+    }
 
     inner class IncomingHandler : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
@@ -106,7 +169,12 @@ class DiffusionWorkerService : Service() {
         val sampleMethod = data.getString(KEY_SAMPLE_METHOD) ?: "auto"
 
         executor.execute {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+            val lock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "chiwiwi:diffusion_synthesis")
             try {
+                lock?.acquire(45 * 60 * 1000L) // 45-minute maximum safety lock
+                updateForegroundNotification("Preparing diffusion model...")
+
                 if (!NativeDiffusion.ensureLoaded()) {
                     val err = NativeDiffusion.getLoadError()?.message ?: "Native library not loaded"
                     sendError(replyTo, "Failed to load native diffusion library: $err")
@@ -125,6 +193,7 @@ class DiffusionWorkerService : Service() {
                         return@execute
                     }
                     Log.i(TAG, "Loading model on-demand: $targetModel with $threads threads")
+                    updateForegroundNotification("Loading model into memory...")
                     ctxHandle = NativeDiffusion.nativeInit(targetModel, threads)
                     currentModelPath = targetModel
                 }
@@ -138,13 +207,20 @@ class DiffusionWorkerService : Service() {
 
                 val progressCallback = object : ProgressCallback {
                     override fun onStepProgress(step: Int, totalSteps: Int, timeSec: Float) {
+                        val stage = if (totalSteps > 100) "loading_weights" else "denoising"
+                        val notifText = if (stage == "loading_weights") {
+                            "Loading neural weights ($step/$totalSteps)..."
+                        } else {
+                            "Synthesizing image (Step $step/$totalSteps)..."
+                        }
+                        updateForegroundNotification(notifText)
+
                         if (replyTo != null) {
                             val pMsg = Message.obtain(null, MSG_PROGRESS)
                             val pData = Bundle()
                             pData.putInt(KEY_STEP, step)
                             pData.putInt(KEY_TOTAL_STEPS, totalSteps)
                             pData.putFloat(KEY_TIME_SEC, timeSec)
-                            val stage = if (totalSteps > 100) "loading_weights" else "denoising"
                             pData.putString(KEY_STAGE, stage)
                             pMsg.data = pData
                             try {
@@ -189,6 +265,15 @@ class DiffusionWorkerService : Service() {
             } catch (t: Throwable) {
                 Log.e(TAG, "Exception during generation", t)
                 sendError(replyTo, "Error during generation: ${t.message}")
+            } finally {
+                try {
+                    if (lock?.isHeld == true) {
+                        lock.release()
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "Error releasing wake lock: ${t.message}")
+                }
+                removeForegroundNotification()
             }
         }
     }

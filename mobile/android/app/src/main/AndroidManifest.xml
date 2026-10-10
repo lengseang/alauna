@@ -38,6 +38,7 @@
     <service
       android:name=".diffusion.DiffusionWorkerService"
       android:process=":diffusion_worker"
+      android:foregroundServiceType="dataSync"
       android:exported="false" />
     <provider
       android:name="androidx.core.content.FileProvider"

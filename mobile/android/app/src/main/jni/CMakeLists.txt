@@ -14,6 +14,11 @@ set(SD_WEBP OFF CACHE BOOL "Disable WebP" FORCE)
 set(SD_WEBM OFF CACHE BOOL "Disable WebM" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "Disable OpenMP" FORCE)
 
+# Hardware-accelerated ARM NEON vector instructions for Snapdragon 8 Gen 2 / modern arm64
+set(GGML_CPU_ARM_ARCH "armv8.2-a+fp16+dotprod+i8mm" CACHE STRING "ggml: CPU architecture for ARM" FORCE)
+set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
+
 add_subdirectory(../cpp/sd ${CMAKE_CURRENT_BINARY_DIR}/sd_build)
 
 # JNI bridge shared library
@@ -25,6 +30,12 @@ set_target_properties(chiwiwi-diffusion PROPERTIES
     C_VISIBILITY_PRESET hidden
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
+)
+
+target_compile_options(chiwiwi-diffusion PRIVATE
+    -O3
+    -ffast-math
+    -march=armv8.2-a+fp16+dotprod+i8mm
 )
 
 target_include_directories(chiwiwi-diffusion PRIVATE
