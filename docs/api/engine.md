@@ -74,7 +74,8 @@ messages, `snippet`), `updateThreadSoul(soul)` (per-chat override), `clearThread
 
 `globalSoul()`, `setGlobalSoul(patch)`, `applyArchetype(key)`, `soulEffects(soul)` -> `{ descriptors, sampling }`,
 `previewSoul(soul?, prompt?)` -> real 80-token generation with the loaded model, or `{ ok:false, reason:'no_model'|'busy'|'engine' }`.
-Archetypes (`core/persona.ts ARCHETYPES`): empath, mentor, tactical, spark, cynic, visionary.
+Archetypes (`core/persona.ts ARCHETYPES`): **neutral** (default for new installs; saved souls are kept), empath, mentor, tactical, spark, cynic, visionary.
+`neutral` = built-in soul `soul_neutral` (category `neutral`): PAD at the scale midpoint (sampling stays exactly the user's Settings), no character, follows the user and the system prompt, no moralising, no role-play unless asked. `compileSoulPrompt` emits a lean rules-only prompt for it and still applies the Model Freedom directives (`compileModelFreedomDirectives(freedom, { hasCharacter: false })` swaps "stay in character" for "stay in a character only if asked").
 PAD -> sampling (k = intensity, a = arousal-0.5, d = dominance-0.5): temp += 0.4ak (0.1..1.5), top_p += 0.1ak, top_k *= 1+0.5ak,
 repeat += 0.1dk (1..1.5); pleasure is prompt-only. Neutral PAD = your base sampling.
 
@@ -100,6 +101,16 @@ settings JSON; with `models:true` full SHA-256 of installed models via the Vault
 `refreshSlots()` + `useStorageSlots()` -> `SlotInfo { usedBytes, modelBytes, modelFiles, freeBytes, totalBytes, available, isPrimary, isDownloadTarget }`,
 `vaultUsage()` -> bytes for models/chats/memory/media/kvCache, `moveModel(spec, slotId, { verify:'sha256'|'size', onProgress, token })`
 (copy -> size+GGUF+SHA-256 -> rename -> delete source; refuses a loaded model). Max 5 slots.
+
+## Vision accuracy — `core/visionProfile.ts`
+
+- `settings.compute.imageMaxTokens`: **0 = Auto** (default, settings v3; a saved 512 from v2 migrates to Auto). Auto = per projector family: Qwen-VL / Qwen3.5 / Omni 256-1280, Gemma 4 140-560, Gemma 3 / SmolVLM / LFM2-VL / MiniCPM / Moondream / Ministral keep the projector default (-1), others 64-512. A number overrides the max. `EngineManager` loads the projector with `resolveImageBudget(spec, override)`.
+- Image turns (`runAssistantTurn`): one grounding line joins that turn's system prompt, sampling is lowered (temp <= 0.2, top_k 20, repeat <= 1.05), only this turn's images are sent (a text follow-up keeps the newest image; dropped images leave a note), and `imageTokens` (the per-image allowance) is used when trimming history.
+- `visionQuality(spec)`: best / fair / weak from family + size (an expectation, not measured), shown in the Vault row, model detail and the attach sheet.
+
+## Image Studio runtime — `services/imageRuntime.ts`
+
+No diffusion engine is linked: `isNativeDiffusionEngineAvailable()` is false, generation throws an honest typed error and the button reads "Engine not in this build". The fake denoising loop and `pngSynthesizer` were removed. A real engine implements `LocalDiffusionEngine` (`core/imageGen/types.ts`: `load(modelPath)`, `generate(params, onProgress(step, total), signal)` -> PNG path, `release()`) and is linked with `registerLocalDiffusionEngine(engine)`; progress is then the engine's own.
 
 ## Needs owner decision
 

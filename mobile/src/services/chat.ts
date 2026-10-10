@@ -27,6 +27,7 @@ import {
 import { activeFactTexts, parseRememberCommand } from '../core/memory.ts';
 import { buildSystemPrompt, padToSampling } from '../core/persona.ts';
 import { createStore } from '../core/store.ts';
+import { imageTokenAllowance } from '../core/visionProfile.ts';
 import { engine, modelHasVision } from './engine.ts';
 import {
   deleteAllThreadFiles,
@@ -568,6 +569,7 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
       userText: userMessage.text,
       attachments: userMessage.attachments ?? [],
       spec,
+      imageTokens: imageTokenAllowance(spec, settings.compute.imageMaxTokens),
       nCtx: engine.state.nCtx || engine.contextSize(),
       system,
       thinkingEnabled: settings.thinkingEnabled,

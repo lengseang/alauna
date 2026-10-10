@@ -19,7 +19,7 @@ export interface PADVector {
   dominance: number;
 }
 
-export type SoulArchetypeKey = 'empath' | 'mentor' | 'tactical' | 'spark' | 'cynic' | 'visionary';
+export type SoulArchetypeKey = 'neutral' | 'empath' | 'mentor' | 'tactical' | 'spark' | 'cynic' | 'visionary';
 
 export interface SoulArchetype {
   id: SoulArchetypeKey;
@@ -29,7 +29,20 @@ export interface SoulArchetype {
   prompt: string;
 }
 
+/** The neutral soul's rules. Shared with the built-in soul so both prompt paths say the same thing. */
+export const NEUTRAL_PROMPT =
+  'You have no persona. Follow the user and the system prompt as the authority: answer directly, in the tone and language the user uses, and match the length they need. Do not role-play unless asked, do not invent a backstory or feelings, and do not lecture or moralise. Play to what the loaded model does best, and if something is beyond it, say so plainly.';
+
 export const ARCHETYPES: Record<SoulArchetypeKey, SoulArchetype> = {
+  neutral: {
+    id: 'neutral',
+    name: 'Neutral',
+    description: 'No character. Open and direct; follows you, adapts to the model.',
+    // Midpoint of every scale (pleasure 0, arousal 0.5, dominance 0.5): describePad says neutral/steady/balanced and
+    // padToSampling returns your Settings sampling unchanged.
+    defaultPAD: { pleasure: 0, arousal: 0.5, dominance: 0.5 },
+    prompt: NEUTRAL_PROMPT,
+  },
   empath: {
     id: 'empath',
     name: 'Empathetic Confidant',

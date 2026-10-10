@@ -1,25 +1,24 @@
 /**
- * Native Local Image Inference Runtime Adapter (pure service).
+ * Native Local Image Inference Runtime Adapter (service).
  *
  * Feature ID: CHIWIWI-IMG-ARCH-001 §5.6
- * Bridges between the ImageGenerationCoordinator and the platform-specific
- * diffusion runtime and synthesized pixel generator.
+ * Bridges the ImageGenerationCoordinator to a real on-device diffusion engine (`LocalDiffusionEngine`).
  *
- * Invariant (GEMINI.md Rule 2 & Specification §16.6):
- * If the model weights file is not present in storage, reports an honest typed error.
- * When weights are present, runs multi-step latent diffusion with live progress telemetry.
+ * Invariant (GEMINI.md Rule 2 & Specification §16.6): no engine, no image. No diffusion engine is linked in this build,
+ * so generation reports an honest typed error; there is no simulated progress and no synthesized picture. A real engine
+ * is dropped in with `registerLocalDiffusionEngine()`; every progress number then comes from that engine.
  */
 
 import type {
   GenerationPlan,
   ImageGenerationError,
   ImageModelManifest,
+  LocalDiffusionEngine,
 } from '../core/imageGen/types.ts';
 import { getImageModelManifest } from '../core/imageGen/modelRegistry.ts';
-import { synthesizeScenePngBase64 } from '../core/imageGen/pngSynthesizer.ts';
 import { isStorageReady } from './storage.ts';
-import { isImageModelInstalled } from './imageModelManager.ts';
-import { saveGalleryImage } from './imageGallery.ts';
+import { getInstalledModelPath, isImageModelInstalled } from './imageModelManager.ts';
+import { importGalleryImage } from './imageGallery.ts';
 
 export interface RuntimeGenerateResult {
   imageId: string;
@@ -39,18 +38,31 @@ export interface LocalImageRuntimeAdapter {
   ): Promise<RuntimeGenerateResult>;
 }
 
+/** The linked engine. Null until a real native diffusion engine is registered (none is in this build). */
+let linkedEngine: LocalDiffusionEngine | null = null;
+
+export function registerLocalDiffusionEngine(engine: LocalDiffusionEngine | null): void {
+  linkedEngine = engine;
+}
+
 export function isNativeDiffusionEngineAvailable(): boolean {
-  // Checks if native stable-diffusion.cpp or ONNX diffusion runtime module is linked in the React Native runtime
-  return false;
+  return linkedEngine !== null;
 }
 
 class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
+  private abort: AbortController | null = null;
+
   public isAvailable(): boolean {
     return isNativeDiffusionEngineAvailable();
   }
 
   public getManifest(modelId: string): ImageModelManifest | undefined {
     return getImageModelManifest(modelId);
+  }
+
+  /** Cancels the running generation (the engine receives the abort signal). */
+  public cancel(): void {
+    this.abort?.abort();
   }
 
   public async generate(
@@ -76,53 +88,69 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
       );
     }
 
-    // Invariant (GEMINI.md Rule 2): Do not fake generation or spew procedural gradients without native engine
-    if (!isNativeDiffusionEngineAvailable()) {
+    const engine = linkedEngine;
+    if (!engine) {
       throw this.error(
         'RUNTIME_UNSUPPORTED_FEATURE',
-        `Native diffusion engine (stable-diffusion.cpp / ONNX) is not linked in this build. Model weights for '${manifest.displayName}' (${(manifest.downloadSizeBytes / 1e9).toFixed(2)} GB) are downloaded in your Vault, but executing on-device diffusion requires the native diffusion C++ engine bridge.`,
+        `The on-device diffusion engine (stable-diffusion.cpp / ONNX) is not in this build. Model weights for '${manifest.displayName}' (${(manifest.downloadSizeBytes / 1e9).toFixed(2)} GB) stay in your Vault, but no image can be generated until the engine is linked.`,
       );
     }
 
-    onProgress(5, `Loading ${manifest.displayName} weights into memory...`);
-    await this.delay(200);
+    const modelPath = getInstalledModelPath(manifest);
+    if (!modelPath) throw this.error('MODEL_NOT_INSTALLED', `Model file for '${manifest.displayName}' was not found on disk.`);
 
-    const steps = Math.max(2, plan.steps || manifest.defaultSteps || 20);
-    for (let step = 1; step <= steps; step++) {
-      await this.delay(100);
-      const pct = Math.round(5 + (step / steps) * 85);
-      onProgress(pct, `Denoising step ${step}/${steps} (${plan.resolution.width}x${plan.resolution.height})...`);
+    this.abort = new AbortController();
+    const steps = Math.max(1, plan.steps || manifest.defaultSteps);
+    let outPath: string;
+    try {
+      onProgress(0, `Loading ${manifest.displayName}...`);
+      try {
+        await engine.load(modelPath);
+      } catch (e) {
+        throw this.error('MODEL_LOAD_FAILED', e instanceof Error ? e.message : String(e));
+      }
+      outPath = await engine.generate(
+        {
+          prompt: plan.prompt ?? '',
+          steps,
+          width: plan.resolution.width,
+          height: plan.resolution.height,
+          seed: plan.seed,
+          cfg: plan.guidanceScale,
+        },
+        (step, total) => onProgress(Math.min(99, Math.round((step / Math.max(1, total)) * 100)), `Denoising step ${step}/${total}`),
+        this.abort.signal,
+      );
+    } catch (e) {
+      if (this.abort.signal.aborted) throw this.error('CANCELLED', 'Generation cancelled.');
+      if (isImageGenerationError(e)) throw e;
+      throw this.error('UNKNOWN_RUNTIME_ERROR', e instanceof Error ? e.message : String(e));
+    } finally {
+      this.abort = null;
     }
 
-    onProgress(92, 'Refining prompt alignment and color balance...');
-    await this.delay(150);
-
-    onProgress(96, 'Encoding PNG file...');
     const imageId = `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    const base64Png = synthesizeScenePngBase64(
-      plan.resolution.width,
-      plan.resolution.height,
-      plan.prompt || 'Synthesized Artwork',
-      plan.seed || Date.now(),
-    );
-
-    const saved = await saveGalleryImage(
-      {
-        imageId,
-        format: 'png',
-        width: plan.resolution.width,
-        height: plan.resolution.height,
-        modelId: manifest.modelId,
-        modelVersion: manifest.version,
-        prompt: plan.prompt ?? 'Synthesized Artwork',
-        qualityMode: plan.qualityMode ?? 'balanced',
-        goal: plan.goal ?? 'general',
-        favorite: false,
-        fileSizeBytes: base64Png.length,
-        createdAt: Date.now(),
-      },
-      base64Png,
-    );
+    let saved;
+    try {
+      saved = await importGalleryImage(
+        {
+          imageId,
+          format: 'png',
+          width: plan.resolution.width,
+          height: plan.resolution.height,
+          modelId: manifest.modelId,
+          modelVersion: manifest.version,
+          prompt: plan.prompt ?? '',
+          qualityMode: plan.qualityMode ?? 'balanced',
+          goal: plan.goal ?? 'general',
+          favorite: false,
+          createdAt: Date.now(),
+        },
+        outPath,
+      );
+    } catch (e) {
+      throw this.error('OUTPUT_SAVE_FAILED', e instanceof Error ? e.message : String(e));
+    }
 
     const durationMs = Date.now() - startTime;
     onProgress(100, `Complete in ${(durationMs / 1000).toFixed(1)}s.`);
@@ -137,10 +165,6 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
     };
   }
 
-  private delay(ms: number): Promise<void> {
-    return new Promise((r) => setTimeout(r, ms));
-  }
-
   private error(code: ImageGenerationError['code'], message: string): ImageGenerationError {
     return {
       code,
@@ -149,6 +173,10 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
       recoverable: true,
     };
   }
+}
+
+function isImageGenerationError(e: unknown): e is ImageGenerationError {
+  return !!e && typeof e === 'object' && 'code' in e && 'recoveryAction' in e;
 }
 
 export const nativeImageRuntime = new MobileImageRuntimeAdapter();

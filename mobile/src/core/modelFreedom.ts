@@ -196,7 +196,7 @@ function migrateV1Freedom(r: Record<string, unknown>): ModelFreedomSettings {
  * unfiltered emits all configured directives. Individual controls are always honored
  * within the mode's scope.
  */
-export function compileModelFreedomDirectives(freedom: ModelFreedomSettings): string[] {
+export function compileModelFreedomDirectives(freedom: ModelFreedomSettings, opts: { hasCharacter?: boolean } = {}): string[] {
   const directives: string[] = [];
 
   // Standard mode: only emit what the user explicitly turned on
@@ -218,7 +218,11 @@ export function compileModelFreedomDirectives(freedom: ModelFreedomSettings): st
 
   // Character fidelity
   if (freedom.characterFidelity === 'strict') {
-    directives.push('Stay entirely in character. Never apologize as an assistant or break narrative immersion.');
+    directives.push(
+      opts.hasCharacter === false
+        ? 'If the user asks you to play a character, stay fully in it until they end it.'
+        : 'Stay entirely in character. Never apologize as an assistant or break narrative immersion.',
+    );
   }
 
   // Anti-sycophancy

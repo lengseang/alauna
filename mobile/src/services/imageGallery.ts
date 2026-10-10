@@ -62,18 +62,37 @@ export async function saveGalleryImage(
   meta: Omit<ImageAssetMetadata, 'storageKey' | 'absolutePath'>,
   imageDataBase64: string,
 ): Promise<ImageAssetMetadata> {
-  if (!isStorageReady()) throw new Error('Storage is not ready.');
-
-  const dir = galleryDir();
-  if (!dir.exists) dir.create({ idempotent: true, intermediates: true });
-
-  const fileName = `${meta.imageId}.${meta.format}`;
-  const file = new File(dir, fileName);
-
-  if (file.exists) file.delete();
+  const { file, fileName } = prepareGalleryFile(meta);
   file.create();
   file.write(imageDataBase64, { encoding: 'base64' });
+  return indexGalleryFile(meta, file, fileName);
+}
 
+/** Move an image a diffusion engine already wrote (its own PNG file) into the gallery and index it. */
+export async function importGalleryImage(
+  meta: Omit<ImageAssetMetadata, 'storageKey' | 'absolutePath' | 'fileSizeBytes'>,
+  sourceUri: string,
+): Promise<ImageAssetMetadata> {
+  const { file, fileName } = prepareGalleryFile(meta);
+  new File(sourceUri).copy(file);
+  return indexGalleryFile({ ...meta, fileSizeBytes: file.size ?? 0 }, file, fileName);
+}
+
+function prepareGalleryFile(meta: { imageId: string; format: string }): { file: File; fileName: string } {
+  if (!isStorageReady()) throw new Error('Storage is not ready.');
+  const dir = galleryDir();
+  if (!dir.exists) dir.create({ idempotent: true, intermediates: true });
+  const fileName = `${meta.imageId}.${meta.format}`;
+  const file = new File(dir, fileName);
+  if (file.exists) file.delete();
+  return { file, fileName };
+}
+
+async function indexGalleryFile(
+  meta: Omit<ImageAssetMetadata, 'storageKey' | 'absolutePath'>,
+  file: File,
+  fileName: string,
+): Promise<ImageAssetMetadata> {
   const fullMeta: ImageAssetMetadata = {
     ...meta,
     storageKey: `gallery/${fileName}`,

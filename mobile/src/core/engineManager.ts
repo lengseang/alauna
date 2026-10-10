@@ -16,6 +16,7 @@
 import { getModel as catalogModel, type ModelSpec } from './catalog.ts';
 import { defaultContext, estimateRamBytes, fitFor } from './fit.ts';
 import { formatBytes } from './format.ts';
+import { resolveImageBudget } from './visionProfile.ts';
 import type { PromptMessage } from './chatPrompt.ts';
 import {
   diagnoseEngineError,
@@ -130,6 +131,12 @@ export interface EngineDeps {
 export type MountResult =
   | { ok: true; loadMs: number; tokensPerSecond: number; ttftMs: number; warmupMs: number }
   | { ok: false; code: 'file' | 'too_heavy' | 'engine' | 'no_output'; message: string; kind?: EngineErrorKind; fix?: string };
+
+/** Projector token budget for this model: Auto (0) = per family, otherwise the user's cap (core/visionProfile.ts). */
+function imageTokenParams(spec: ModelSpec, override: number | null | undefined): { imageMinTokens: number; imageMaxTokens: number } {
+  const b = resolveImageBudget(spec, override);
+  return { imageMinTokens: b.min, imageMaxTokens: b.max };
+}
 
 export class EngineNotReadyError extends Error {
   constructor() {
@@ -384,7 +391,7 @@ export class EngineManager {
         useMlock: c?.useMlock,
         speculative: a.speculative,
         mmprojPath,
-        imageMaxTokens: c?.imageMaxTokens ?? 512,
+        ...imageTokenParams(spec, c?.imageMaxTokens),
         onProgress: (p) => this.store.setState({ loadProgress: Math.max(0, Math.min(1, p)) }),
       });
     } catch (e) {

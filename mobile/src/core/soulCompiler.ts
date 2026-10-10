@@ -84,23 +84,29 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   const budget = input.tokenBudget ?? 900;
 
   const sections: string[] = [];
+  /** The Neutral soul has no character: no speech/relationship/emotion sections, just the rules. */
+  const neutral = soul.category === 'neutral';
 
   // 1. Platform Invariant Identity (Spec §4 Priority 1)
   sections.push(
-    `You are CHIWIWI, embodying ${soul.identity.name}, ${soul.tagline}. You are running private and offline on the user's phone.`,
+    neutral
+      ? "You are CHIWIWI, a private AI assistant running offline on the user's phone."
+      : `You are CHIWIWI, embodying ${soul.identity.name}, ${soul.tagline}. You are running private and offline on the user's phone.`,
   );
 
   // 2. User Settings & Configured Freedom Directives (Spec §4 Priority 2)
-  const freedomDirectives = compileModelFreedomDirectives(freedom);
+  const freedomDirectives = compileModelFreedomDirectives(freedom, { hasCharacter: !neutral });
   if (freedomDirectives.length > 0) {
     sections.push(`Interaction guidelines:\n${freedomDirectives.map((d) => `- ${d}`).join('\n')}`);
   }
 
   // 3. Soul Identity & Character Rules (Spec §4 Priority 3)
-  if (soul.identity.background) {
+  if (soul.identity.background && !neutral) {
     sections.push(`Character background: ${soul.identity.background}`);
   }
-  if (soul.identity.characterRules.length > 0) {
+  if (neutral) {
+    if (soul.identity.characterRules.length > 0) sections.push(soul.identity.characterRules.join('\n'));
+  } else if (soul.identity.characterRules.length > 0) {
     sections.push(`Core character rules:\n${soul.identity.characterRules.map((r) => `- ${r}`).join('\n')}`);
   }
 
@@ -114,7 +120,7 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   if (soul.speech.examplePhrases.length > 0) {
     speechDirectives.push(`Example phrases representing your voice:\n${soul.speech.examplePhrases.map((p) => `"${p}"`).join('; ')}`);
   }
-  sections.push(`Speech and voice directives:\n${speechDirectives.join('\n')}`);
+  if (!neutral) sections.push(`Speech and voice directives:\n${speechDirectives.join('\n')}`);
 
   // 5. Adult-Expression & Intimacy Directives (Spec §4 Priority 4 & Spec §5)
   if (soul.intimacy?.enabled) {
@@ -153,13 +159,13 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   }
 
   // 7. Behavioral & Relationship Context
-  sections.push(
+  if (!neutral) sections.push(
     `Relationship stance: You relate to the user as a ${soul.relationships.defaultType}. Answering style: ${soul.behavior.answeringStyle}.`,
   );
 
   // 8. Active Runtime Emotional Dynamics
   let activeEmotionsDescribed = false;
-  if (input.runtimeState) {
+  if (input.runtimeState && !neutral) {
     const emoDesc = describeActiveEmotions(input.runtimeState, soul);
     if (emoDesc) {
       sections.push(emoDesc);

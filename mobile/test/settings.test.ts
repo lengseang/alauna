@@ -10,7 +10,7 @@ test('settings: garbage input yields safe defaults and never throws', () => {
   const a = sanitizeSettings(null);
   a.pad.pleasure = -1;
   a.verified.x = { at: 1, tokensPerSecond: 1, loadMs: 1 };
-  assert.equal(DEFAULT_SETTINGS.pad.pleasure, 0.65);
+  assert.equal(DEFAULT_SETTINGS.pad.pleasure, 0, 'Neutral midpoint');
   assert.deepEqual(DEFAULT_SETTINGS.verified, {});
 });
 
@@ -25,7 +25,7 @@ test('settings: valid values round-trip; invalid fields fall back individually',
   for (const [k, v] of Object.entries(good)) assert.deepEqual(back[k as keyof typeof back], v, k);
 
   const s = sanitizeSettings({ archetype: 'wizard', pad: { pleasure: 'hot' }, contextOverride: 12, threads: 99, useGpu: 'yes', thinkingEnabled: 1, verified: { a: null, b: { at: 'x' }, c: { at: 3 } } });
-  assert.equal(s.archetype, 'empath', 'unknown archetype');
+  assert.equal(s.archetype, 'neutral', 'unknown archetype falls back to the default (Neutral)');
   assert.deepEqual(s.pad, DEFAULT_SETTINGS.pad, 'incomplete pad');
   assert.equal(s.contextOverride, null, 'context below 512 rejected');
   assert.equal(s.threads, null, 'absurd thread count rejected');

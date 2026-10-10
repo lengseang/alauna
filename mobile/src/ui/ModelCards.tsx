@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { installSizeBytes, isSmallUncensored, speedHint, type ModelSpec } from '../core/catalog.ts';
 import { formatBytes, formatDuration, formatPercent, formatSpeed } from '../core/format.ts';
 import { actionsFor } from '../core/modelStatus.ts';
+import { visionQuality } from '../core/visionProfile.ts';
 import { downloads, useDownloadState } from '../services/downloads.ts';
 import { installedBytes } from '../services/modelLibrary.ts';
 import { makeStyles } from '../theme';
@@ -67,6 +68,7 @@ export const ModelRow = React.memo(function ModelRow({ spec, eng, verified, ramB
             <Tag key={c} label={c} />
           ))}
           {spec.contentPolicy === 'Uncensored' ? <Tag label="Uncensored" tone="accent" /> : null}
+          {visionQuality(spec) ? <Tag label={visionQuality(spec)!.label} /> : null}
         </View>
       </Pressable>
       {st.primary && action ? (

@@ -91,6 +91,7 @@ export async function startImageGeneration(
 
 /** Cancel active background generation. */
 export function cancelImageGeneration(): void {
+  nativeImageRuntime.cancel();
   imageCoordinator.requestCancellation();
   if (timerHandle) {
     clearInterval(timerHandle);

@@ -43,8 +43,8 @@ test('soulSchema: clamps temperament and emotion values within 0..100', () => {
   assert.equal(s.psychology.emotions[0].reactivity, 100);
 });
 
-test('soulSchema: built-in library contains all 11 canonical categories', () => {
-  assert.equal(BUILT_IN_SOULS.length, 11);
+test('soulSchema: built-in library contains all 12 canonical categories', () => {
+  assert.equal(BUILT_IN_SOULS.length, 12);
   const categoriesPresent = new Set(BUILT_IN_SOULS.map((s) => s.category));
   for (const cat of SOUL_CATEGORIES) {
     assert.ok(categoriesPresent.has(cat), `Category ${cat} must be present`);
@@ -58,7 +58,7 @@ test('soulSchema: built-in library contains all 11 canonical categories', () => 
 });
 
 test('soulSchema: legacy archetypes map directly to valid built-in souls', () => {
-  for (const legacyKey of ['empath', 'mentor', 'tactical', 'spark', 'cynic', 'visionary']) {
+  for (const legacyKey of ['neutral', 'empath', 'mentor', 'tactical', 'spark', 'cynic', 'visionary']) {
     const soul = getBuiltInSoul(legacyKey);
     assert.ok(soul, `Legacy key ${legacyKey} must resolve`);
     assert.equal(soul.type, 'builtin');

@@ -302,7 +302,7 @@ export function ImageStudioScreen() {
                   : !isSelectedModelInstalled
                   ? 'Download Model to Generate'
                   : !isNativeDiffusionEngineAvailable()
-                  ? 'Awaiting Native Diffusion Bridge'
+                  ? 'Engine not in this build'
                   : 'Imagine / Generate Image'
               }
               variant={!isNativeDiffusionEngineAvailable() && isSelectedModelInstalled ? 'quiet' : 'primary'}
@@ -311,13 +311,13 @@ export function ImageStudioScreen() {
                   ? () => handleDownloadModel(selectedManifest)
                   : handleGenerate
               }
-              disabled={isGenerating || (!prompt.trim() && isSelectedModelInstalled && isNativeDiffusionEngineAvailable())}
+              disabled={isGenerating || (isSelectedModelInstalled && !isNativeDiffusionEngineAvailable()) || (!prompt.trim() && isSelectedModelInstalled)}
             />
 
             {!isNativeDiffusionEngineAvailable() && isSelectedModelInstalled && (
               <View style={{ marginTop: 10 }}>
-                <Notice tone="quiet" title="Native Diffusion Engine Status">
-                  {`Model weights for ${selectedManifest.displayName} are downloaded in your Vault. On-device execution requires the native stable-diffusion.cpp runtime bridge.`}
+                <Notice tone="quiet" title="Engine not in this build">
+                  {`Model weights for ${selectedManifest.displayName} are downloaded in your Vault. This build has no on-device diffusion engine, so it cannot generate images yet; nothing is simulated. You can still browse and download models.`}
                 </Notice>
               </View>
             )}

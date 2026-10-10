@@ -12,6 +12,7 @@ import { imagePaths, withAttachments, type Attachment, type ChatMessage, type Me
 import type { SamplingSettings } from './settingsModel.ts';
 import { friendlyEngineError, type GenerateParams, type GenerateResult } from './engineTypes.ts';
 import { parseThinking, type OutputPhase } from './thinking.ts';
+import { groundSampling, groundSystemPrompt, pruneHistoryImages } from './visionProfile.ts';
 import { isMessageCutOff, closeUnclosedMarkup, stripContinuationPreamble, stripRedundantCodeFence } from './conversationContinuity.ts';
 
 export interface TurnInput {
@@ -27,6 +28,8 @@ export interface TurnInput {
   /** Called for every streamed update (the caller should coalesce for rendering). */
   onUpdate: (patch: Partial<ChatMessage>) => void;
   temperature?: number;
+  /** Tokens one image can take in the prompt (visionProfile.imageTokenAllowance); default = chatPrompt's estimate. */
+  imageTokens?: number;
   /** Full sampling (soul-adjusted, core/persona.ts padToSampling). Wins over `temperature`. */
   sampling?: SamplingSettings;
   /** Backend label to store in the reply's stats ("CPU" / "GPU (...)"). */
@@ -67,12 +70,20 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
   const replyBudget = replyBudgetFor(spec, input.nCtx, thinking);
   const userContent = withAttachments(input.userText, input.attachments);
   const userImages = imagePaths(input.attachments);
+  const hasImages = userImages.length > 0;
+  // Image turns: only this turn's images are sent (a text follow-up keeps the newest), a one-line grounding rule joins
+  // the system prompt for this turn only, and sampling is lowered so the model stops inventing details.
+  const system = hasImages ? groundSystemPrompt(input.system) : input.system;
+  const history = pruneHistoryImages(input.history, hasImages);
+  const sampling = input.sampling && hasImages ? groundSampling(input.sampling) : input.sampling;
+  const temperature = sampling?.temperature ?? (hasImages ? Math.min(input.temperature ?? 0.7, 0.2) : input.temperature ?? 0.7);
   const build = (tokenScale: number): BuiltPrompt =>
     buildPrompt({
-      system: input.system,
-      history: input.history,
+      system,
+      history,
       userMessage: userContent,
       userImages,
+      imageTokens: input.imageTokens,
       nCtx: input.nCtx,
       replyBudget,
       tokenScale,
@@ -126,6 +137,8 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
   const notes: string[] = [];
   if (built.droppedMessages > 0) notes.push(`${built.droppedMessages} older message${built.droppedMessages === 1 ? '' : 's'} did not fit the model's memory and were left out of this reply.`);
   if (built.truncatedUserMessage) notes.push('Your message was too long for the model and was shortened.');
+  const overBudget = hasImages && countedPromptTokens !== null && countedPromptTokens > Math.max(256, input.nCtx - replyBudget);
+  if (overBudget) notes.push('The image needs more memory than this context allows; lower the Vision token budget or raise the context size in Settings > Advanced.');
 
   const startedAt = now();
   let forcedOpen = spec.thinking === 'always';
@@ -143,7 +156,7 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
     text: priorText,
     reasoning: priorReasoning || '',
     notice: userImages.length > 0
-      ? `Analyzing ${userImages.length === 1 ? 'image' : `${userImages.length} images`}${actualPromptEst ? ` (~${actualPromptEst} tokens)` : ''}`
+      ? [`Analyzing ${userImages.length === 1 ? 'image' : `${userImages.length} images`}${actualPromptEst ? ` (~${actualPromptEst} tokens)` : ''}`, ...(overBudget ? notes.slice(-1) : [])].join('. ')
       : notes.join(' ') || undefined,
   });
 
@@ -163,9 +176,9 @@ export async function runAssistantTurn(input: TurnInput): Promise<TurnOutcome> {
     const result = await input.generate({
       messages: built.messages,
       maxTokens: safeMaxTokens,
-      temperature: input.sampling?.temperature ?? input.temperature ?? 0.7,
-      ...(input.sampling
-        ? { sampling: { topP: input.sampling.topP, topK: input.sampling.topK, minP: input.sampling.minP, repeatPenalty: input.sampling.repeatPenalty } }
+      temperature,
+      ...(sampling
+        ? { sampling: { topP: sampling.topP, topK: sampling.topK, minP: sampling.minP, repeatPenalty: sampling.repeatPenalty } }
         : {}),
       enableThinking: thinking,
       onStart: (info) => {

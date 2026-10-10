@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Linking } from 'react-native';
 import { getModel } from '../core/catalog.ts';
+import { visionQuality } from '../core/visionProfile.ts';
 import { pickDocuments, pickPhotos, takePhoto, type AttachResult, type PickedAttachment } from '../services/attachments.ts';
 import { modelHasVision } from '../services/engine.ts';
 import { expectExternalActivity } from '../services/security.ts';
@@ -27,6 +28,7 @@ export function AttachSheet({ visible, onClose, onPicked, room }: Props) {
   const settings = useSettings();
   const spec = getModel(settings.activeModelId);
   const vision = !!spec && modelHasVision(spec);
+  const vq = vision && spec ? visionQuality(spec) : null;
   const [failure, setFailure] = useState<{ message: string; settings: boolean } | null>(null);
 
   const run = async (pick: () => Promise<AttachResult>) => {
@@ -52,6 +54,7 @@ export function AttachSheet({ visible, onClose, onPicked, room }: Props) {
             : 'No model chosen yet. Text files work with any model; images need a vision model.'}
         </Notice>
       ) : null}
+      {vq && vq.quality !== 'best' ? <Notice tone="quiet">{`${spec?.name}: ${vq.note}`}</Notice> : null}
       {failure ? (
         <Notice
           tone="danger"

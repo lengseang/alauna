@@ -25,7 +25,7 @@ export interface HistoryMessage {
 
 /** Prompt-size allowance per image (aligned with the default 512 vision token budget). */
 export const IMAGE_TOKEN_ESTIMATE = 512;
-const imageCost = (images?: string[]) => (images?.length ?? 0) * IMAGE_TOKEN_ESTIMATE;
+const imageCost = (images: string[] | undefined, perImage: number) => (images?.length ?? 0) * perImage;
 
 /**
  * Conservative token estimate. Undercounting overflows the model's context (a hard "Context is full"
@@ -78,6 +78,8 @@ export interface BuildPromptInput {
   nCtx: number;
   /** Tokens kept free for the model's reply. */
   replyBudget: number;
+  /** Tokens one image can take (core/visionProfile.ts imageTokenAllowance). Default: IMAGE_TOKEN_ESTIMATE. */
+  imageTokens?: number;
   /** Multiplier applied to every estimate (1 = default heuristic; raise it after the engine reported a larger real count). */
   tokenScale?: number;
   /** Custom continuity anchor override or false to disable automatic rolling anchor */
@@ -98,6 +100,7 @@ export interface BuiltPrompt {
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   const { system, nCtx, replyBudget } = input;
   const scale = input.tokenScale ?? 1;
+  const perImage = input.imageTokens ?? IMAGE_TOKEN_ESTIMATE;
   const tokens = (text: string) => estimateTokens(text, scale);
   const budget = Math.max(256, nCtx - replyBudget);
   const systemTokens = system ? tokens(system) + 8 : 0;
@@ -114,11 +117,11 @@ export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   }
 
   const userImages = input.userImages?.length ? [...input.userImages] : undefined;
-  let used = systemTokens + tokens(userMessage) + imageCost(userImages) + 8;
+  let used = systemTokens + tokens(userMessage) + imageCost(userImages, perImage) + 8;
   const history = normalizeHistory(input.history);
   const kept: HistoryMessage[] = [];
   for (let i = history.length - 1; i >= 0; i--) {
-    const cost = tokens(history[i].content) + imageCost(history[i].images) + 8;
+    const cost = tokens(history[i].content) + imageCost(history[i].images, perImage) + 8;
     if (used + cost > budget) break;
     used += cost;
     kept.unshift(history[i]);

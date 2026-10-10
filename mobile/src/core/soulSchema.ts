@@ -17,6 +17,7 @@ export interface SoulAvatar {
 }
 
 export type SoulCategory =
+  | 'neutral'
   | 'sage'
   | 'guardian'
   | 'rebel'
@@ -30,6 +31,7 @@ export type SoulCategory =
   | 'companion';
 
 export const SOUL_CATEGORIES: SoulCategory[] = [
+  'neutral',
   'sage',
   'guardian',
   'rebel',

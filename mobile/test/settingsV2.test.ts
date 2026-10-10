@@ -10,7 +10,7 @@ import { buildPrompt } from '../src/core/chatPrompt.ts';
 test('settings v2: a v1 file migrates (threads / GPU / context move into compute, mirrors stay readable)', () => {
   const v1 = { archetype: 'mentor', threads: 6, useGpu: true, contextOverride: 8192, thinkingEnabled: false, activeModelId: 'qwen3.5-4b' };
   const s = sanitizeSettings(v1);
-  assert.equal(s.version, 2);
+  assert.equal(s.version, 3);
   assert.deepEqual([s.compute.threads, s.compute.backend, s.compute.nCtx], [6, 'gpu', 8192]);
   assert.deepEqual([s.threads, s.useGpu, s.contextOverride], [6, true, 8192], 'v1 mirrors');
   assert.equal(s.archetype, 'mentor');
@@ -43,7 +43,7 @@ test('settings v2: every field is validated and clamped on its own', () => {
   assert.deepEqual(s.compute, {
     backend: 'cpu', nGpuLayers: 0, threads: null, nCtx: 32768, nBatch: 2048, flashAttn: 'auto',
     cacheTypeK: 'q8_0', cacheTypeV: 'f16', useMmap: true, useMlock: true, kvSessionCache: true,
-    imageMaxTokens: 512,
+    imageMaxTokens: 0,
   });
   assert.deepEqual(s.sampling, { temperature: 0, topP: 1, topK: 200, minP: DEFAULT_SAMPLING.minP, repeatPenalty: 1 });
   assert.deepEqual(s.speculative, { enabled: true, draftModelId: null, nDraft: 16, pMin: 1 });
@@ -123,7 +123,7 @@ test('settings v2: voice and security are single source of truth; mirrors stay i
 });
 
 test('soul: the six archetypes of the old app are back with their PAD defaults', () => {
-  assert.deepEqual(ARCHETYPE_KEYS, ['empath', 'mentor', 'tactical', 'spark', 'cynic', 'visionary']);
+  assert.deepEqual(ARCHETYPE_KEYS, ['neutral', 'empath', 'mentor', 'tactical', 'spark', 'cynic', 'visionary']);
   assert.deepEqual(ARCHETYPES.cynic.defaultPAD, { pleasure: -0.35, arousal: 0.6, dominance: 0.9 });
   assert.deepEqual(ARCHETYPES.visionary.defaultPAD, { pleasure: 0.5, arousal: 0.65, dominance: 0.85 });
   assert.match(buildSystemPrompt({ archetype: 'cynic', pad: ARCHETYPES.cynic.defaultPAD }), /red-team/);

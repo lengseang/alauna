@@ -17,7 +17,7 @@ export type { SecurityPrefs } from './appLock.ts';
 export type { VoicePrefs } from './voiceModels.ts';
 export type { ModelFreedomSettings } from './modelFreedom.ts';
 
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 
 export interface VerifiedInfo {
   at: number;
@@ -53,7 +53,7 @@ export interface ComputeSettings {
   useMlock: boolean;
   /** Save the persona/system-prompt prefix to disk after it is evaluated and restore it on the next load (TTFT). */
   kvSessionCache: boolean;
-  /** Max vision tokens per image (e.g. 256, 384, 512, 1024). Default: 512. */
+  /** Max vision tokens per image (256..2048). 0 = Auto: per projector family (core/visionProfile.ts). Default: 0. */
   imageMaxTokens: number;
 }
 
@@ -187,7 +187,7 @@ export const DEFAULT_COMPUTE: ComputeSettings = {
   useMmap: true,
   useMlock: false,
   kvSessionCache: true,
-  imageMaxTokens: 512,
+  imageMaxTokens: 0,
 };
 
 /** The values the engine used before v2 (llamaEngine.ts constants), so v1 users see no behaviour change. */
@@ -196,9 +196,9 @@ export const DEFAULT_SAMPLING: SamplingSettings = { temperature: 0.7, topP: 0.9,
 function defaults(): Settings {
   return {
     version: SETTINGS_VERSION,
-    archetype: 'empath',
-    activeSoulId: 'soul_caregiver',
-    pad: { ...ARCHETYPES.empath.defaultPAD },
+    archetype: 'neutral',
+    activeSoulId: 'soul_neutral',
+    pad: { ...ARCHETYPES.neutral.defaultPAD },
     toneIntensity: 0.8,
     customBackstory: '',
     freedom: { ...DEFAULT_MODEL_FREEDOM },
@@ -279,7 +279,7 @@ function sanitizeCompute(raw: unknown, base: ComputeSettings): ComputeSettings {
     useMmap: bool(r.useMmap, base.useMmap),
     useMlock: bool(r.useMlock, base.useMlock),
     kvSessionCache: bool(r.kvSessionCache, base.kvSessionCache),
-    imageMaxTokens: int(r.imageMaxTokens, 128, 4096, base.imageMaxTokens ?? 512),
+    imageMaxTokens: r.imageMaxTokens === 0 ? 0 : int(r.imageMaxTokens, 128, 4096, base.imageMaxTokens ?? 0),
   };
 }
 
@@ -349,6 +349,8 @@ export function sanitizeSettings(raw: unknown): Settings {
       d.compute,
     );
   }
+  // v2 -> v3: 512 was the old flat default, not a choice; those files move to Auto (per-family budget).
+  if (!(typeof r.version === 'number' && r.version >= 3) && out.compute.imageMaxTokens === 512) out.compute = { ...out.compute, imageMaxTokens: 0 };
   out.sampling = sanitizeSampling(r.sampling, d.sampling);
   const sp = obj(r.speculative);
   out.speculative = {
@@ -403,6 +405,7 @@ export function sanitizeSettings(raw: unknown): Settings {
 }
 
 const LEGACY_ARCH_TO_SOUL: Record<string, string> = {
+  neutral: 'soul_neutral',
   empath: 'soul_caregiver',
   mentor: 'soul_sage',
   tactical: 'soul_analyst',
@@ -412,6 +415,7 @@ const LEGACY_ARCH_TO_SOUL: Record<string, string> = {
 };
 
 const SOUL_TO_LEGACY_ARCH: Record<string, SoulArchetypeKey> = {
+  soul_neutral: 'neutral',
   soul_caregiver: 'empath',
   soul_sage: 'mentor',
   soul_analyst: 'tactical',

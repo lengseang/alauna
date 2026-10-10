@@ -260,3 +260,31 @@ export interface ImageGenerationError {
   recoveryAction: string;
   recoverable: boolean;
 }
+
+// ------------------------------------------------------------------ Local diffusion engine contract
+
+export interface LocalDiffusionParams {
+  prompt: string;
+  negative?: string;
+  steps: number;
+  width: number;
+  height: number;
+  seed?: number;
+  /** Classifier-free guidance scale. */
+  cfg: number;
+}
+
+/**
+ * What a real on-device diffusion engine (stable-diffusion.cpp bridge, ONNX, Core ML...) must implement to be linked
+ * into Image Studio. `onProgress` is called by the engine with its real step counter; nothing in the app invents steps.
+ * `generate` resolves with the file path of the PNG the engine wrote.
+ */
+export interface LocalDiffusionEngine {
+  load(modelPath: string): Promise<void>;
+  generate(
+    params: LocalDiffusionParams,
+    onProgress: (step: number, totalSteps: number) => void,
+    signal?: AbortSignal,
+  ): Promise<string>;
+  release(): Promise<void>;
+}

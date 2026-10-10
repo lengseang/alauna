@@ -10,7 +10,7 @@ export const CTX_CHOICES = [null, 512, 1024, 2048, 3072, 4096, 6144, 8192, 12288
 /** CPU threads: null = the engine's own choice (fast cores). */
 export const THREAD_CHOICES = [null, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 16] as const;
 export const BATCH_CHOICES = [32, 64, 128, 256, 512, 1024, 2048] as const;
-export const VISION_TOKEN_CHOICES = [256, 384, 512, 768, 1024, 2048] as const;
+export const VISION_TOKEN_CHOICES = [0, 256, 384, 512, 768, 1024, 1280, 2048] as const;
 export const PURGE_DAYS_CHOICES = [0, 7, 14, 30, 60, 90, 180, 365] as const;
 /** Common Whisper languages; 'auto' lets the model detect it. The .en models always use English. */
 export const LANGUAGE_CHOICES: ReadonlyArray<{ code: string; name: string }> = [
@@ -39,7 +39,8 @@ export const labelTokens = (n: number | null, auto: number): string => (n === nu
 export const labelVisionTokens = (n: number | null | undefined): string => {
   if (n === 256) return '256 tokens (Fastest, low RAM)';
   if (n === 384) return '384 tokens (Snappy)';
-  if (n === 512 || !n) return '512 tokens (Balanced, recommended)';
+  if (!n) return 'Auto (per model, recommended)';
+  if (n === 512) return '512 tokens (Balanced)';
   if (n === 768) return '768 tokens (Detailed)';
   if (n === 1024) return '1024 tokens (High detail, slower)';
   if (n === 2048) return '2048 tokens (Maximum tiles)';

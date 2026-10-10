@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View } from 'react-native';
+import { visionQuality } from '../core/visionProfile.ts';
 import { CAPABILITY_INFO, getModel, installSizeBytes, speedHint, type ModelSpec } from '../core/catalog.ts';
 import { defaultContext } from '../core/fit.ts';
 import { formatBytes, formatDuration, formatPercent, formatSpeed } from '../core/format.ts';
@@ -62,6 +63,7 @@ export function ModelDetailScreen() {
 }
 
 function Detail({ spec }: { spec: ModelSpec }) {
+  const vq = visionQuality(spec);
   const s = useStyles();
   const dl = useDownloadState(spec.id);
   const eng = useEngineState();
@@ -174,6 +176,7 @@ function Detail({ spec }: { spec: ModelSpec }) {
       <Text variant="strong">{spec.uniqueTag}</Text>
       <Text>{`Best for: ${spec.bestFor}`}</Text>
       <Text variant="small">{speedHint(spec).label}. A class from file size, not a measurement.</Text>
+      {vq ? <Text variant="small">{`${vq.label}. ${vq.note} Expected from the vision family and size, not measured on this phone.`}</Text> : null}
       <Text tone="muted">{spec.description}</Text>
 
       {/* ------------------------------------------------ status and actions */}
