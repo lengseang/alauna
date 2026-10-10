@@ -230,6 +230,12 @@ export interface ImageAssetMetadata {
   modelId: string;
   modelVersion: string;
   prompt: string;
+  negativePrompt?: string;
+  aspectRatio?: AspectRatio;
+  steps?: number;
+  cfgScale?: number;
+  sampler?: string;
+  durationMs?: number;
   seed?: number;
   goal: GenerationGoal;
   qualityMode: QualityMode;

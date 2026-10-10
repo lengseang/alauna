@@ -242,6 +242,7 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
       this.abort = null;
     }
 
+    const durationMs = Date.now() - startTime;
     const imageId = `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     let saved;
     try {
@@ -254,6 +255,12 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
           modelId: manifest.modelId,
           modelVersion: manifest.version,
           prompt: plan.prompt ?? '',
+          aspectRatio: plan.aspectRatio,
+          steps: plan.steps,
+          cfgScale: plan.guidanceScale,
+          sampler: plan.scheduler,
+          seed: plan.seed,
+          durationMs,
           qualityMode: plan.qualityMode ?? 'balanced',
           goal: plan.goal ?? 'general',
           favorite: false,
@@ -264,8 +271,6 @@ class MobileImageRuntimeAdapter implements LocalImageRuntimeAdapter {
     } catch (e) {
       throw this.error('OUTPUT_SAVE_FAILED', e instanceof Error ? e.message : String(e));
     }
-
-    const durationMs = Date.now() - startTime;
     onProgress(100, `Complete in ${(durationMs / 1000).toFixed(1)}s.`);
 
     return {

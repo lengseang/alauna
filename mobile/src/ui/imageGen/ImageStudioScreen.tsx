@@ -16,6 +16,8 @@ import {
   shareImage,
   useGallery,
 } from '../../services/imageGallery.ts';
+import { enhancePromptWithLLM } from '../../core/imageGen/promptEnhancer.ts';
+import { engine } from '../../services/engine.ts';
 import {
   deleteImageModel,
   cancelImageModelDownload,
@@ -99,6 +101,7 @@ export function ImageStudioScreen() {
   const [seedInput, setSeedInput] = useState<string>('');
   const [modelFilter, setModelFilter] = useState<'all' | 'standalone' | 'uncensored' | 'fast' | 'installed'>('all');
   const [viewerImage, setViewerImage] = useState<ImageAssetMetadata | null>(null);
+  const [isEnhancing, setIsEnhancing] = useState(false);
 
   // Initialize storage index and model status check on mount
   useEffect(() => {
@@ -209,6 +212,50 @@ export function ImageStudioScreen() {
     await shareImage(item);
   };
 
+  const handleEnhancePrompt = async () => {
+    if (!prompt.trim()) {
+      showToast('Enter a short prompt idea first to enhance.');
+      return;
+    }
+    setIsEnhancing(true);
+    try {
+      const res = await enhancePromptWithLLM(engine, prompt, goal);
+      if (res.ok && res.positivePrompt) {
+        setPrompt(res.positivePrompt);
+        if (res.negativePrompt && !negativePrompt.trim()) {
+          setNegativePrompt(res.negativePrompt);
+        }
+        showToast('✨ Prompt enhanced by local AI! Review or edit before generating.', 3500);
+      } else {
+        showToast(res.message || 'Could not enhance prompt.', 4000);
+      }
+    } finally {
+      setIsEnhancing(false);
+    }
+  };
+
+  const handleRegenerateFromImage = (item: ImageAssetMetadata | null) => {
+    if (!item) return;
+    setPrompt(item.prompt || '');
+    if (item.negativePrompt) {
+      setNegativePrompt(item.negativePrompt);
+    }
+    if (item.aspectRatio) {
+      setAspectRatio(item.aspectRatio);
+    }
+    if (item.qualityMode) {
+      setQualityMode(item.qualityMode);
+    }
+    if (item.modelId) {
+      setSelectedModelId(item.modelId);
+    }
+    if (item.seed != null && item.seed >= 0) {
+      setSeedInput(String(item.seed));
+    }
+    setTab('generate');
+    showToast('Loaded settings from image into Studio.', 3000);
+  };
+
   const formatTimer = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const sRem = seconds % 60;
@@ -291,7 +338,15 @@ export function ImageStudioScreen() {
 
           {/* Prompt Entry Box */}
           <View style={s.section}>
-            <Text variant="label">PROMPT</Text>
+            <View style={s.promptHeaderRow}>
+              <Text variant="label">PROMPT</Text>
+              <Button
+                label={isEnhancing ? 'Enhancing...' : '✨ Enhance (AI)'}
+                variant="quiet"
+                onPress={handleEnhancePrompt}
+                disabled={isGenerating || isEnhancing || !prompt.trim()}
+              />
+            </View>
             <Card style={s.card}>
               <TextInput
                 multiline
@@ -439,6 +494,11 @@ export function ImageStudioScreen() {
                       label="View Full"
                       variant="primary"
                       onPress={() => setViewerImage(latestImage)}
+                    />
+                    <Button
+                      label="Regenerate"
+                      variant="quiet"
+                      onPress={() => handleRegenerateFromImage(latestImage)}
                     />
                     <Button
                       label="Download to Device"
@@ -787,12 +847,9 @@ export function ImageStudioScreen() {
                       />
                       <Button label="Share" variant="quiet" onPress={() => handleShare(item)} />
                       <Button
-                        label="Use Prompt"
+                        label="Regenerate"
                         variant="quiet"
-                        onPress={() => {
-                          setPrompt(item.prompt);
-                          setTab('generate');
-                        }}
+                        onPress={() => handleRegenerateFromImage(item)}
                       />
                       <Button
                         label="Delete"
@@ -813,6 +870,7 @@ export function ImageStudioScreen() {
         image={viewerImage}
         visible={Boolean(viewerImage)}
         onClose={() => setViewerImage(null)}
+        onRegenerate={handleRegenerateFromImage}
       />
     </Screen>
   );
@@ -828,6 +886,11 @@ const useStyles = makeStyles(({ space, colors, line }) => ({
   },
   section: {
     gap: space.sm,
+  },
+  promptHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   chipsRow: {
     flexDirection: 'row',

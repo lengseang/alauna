@@ -16,9 +16,10 @@ export interface ImageViewerModalProps {
   image: ImageAssetMetadata | null;
   visible: boolean;
   onClose: () => void;
+  onRegenerate?: (image: ImageAssetMetadata) => void;
 }
 
-export function ImageViewerModal({ image, visible, onClose }: ImageViewerModalProps) {
+export function ImageViewerModal({ image, visible, onClose, onRegenerate }: ImageViewerModalProps) {
   const s = useStyles();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -99,14 +100,29 @@ export function ImageViewerModal({ image, visible, onClose }: ImageViewerModalPr
               </Text>
             </Pressable>
             <Text variant="small" tone="muted" style={s.metaText}>
-              Generated: {dateStr} · Quality: {image.qualityMode}
+              Generated: {dateStr} · {image.qualityMode} · {image.steps ? `${image.steps} steps` : ''}{image.sampler ? ` · ${image.sampler}` : ''}
             </Text>
+            {image.seed != null && image.seed >= 0 ? (
+              <Text variant="small" tone="muted" style={s.metaText}>
+                Seed: {image.seed}{image.durationMs ? ` · ${(image.durationMs / 1000).toFixed(1)}s elapsed` : ''}
+              </Text>
+            ) : null}
           </ScrollView>
 
           <View style={s.actionRow}>
+            {onRegenerate ? (
+              <Button
+                label="Regenerate"
+                variant="primary"
+                onPress={() => {
+                  onRegenerate(image);
+                  onClose();
+                }}
+              />
+            ) : null}
             <Button
               label="Save to Device"
-              variant="primary"
+              variant={onRegenerate ? 'quiet' : 'primary'}
               onPress={handleDownload}
             />
             <Button label="Share" variant="quiet" onPress={handleShare} />
