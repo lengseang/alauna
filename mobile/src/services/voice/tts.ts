@@ -58,10 +58,13 @@ export async function listVoices(refresh = false): Promise<TtsVoice[]> {
   return voices;
 }
 
+import { getVoicePersona, type VoicePersona } from '../../core/voicePersonas.ts';
+
 export interface SpeakOptions {
   voice?: string | null;
   rate?: number;
   pitch?: number;
+  personaId?: string | null;
   /** Called once when this sentence finished, was stopped by the system, or failed. Not called after stopSpeaking(). */
   onDone?: () => void;
 }
@@ -69,7 +72,22 @@ export interface SpeakOptions {
 // Bumped by stopSpeaking(): callbacks of utterances flushed by a stop are ignored (Android drops queued ones silently).
 let generation = 0;
 
-/** Queue one sentence. Uses the voice prefs unless overridden. */
+/** Match the best installed native voice given a persona's voicePattern */
+export function findMatchingNativeVoice(patternStr?: string): string | null {
+  if (!patternStr || !voices || voices.length === 0) return null;
+  try {
+    const rx = new RegExp(patternStr, 'i');
+    // Prefer on-device/local voices matching the pattern first
+    const localMatch = voices.find((v) => !v.needsNetwork && (rx.test(v.name) || rx.test(v.id)));
+    if (localMatch) return localMatch.id;
+    const anyMatch = voices.find((v) => rx.test(v.name) || rx.test(v.id));
+    return anyMatch ? anyMatch.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Queue one sentence. Uses the voice persona and voice prefs unless overridden. */
 export function speak(text: string, opts: SpeakOptions = {}): boolean {
   const s = speech();
   if (!s) {
@@ -78,6 +96,7 @@ export function speak(text: string, opts: SpeakOptions = {}): boolean {
     return false;
   }
   const prefs = getVoicePrefs();
+  const persona = getVoicePersona(opts.personaId ?? prefs.personaId);
   const gen = generation;
   let finished = false;
   const finish = (error?: string) => {
@@ -89,11 +108,18 @@ export function speak(text: string, opts: SpeakOptions = {}): boolean {
   };
   const pending = ttsStore.getState().pending + 1;
   ttsStore.setState({ pending, speaking: true, lastError: null });
+
+  // Resolve best voice: explicit opts.voice -> user chosen prefs.ttsVoice -> persona matched voice
+  const matchedVoice = persona ? findMatchingNativeVoice(persona.voicePattern) : null;
+  const targetVoice = (opts.voice !== undefined ? opts.voice : prefs.ttsVoice) ?? matchedVoice ?? undefined;
+  const targetRate = opts.rate ?? (persona ? persona.rate : prefs.ttsRate);
+  const targetPitch = opts.pitch ?? (persona ? persona.pitch : prefs.ttsPitch);
+
   try {
     s.speak(text.slice(0, Math.max(1, s.maxSpeechInputLength - 1)), {
-      voice: (opts.voice === undefined ? prefs.ttsVoice : opts.voice) ?? undefined,
-      rate: opts.rate ?? prefs.ttsRate,
-      pitch: opts.pitch ?? prefs.ttsPitch,
+      voice: targetVoice,
+      rate: targetRate,
+      pitch: targetPitch,
       onDone: () => finish(),
       onStopped: () => finish(),
       onError: (e: Error) => finish(`Speech failed: ${e.message}`),
@@ -118,4 +144,16 @@ export const PREVIEW_TEXT = 'Hello. This is how I will sound when I answer you.'
 export async function previewVoice(opts: Omit<SpeakOptions, 'onDone'> = {}, text = PREVIEW_TEXT): Promise<boolean> {
   await stopSpeaking();
   return speak(text, opts);
+}
+
+/** Play a realistic preview of a Voice Persona using its sample text, pitch, rate and voice match. */
+export async function previewPersonaVoice(persona: VoicePersona): Promise<boolean> {
+  await stopSpeaking();
+  const matched = findMatchingNativeVoice(persona.voicePattern);
+  return speak(persona.sampleText, {
+    voice: matched,
+    rate: persona.rate,
+    pitch: persona.pitch,
+    personaId: persona.id,
+  });
 }

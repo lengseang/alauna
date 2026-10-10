@@ -28,8 +28,8 @@ if (-not (Test-Path $apkSource)) {
     exit 1
 }
 
-$apkDestMobile = "D:\1111-Works\CHIWIWI\mobile\chiwiwi-v0.08.apk"
-$apkDestRoot = "D:\1111-Works\CHIWIWI\chiwiwi-v0.08.apk"
+$apkDestMobile = "D:\1111-Works\CHIWIWI\mobile\chiwiwi-v0.09.apk"
+$apkDestRoot = "D:\1111-Works\CHIWIWI\chiwiwi-v0.09.apk"
 
 Write-Host "[2/3] Copying APK to destination releases..."
 Copy-Item -Path $apkSource -Destination $apkDestMobile -Force
@@ -42,7 +42,7 @@ $sha256 = (Get-FileHash -Path $apkDestMobile -Algorithm SHA256).Hash
 
 Write-Host "------------------------------------------"
 Write-Host "APK BUILD SUCCESSFUL"
-Write-Host "File:       chiwiwi-v0.08.apk"
+Write-Host "File:       chiwiwi-v0.09.apk"
 Write-Host "Size:       $fileSizeMb MB ($($fileItem.Length) bytes)"
 Write-Host "SHA256:     $sha256"
 Write-Host "Mobile Path: $apkDestMobile"

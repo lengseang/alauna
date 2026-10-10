@@ -21,6 +21,9 @@ import { Text } from '../Text';
 import { LANGUAGE_CHOICES, languageName, speechFraction, speechLine, vadPresetFor } from './logic';
 import { ChoiceRow, Group, Rows } from './parts';
 
+import { getVoicePersona, listVoicePersonas, type VoicePersona } from '../../core/voicePersonas.ts';
+import { previewPersonaVoice } from '../../services/voice/tts.ts';
+
 /** One speech model: pick it (radio), see its real state, download / pause / resume / cancel / delete. */
 function SpeechModelRow({ spec, selected, onSelect }: { spec: SpeechModelSpec; selected: boolean; onSelect?: () => void }) {
   const s = useStyles();
@@ -55,6 +58,52 @@ function SpeechModelRow({ spec, selected, onSelect }: { spec: SpeechModelSpec; s
   );
 }
 
+// Voice Model Card component
+function VoicePersonaCard({
+  persona,
+  selected,
+  isPlaying,
+  onSelect,
+  onPreview,
+}: {
+  persona: VoicePersona;
+  selected: boolean;
+  isPlaying: boolean;
+  onSelect: () => void;
+  onPreview: () => void;
+}) {
+  const s = useStyles();
+  return (
+    <View style={[s.personaCard, selected && s.personaCardSelected]}>
+      <View style={s.personaHeader}>
+        <View style={s.personaTitleRow}>
+          <Text variant="heading" style={s.personaName}>{persona.name}</Text>
+          {selected ? <Tag label="Selected" tone="accent" /> : null}
+          {persona.isNsfw ? <Tag label="18+" tone="danger" /> : null}
+        </View>
+        <Text tone="muted" style={s.personaSubtitle}>{persona.subtitle}</Text>
+      </View>
+      <Text style={s.personaDescription}>{persona.description}</Text>
+      <View style={s.personaTags}>
+        {persona.tags.map((t) => (
+          <Tag key={t} label={t} tone="default" />
+        ))}
+      </View>
+      <View style={s.personaActions}>
+        <Button
+          label={isPlaying ? 'Stop' : 'Preview'}
+          icon={isPlaying ? 'stop' : 'play'}
+          variant="text"
+          onPress={onPreview}
+        />
+        {!selected ? (
+          <Button label="Select" variant="quiet" onPress={onSelect} />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 /** Settings > Audio and voice: listening (Whisper models, language, VAD, barge-in) and speaking (system voices, rate, pitch). */
 export function AudioVoiceScreen() {
   const s = useStyles();
@@ -69,6 +118,8 @@ export function AudioVoiceScreen() {
   const [pitch, setPitch] = useState(prefs.ttsPitch);
   const [vad, setVad] = useState(prefs.vadThreshold);
   const [endMs, setEndMs] = useState(prefs.endOfSpeechMs);
+  const [personaCategory, setPersonaCategory] = useState<'normal' | 'companion' | 'nsfw_adult'>('normal');
+  const [previewingPersonaId, setPreviewingPersonaId] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -140,7 +191,67 @@ export function AudioVoiceScreen() {
         </Rows>
       </Group>
 
-      <Group index={3} title="Speaking" hint="Replies are read aloud by the voices installed on your phone (Android text to speech).">
+      <Group index={3} title="Voice models & styles" hint="Curated voice personalities with tailored pitch, cadence, and expression. Includes girlfriend/boyfriend styles and 18+ adult intimacy.">
+        <View style={s.personaTabs}>
+          <Button
+            label="Normal"
+            variant={personaCategory === 'normal' ? 'primary' : 'quiet'}
+            onPress={() => setPersonaCategory('normal')}
+          />
+          <Button
+            label="Girlfriend & Boyfriend"
+            variant={personaCategory === 'companion' ? 'primary' : 'quiet'}
+            onPress={() => setPersonaCategory('companion')}
+          />
+          <Button
+            label="18+ Adult (NSFW)"
+            variant={personaCategory === 'nsfw_adult' ? 'primary' : 'quiet'}
+            onPress={() => setPersonaCategory('nsfw_adult')}
+          />
+        </View>
+
+        {personaCategory === 'nsfw_adult' ? (
+          <Notice tone="danger" title="Uncensored 18+ Voice Profiles">
+            Intimate adult styles with breathy cadence and unfiltered tone for romantic and adult immersion.
+          </Notice>
+        ) : null}
+
+        <View style={s.personaList}>
+          {listVoicePersonas(personaCategory).map((p) => {
+            const isSel = prefs.personaId === p.id;
+            const isPlaying = previewingPersonaId === p.id;
+            return (
+              <VoicePersonaCard
+                key={p.id}
+                persona={p}
+                selected={isSel}
+                isPlaying={isPlaying}
+                onSelect={() => {
+                  setRate(p.rate);
+                  setPitch(p.pitch);
+                  updateVoicePrefs({
+                    personaId: p.id,
+                    ttsPitch: p.pitch,
+                    ttsRate: p.rate,
+                  });
+                }}
+                onPreview={async () => {
+                  if (isPlaying) {
+                    await stopSpeaking();
+                    setPreviewingPersonaId(null);
+                  } else {
+                    setPreviewingPersonaId(p.id);
+                    await previewPersonaVoice(p);
+                    setPreviewingPersonaId(null);
+                  }
+                }}
+              />
+            );
+          })}
+        </View>
+      </Group>
+
+      <Group index={4} title="Speaking & system audio" hint="Replies are read aloud by the voices installed on your phone (Android text to speech).">
         {voiceError ? (
           <Notice tone="quiet" title="No speech voices">
             {voiceError === TTS_MISSING ? TTS_MISSING : `${voiceError} Install a text to speech voice in Android settings.`}
@@ -153,7 +264,7 @@ export function AudioVoiceScreen() {
         <Slider label="Speed" value={rate} min={0.25} max={2} step={0.05} format={(v) => `${v.toFixed(2)}x`} poles={['Slower', 'Faster']} onChange={setRate} onCommit={(v) => updateVoicePrefs({ ttsRate: v })} />
         <Slider label="Pitch" value={pitch} min={0.5} max={2} step={0.05} format={(v) => `${v.toFixed(2)}x`} poles={['Lower', 'Higher']} onChange={setPitch} onCommit={(v) => updateVoicePrefs({ ttsPitch: v })} />
         <Button
-          label={tts.speaking ? 'Stop' : 'Preview this voice'}
+          label={tts.speaking ? 'Stop' : 'Preview current voice'}
           icon={tts.speaking ? 'stop' : 'speaker'}
           variant="quiet"
           onPress={async () => {
@@ -166,9 +277,12 @@ export function AudioVoiceScreen() {
           label="Reset speed and pitch"
           variant="text"
           onPress={() => {
-            setRate(1);
-            setPitch(1);
-            updateVoicePrefs({ ttsRate: 1, ttsPitch: 1 });
+            const p = getVoicePersona(prefs.personaId);
+            const r = p ? p.rate : 1;
+            const pi = p ? p.pitch : 1;
+            setRate(r);
+            setPitch(pi);
+            updateVoicePrefs({ ttsRate: r, ttsPitch: pi });
           }}
         />
       </Group>
@@ -200,8 +314,27 @@ export function AudioVoiceScreen() {
   );
 }
 
-const useStyles = makeStyles(({ space }) => ({
+const useStyles = makeStyles(({ colors, space, line }) => ({
   model: { gap: space.xs },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  personaTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginBottom: space.xs },
+  personaList: { gap: space.md },
+  personaCard: {
+    padding: space.md,
+    backgroundColor: colors.surface,
+    borderWidth: line,
+    borderColor: colors.border,
+    gap: space.xs,
+  },
+  personaCardSelected: {
+    borderColor: colors.accent,
+  },
+  personaHeader: { gap: 2 },
+  personaTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  personaName: { flex: 1 },
+  personaSubtitle: { fontSize: 13 },
+  personaDescription: { fontSize: 14, lineHeight: 20 },
+  personaTags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  personaActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: space.xs },
 }));

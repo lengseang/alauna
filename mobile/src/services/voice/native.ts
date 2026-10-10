@@ -25,9 +25,19 @@ export const MIC_MODULE_MISSING =
 /** whisper.rn JS modules, or null when this build cannot load them. */
 export function loadWhisper(): { whisper: WhisperModule; realtime: RealtimeModule } | null {
   try {
-    return { whisper: require('whisper.rn/index') as WhisperModule, realtime: require('whisper.rn/realtime-transcription/index') as RealtimeModule };
-  } catch {
-    return null; // APK without the whisper.rn native module
+    return {
+      whisper: require('whisper.rn/index') as WhisperModule,
+      realtime: require('whisper.rn/realtime-transcription/index') as RealtimeModule,
+    };
+  } catch (e1) {
+    try {
+      return {
+        whisper: require('whisper.rn') as WhisperModule,
+        realtime: require('whisper.rn/realtime-transcription') as RealtimeModule,
+      };
+    } catch (e2) {
+      return null;
+    }
   }
 }
 
@@ -36,7 +46,13 @@ export function createMicStream(): AudioStreamInterface | null {
   try {
     const { AudioPcmStreamAdapter } = require('whisper.rn/realtime-transcription/adapters/AudioPcmStreamAdapter');
     return new AudioPcmStreamAdapter();
-  } catch {
-    return null; // APK without the PCM stream native module
+  } catch (e1) {
+    try {
+      const adapterModule = require('whisper.rn/lib/commonjs/realtime-transcription/adapters/AudioPcmStreamAdapter');
+      const Adapter = adapterModule.AudioPcmStreamAdapter || adapterModule.default || adapterModule;
+      return new Adapter();
+    } catch (e2) {
+      return null;
+    }
   }
 }

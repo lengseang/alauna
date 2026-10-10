@@ -59,6 +59,8 @@ export function speechModelUrl(spec: SpeechModelSpec): string {
 
 // ------------------------------------------------------------------ preferences
 
+import { DEFAULT_VOICE_PERSONA_ID, getVoicePersona } from './voicePersonas.ts';
+
 export interface VoicePrefs {
   sttModelId: string;
   /** Whisper language: 'auto' or an ISO-639-1 code. English-only models always use 'en'. */
@@ -74,6 +76,8 @@ export interface VoicePrefs {
   ttsPitch: number;
   bargeIn: boolean;
   continuous: boolean;
+  /** Active Voice Model persona (e.g. sol_natural, velvet_girlfriend, serena_nsfw_intimate) */
+  personaId: string;
 }
 
 /** The old app's three sensitivity pills, kept: High / Normal / Low sensitivity. */
@@ -94,6 +98,7 @@ export const DEFAULT_VOICE_PREFS: VoicePrefs = {
   ttsPitch: 1,
   bargeIn: true,
   continuous: true,
+  personaId: DEFAULT_VOICE_PERSONA_ID,
 };
 
 const clamp = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -105,6 +110,7 @@ export function sanitizeVoicePrefs(raw: unknown): VoicePrefs {
   if (!raw || typeof raw !== 'object') return { ...d };
   const r = raw as Record<string, unknown>;
   const stt = getSpeechModel(typeof r.sttModelId === 'string' ? r.sttModelId : null);
+  const pId = typeof r.personaId === 'string' && getVoicePersona(r.personaId) ? r.personaId : d.personaId;
   return {
     sttModelId: stt && stt.kind === 'stt' ? stt.id : d.sttModelId,
     language: typeof r.language === 'string' && /^(auto|[a-z]{2,3})$/.test(r.language) ? r.language : d.language,
@@ -116,6 +122,7 @@ export function sanitizeVoicePrefs(raw: unknown): VoicePrefs {
     ttsPitch: clamp(r.ttsPitch, 0.25, 3, d.ttsPitch),
     bargeIn: typeof r.bargeIn === 'boolean' ? r.bargeIn : d.bargeIn,
     continuous: typeof r.continuous === 'boolean' ? r.continuous : d.continuous,
+    personaId: pId,
   };
 }
 
