@@ -16,15 +16,16 @@ set(GGML_OPENMP OFF CACHE BOOL "Disable OpenMP" FORCE)
 
 # Hardware-accelerated ARM NEON vector instructions for Snapdragon 8 Gen 2 / modern arm64
 set(GGML_CPU_ARM_ARCH "armv8.2-a+fp16+dotprod+i8mm" CACHE STRING "ggml: CPU architecture for ARM" FORCE)
-set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -ffast-math" CACHE STRING "" FORCE)
+set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG -ffast-math -fno-finite-math-only" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -ffast-math -fno-finite-math-only" CACHE STRING "" FORCE)
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -ffast-math -fno-finite-math-only" CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -DNDEBUG -ffast-math -fno-finite-math-only" CACHE STRING "" FORCE)
 
 add_compile_options(
     -O3
     -DNDEBUG
     -ffast-math
+    -fno-finite-math-only
     -march=armv8.2-a+fp16+dotprod+i8mm
 )
 
