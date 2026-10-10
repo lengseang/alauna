@@ -4,6 +4,7 @@ import { cleanTranscript, MAX_SENTENCE_CHARS, nextSentences, toSpeakable } from 
 import { IDLE_VOICE, voiceReducer, type VoiceEffect, type VoiceEvent, type VoiceLoopOptions, type VoiceLoopState } from '../src/core/voiceLoop.ts';
 import {
   DEFAULT_VOICE_PREFS,
+  KOKORO_MODEL,
   SPEECH_MODELS,
   STT_MODELS,
   VAD_MODEL,
@@ -180,13 +181,18 @@ test('speech models: verified HF files (exact size + sha256), unique ids, tiny/b
   for (const m of SPEECH_MODELS) {
     assert.match(m.sha256, /^[0-9a-f]{64}$/, m.id);
     assert.ok(Number.isInteger(m.bytes) && m.bytes > 500_000, m.id);
-    assert.match(speechModelUrl(m), /^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+\/resolve\/main\/ggml-[\w.-]+\.bin$/);
+    if (m.kind === 'stt' || m.kind === 'vad') {
+      assert.match(speechModelUrl(m), /^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+\/resolve\/main\/ggml-[\w.-]+\.bin$/);
+    } else {
+      assert.match(speechModelUrl(m), /^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+\/resolve\/main\/[\w.-/]+$/);
+    }
   }
   for (const size of ['tiny', 'base', 'small']) {
     assert.ok(STT_MODELS.some((m) => m.id.includes(size) && m.englishOnly), `${size}.en`);
     assert.ok(STT_MODELS.some((m) => m.id.includes(size) && !m.englishOnly), `${size} multilingual`);
   }
   assert.equal(VAD_MODEL.kind, 'vad');
+  assert.equal(KOKORO_MODEL.kind, 'tts');
   assert.equal(getSpeechModel(DEFAULT_VOICE_PREFS.sttModelId)?.kind, 'stt');
 });
 

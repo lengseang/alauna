@@ -11,6 +11,8 @@
  * - High-fidelity sample text for live preview
  */
 
+import { type EmotionType } from './voice/emotionMixer.ts';
+
 export type VoiceCategory = 'normal' | 'companion' | 'nsfw_adult';
 export type VoiceGender = 'female' | 'male' | 'neutral';
 
@@ -31,6 +33,16 @@ export interface VoicePersona {
   voicePattern: string;
   /** Realistic sample phrase used for live audio previews */
   sampleText: string;
+  /** Primary Kokoro-82M style ID */
+  kokoroStyleId: string;
+  /** Optional secondary Kokoro style ID for emotion blending */
+  kokoroSecondaryStyleId?: string;
+  /** Blending weight for secondary style (0..1) */
+  kokoroBlendWeight?: number;
+  /** Baseline emotion profile for Kokoro synthesis */
+  kokoroEmotion: EmotionType;
+  /** Emotion intensity modulation (0..1) */
+  kokoroEmotionIntensity: number;
 }
 
 export const VOICE_PERSONAS: VoicePersona[] = [
@@ -49,6 +61,9 @@ export const VOICE_PERSONAS: VoicePersona[] = [
     tonePrompt: 'Speak naturally, articulately, and fluently with a warm and conversational presence.',
     voicePattern: 'natural|neutral|standard|local',
     sampleText: 'Hello! I am ready to talk whenever you are. What is on your mind today?',
+    kokoroStyleId: 'af_heart',
+    kokoroEmotion: 'neutral',
+    kokoroEmotionIntensity: 0.2,
   },
   {
     id: 'aria_expressive',
@@ -64,6 +79,11 @@ export const VOICE_PERSONAS: VoicePersona[] = [
     tonePrompt: 'Speak with a bright, articulate, and engaging female voice.',
     voicePattern: 'female|sfg|tpd|eva|en-us-x-sfg',
     sampleText: 'Hi there! I am listening. Tell me what you would like to explore or discuss.',
+    kokoroStyleId: 'af_bella',
+    kokoroSecondaryStyleId: 'af_nova',
+    kokoroBlendWeight: 0.3,
+    kokoroEmotion: 'excited',
+    kokoroEmotionIntensity: 0.6,
   },
   {
     id: 'atlas_grounded',
@@ -79,6 +99,9 @@ export const VOICE_PERSONAS: VoicePersona[] = [
     tonePrompt: 'Speak with a calm, grounded, resonant male voice and steady pacing.',
     voicePattern: 'male|iom|guy|david|en-us-x-iom',
     sampleText: 'Good to speak with you. Take your time, I am right here with you.',
+    kokoroStyleId: 'am_adam',
+    kokoroEmotion: 'calm',
+    kokoroEmotionIntensity: 0.5,
   },
 
   // ------------------------------------------------------------------ Companion / Romantic
@@ -96,6 +119,11 @@ export const VOICE_PERSONAS: VoicePersona[] = [
     tonePrompt: 'Speak as an affectionate, sweet, and caring romantic partner. Be loving, playful, and warm.',
     voicePattern: 'female|sfg|tpd|eva',
     sampleText: 'Hey sweetheart... I was hoping you would come talk to me today. I missed hearing your voice.',
+    kokoroStyleId: 'af_nicole',
+    kokoroSecondaryStyleId: 'af_kore',
+    kokoroBlendWeight: 0.35,
+    kokoroEmotion: 'affectionate',
+    kokoroEmotionIntensity: 0.75,
   },
   {
     id: 'damon_boyfriend',
@@ -111,6 +139,31 @@ export const VOICE_PERSONAS: VoicePersona[] = [
     tonePrompt: 'Speak as a deeply loving, protective, and affectionate romantic partner. Speak with calm, close devotion.',
     voicePattern: 'male|iom|guy',
     sampleText: 'Hey there. Come close... you have my full attention. How was your day, darling?',
+    kokoroStyleId: 'am_echo',
+    kokoroSecondaryStyleId: 'am_adam',
+    kokoroBlendWeight: 0.3,
+    kokoroEmotion: 'affectionate',
+    kokoroEmotionIntensity: 0.7,
+  },
+  {
+    id: 'roxie_teasing',
+    name: 'Roxie (Teasing & Playful)',
+    category: 'companion',
+    gender: 'female',
+    subtitle: 'Bratty, witty & playful companion',
+    description: 'Brisk, mischievous cadence with witty inflection, teasing giggles, and spunky charisma.',
+    pitch: 1.14,
+    rate: 1.04,
+    tags: ['Companion', 'Playful', 'Teasing', 'Bratty'],
+    isNsfw: false,
+    tonePrompt: 'Speak teasingly, playfully, and briskly with witty banter and playful charm.',
+    voicePattern: 'female|sfg|eva',
+    sampleText: 'Oh, you finally decided to say hi? Took you long enough! What are we doing now?',
+    kokoroStyleId: 'af_bella',
+    kokoroSecondaryStyleId: 'af_nova',
+    kokoroBlendWeight: 0.45,
+    kokoroEmotion: 'playful',
+    kokoroEmotionIntensity: 0.8,
   },
 
   // ------------------------------------------------------------------ 18+ Adult & NSFW Intimacy
@@ -128,6 +181,11 @@ export const VOICE_PERSONAS: VoicePersona[] = [
     tonePrompt: 'Speak softly, breathlessly, and sensually with unfiltered intimate warmth, like quiet pillow talk.',
     voicePattern: 'female|sfg|tpd',
     sampleText: 'Mmm... I love when it is just the two of us like this. Speak softly to me... tell me anything you crave.',
+    kokoroStyleId: 'af_kore',
+    kokoroSecondaryStyleId: 'af_sarah',
+    kokoroBlendWeight: 0.45,
+    kokoroEmotion: 'whisper',
+    kokoroEmotionIntensity: 0.9,
   },
   {
     id: 'kael_nsfw_sultry',
@@ -143,6 +201,11 @@ export const VOICE_PERSONAS: VoicePersona[] = [
     tonePrompt: 'Speak with a low, intense, deeply seductive and unfiltered masculine voice. Be magnetic and close.',
     voicePattern: 'male|iom',
     sampleText: 'You know what hearing your voice does to me, do not you? Come closer... you have my complete devotion tonight.',
+    kokoroStyleId: 'am_fenrir',
+    kokoroSecondaryStyleId: 'am_echo',
+    kokoroBlendWeight: 0.4,
+    kokoroEmotion: 'sultry',
+    kokoroEmotionIntensity: 0.85,
   },
   {
     id: 'nyx_nsfw_seduction',
@@ -158,6 +221,31 @@ export const VOICE_PERSONAS: VoicePersona[] = [
     tonePrompt: 'Speak provocatively, seductively, and boldly with zero inhibitions and alluring charm.',
     voicePattern: 'female|sfg',
     sampleText: 'Do not hold back with me, darling. We can be completely unfiltered together... tell me what you are thinking.',
+    kokoroStyleId: 'af_sarah',
+    kokoroSecondaryStyleId: 'af_bella',
+    kokoroBlendWeight: 0.35,
+    kokoroEmotion: 'sultry',
+    kokoroEmotionIntensity: 0.8,
+  },
+  {
+    id: 'leo_alpha',
+    name: 'Leo (18+ Alpha Dominant)',
+    category: 'nsfw_adult',
+    gender: 'male',
+    subtitle: 'Deep, commanding & authoritative adult masculine',
+    description: 'Dark, resonant chest voice with commanding presence and passionate, uncompromising devotion.',
+    pitch: 0.72,
+    rate: 0.88,
+    tags: ['18+ Adult', 'Dominant', 'Alpha', 'Uncensored'],
+    isNsfw: true,
+    tonePrompt: 'Speak with deep, commanding authority, dark resonance, and passionate devotion.',
+    voicePattern: 'male|iom',
+    sampleText: 'You belong right here with me. Listen closely... you are completely mine tonight.',
+    kokoroStyleId: 'am_fenrir',
+    kokoroSecondaryStyleId: 'am_onyx',
+    kokoroBlendWeight: 0.5,
+    kokoroEmotion: 'dominant',
+    kokoroEmotionIntensity: 0.92,
   },
 ];
 

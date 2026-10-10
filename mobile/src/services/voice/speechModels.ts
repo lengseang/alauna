@@ -55,8 +55,9 @@ function voiceDir(): Directory {
   if (!d.exists) d.create({ intermediates: true, idempotent: true });
   return d;
 }
-const finalFile = (spec: SpeechModelSpec) => new File(voiceDir(), spec.filename);
-const partFile = (spec: SpeechModelSpec) => new File(voiceDir(), `${spec.filename}.part`);
+const diskFilename = (spec: SpeechModelSpec) => spec.filename.replace(/\//g, '_');
+const finalFile = (spec: SpeechModelSpec) => new File(voiceDir(), diskFilename(spec));
+const partFile = (spec: SpeechModelSpec) => new File(voiceDir(), `${diskFilename(spec)}.part`);
 
 function isComplete(spec: SpeechModelSpec): boolean {
   try {

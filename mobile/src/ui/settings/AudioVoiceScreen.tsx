@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { getSpeechModel, STT_MODELS, VAD_MODEL, VAD_SENSITIVITY_PRESETS, type SpeechModelSpec } from '../../core/voiceModels.ts';
+import { getSpeechModel, KOKORO_MODEL, STT_MODELS, VAD_MODEL, VAD_SENSITIVITY_PRESETS, type SpeechModelSpec } from '../../core/voiceModels.ts';
 import { showToast } from '../../services/toast.ts';
 import { updateVoicePrefs, useVoicePrefs } from '../../services/voice/prefs.ts';
 import { cancelSpeechModelDownload, deleteSpeechModel, downloadSpeechModel, pauseSpeechModelDownload, useSpeechModels } from '../../services/voice/speechModels.ts';
@@ -23,6 +23,8 @@ import { ChoiceRow, Group, Rows } from './parts';
 
 import { getVoicePersona, listVoicePersonas, type VoicePersona } from '../../core/voicePersonas.ts';
 import { previewPersonaVoice } from '../../services/voice/tts.ts';
+import { EMOTION_PROFILES, type EmotionType } from '../../core/voice/emotionMixer.ts';
+import { getKokoroStyle } from '../../core/voice/kokoroStyles.ts';
 
 /** One speech model: pick it (radio), see its real state, download / pause / resume / cancel / delete. */
 function SpeechModelRow({ spec, selected, onSelect }: { spec: SpeechModelSpec; selected: boolean; onSelect?: () => void }) {
@@ -73,6 +75,13 @@ function VoicePersonaCard({
   onPreview: () => void;
 }) {
   const s = useStyles();
+  const primaryStyle = getKokoroStyle(persona.kokoroStyleId);
+  const secondaryStyle = persona.kokoroSecondaryStyleId ? getKokoroStyle(persona.kokoroSecondaryStyleId) : null;
+  const styleLabel = secondaryStyle
+    ? `${primaryStyle?.name ?? persona.kokoroStyleId} + ${secondaryStyle.name}`
+    : (primaryStyle?.name ?? persona.kokoroStyleId);
+  const emotionLabel = EMOTION_PROFILES[persona.kokoroEmotion]?.label ?? persona.kokoroEmotion;
+
   return (
     <View style={[s.personaCard, selected && s.personaCardSelected]}>
       <View style={s.personaHeader}>
@@ -85,6 +94,8 @@ function VoicePersonaCard({
       </View>
       <Text style={s.personaDescription}>{persona.description}</Text>
       <View style={s.personaTags}>
+        <Tag label={`Kokoro: ${styleLabel}`} tone="accent" />
+        <Tag label={`Tone: ${emotionLabel}`} tone="default" />
         {persona.tags.map((t) => (
           <Tag key={t} label={t} tone="default" />
         ))}
@@ -192,6 +203,57 @@ export function AudioVoiceScreen() {
       </Group>
 
       <Group index={3} title="Voice models & styles" hint="Curated voice personalities with tailored pitch, cadence, and expression. Includes girlfriend/boyfriend styles and 18+ adult intimacy.">
+        <Text variant="label">Speech synthesis engine</Text>
+        <View style={s.personaTabs}>
+          <Button
+            label="Android System TTS"
+            variant={prefs.ttsEngine === 'system' ? 'primary' : 'quiet'}
+            onPress={() => {
+              updateVoicePrefs({ ttsEngine: 'system' });
+            }}
+          />
+          <Button
+            label="Kokoro-82M Neural TTS"
+            variant={prefs.ttsEngine === 'kokoro' ? 'primary' : 'quiet'}
+            onPress={() => {
+              updateVoicePrefs({ ttsEngine: 'kokoro' });
+            }}
+          />
+        </View>
+
+        {prefs.ttsEngine === 'kokoro' ? (
+          <View style={s.kokoroSection}>
+            <SpeechModelRow spec={KOKORO_MODEL} selected={true} />
+            <Text variant="small">Kokoro-82M is an 82M-parameter neural engine with 512-D style vectors and mathematical emotion blending for high-fidelity speech.</Text>
+          </View>
+        ) : null}
+
+        <View style={s.emotionControls}>
+          <Text variant="label">Emotion modulation & tone blend</Text>
+          <View style={s.tags}>
+            {(Object.keys(EMOTION_PROFILES) as EmotionType[]).map((em) => (
+              <Tag
+                key={em}
+                label={EMOTION_PROFILES[em].label}
+                selected={prefs.kokoroEmotion === em}
+                onPress={() => updateVoicePrefs({ kokoroEmotion: em })}
+              />
+            ))}
+          </View>
+          <Slider
+            label="Emotion intensity"
+            value={prefs.kokoroEmotionIntensity}
+            min={0.1}
+            max={1.0}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)}%`}
+            poles={['Subtle', 'Intense']}
+            hint="Scales dynamic acoustic style interpolation and prosody inflection."
+            onChange={(v) => updateVoicePrefs({ kokoroEmotionIntensity: v })}
+          />
+        </View>
+
+        <Text variant="label">Persona Category</Text>
         <View style={s.personaTabs}>
           <Button
             label="Normal"
@@ -233,6 +295,9 @@ export function AudioVoiceScreen() {
                     personaId: p.id,
                     ttsPitch: p.pitch,
                     ttsRate: p.rate,
+                    kokoroStyleId: p.kokoroStyleId,
+                    kokoroEmotion: p.kokoroEmotion,
+                    kokoroEmotionIntensity: p.kokoroEmotionIntensity,
                   });
                 }}
                 onPreview={async () => {
@@ -241,7 +306,7 @@ export function AudioVoiceScreen() {
                     setPreviewingPersonaId(null);
                   } else {
                     setPreviewingPersonaId(p.id);
-                    await previewPersonaVoice(p);
+                    await previewPersonaVoice(p, prefs.kokoroEmotion, prefs.kokoroEmotionIntensity);
                     setPreviewingPersonaId(null);
                   }
                 }}
@@ -337,4 +402,20 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
   personaDescription: { fontSize: 14, lineHeight: 20 },
   personaTags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   personaActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: space.xs },
+  kokoroSection: {
+    gap: space.xs,
+    padding: space.md,
+    backgroundColor: colors.surface,
+    borderWidth: line,
+    borderColor: colors.border,
+    marginBottom: space.sm,
+  },
+  emotionControls: {
+    gap: space.xs,
+    padding: space.md,
+    backgroundColor: colors.surface,
+    borderWidth: line,
+    borderColor: colors.border,
+    marginBottom: space.md,
+  },
 }));

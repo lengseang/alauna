@@ -60,11 +60,15 @@ export async function listVoices(refresh = false): Promise<TtsVoice[]> {
 
 import { getVoicePersona, type VoicePersona } from '../../core/voicePersonas.ts';
 
+import { computeAcousticModulation, type EmotionType } from '../../core/voice/emotionMixer.ts';
+
 export interface SpeakOptions {
   voice?: string | null;
   rate?: number;
   pitch?: number;
   personaId?: string | null;
+  emotion?: EmotionType;
+  emotionIntensity?: number;
   /** Called once when this sentence finished, was stopped by the system, or failed. Not called after stopSpeaking(). */
   onDone?: () => void;
 }
@@ -112,8 +116,16 @@ export function speak(text: string, opts: SpeakOptions = {}): boolean {
   // Resolve best voice: explicit opts.voice -> user chosen prefs.ttsVoice -> persona matched voice
   const matchedVoice = persona ? findMatchingNativeVoice(persona.voicePattern) : null;
   const targetVoice = (opts.voice !== undefined ? opts.voice : prefs.ttsVoice) ?? matchedVoice ?? undefined;
-  const targetRate = opts.rate ?? (persona ? persona.rate : prefs.ttsRate);
-  const targetPitch = opts.pitch ?? (persona ? persona.pitch : prefs.ttsPitch);
+  
+  // Acoustic emotion modulation
+  const baseRate = persona ? persona.rate : prefs.ttsRate;
+  const basePitch = persona ? persona.pitch : prefs.ttsPitch;
+  const activeEmotion = opts.emotion ?? (persona ? persona.kokoroEmotion : prefs.kokoroEmotion);
+  const activeIntensity = opts.emotionIntensity ?? (persona ? persona.kokoroEmotionIntensity : prefs.kokoroEmotionIntensity);
+  const mod = computeAcousticModulation(basePitch, baseRate, activeEmotion, activeIntensity);
+
+  const targetRate = opts.rate ?? mod.rate;
+  const targetPitch = opts.pitch ?? mod.pitch;
 
   try {
     s.speak(text.slice(0, Math.max(1, s.maxSpeechInputLength - 1)), {
@@ -147,13 +159,18 @@ export async function previewVoice(opts: Omit<SpeakOptions, 'onDone'> = {}, text
 }
 
 /** Play a realistic preview of a Voice Persona using its sample text, pitch, rate and voice match. */
-export async function previewPersonaVoice(persona: VoicePersona): Promise<boolean> {
+export async function previewPersonaVoice(persona: VoicePersona, emotion?: EmotionType, intensity?: number): Promise<boolean> {
   await stopSpeaking();
   const matched = findMatchingNativeVoice(persona.voicePattern);
+  const em = emotion ?? persona.kokoroEmotion;
+  const inIntensity = intensity ?? persona.kokoroEmotionIntensity;
+  const mod = computeAcousticModulation(persona.pitch, persona.rate, em, inIntensity);
   return speak(persona.sampleText, {
     voice: matched,
-    rate: persona.rate,
-    pitch: persona.pitch,
+    rate: mod.rate,
+    pitch: mod.pitch,
     personaId: persona.id,
+    emotion: em,
+    emotionIntensity: inIntensity,
   });
 }

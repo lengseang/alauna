@@ -10,14 +10,14 @@
 export interface SpeechModelSpec {
   id: string;
   name: string;
-  kind: 'stt' | 'vad';
+  kind: 'stt' | 'vad' | 'tts';
   repo: string;
   filename: string;
   bytes: number;
   sha256: string;
   /** .en models only understand English (and are a bit more accurate at it). */
   englishOnly: boolean;
-  quant: 'f16' | 'q5_1' | 'f32';
+  quant: 'f16' | 'q5_1' | 'f32' | 'q8_0';
   note: string;
 }
 
@@ -46,7 +46,22 @@ export const VAD_MODEL: SpeechModelSpec = {
   note: 'Voice activity detection.',
 };
 
-export const SPEECH_MODELS: SpeechModelSpec[] = [...STT_MODELS, VAD_MODEL];
+/** Kokoro-82M v1.0 ONNX text-to-speech model: 82M params, 24kHz audio, 512-D style embeddings. */
+export const KOKORO_MODEL: SpeechModelSpec = {
+  id: 'kokoro-82m-v1.0-onnx',
+  name: 'Kokoro-82M v1.0 (Neural ONNX)',
+  kind: 'tts',
+  repo: 'onnx-community/Kokoro-82M-v1.0-ONNX',
+  filename: 'onnx/model_quantized.onnx',
+  bytes: 92_361_116,
+  sha256: 'fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478',
+  englishOnly: false,
+  quant: 'q8_0',
+  note: 'High-fidelity neural text-to-speech with 512-D style & emotion blending (82M params).',
+};
+
+export const TTS_MODELS: SpeechModelSpec[] = [KOKORO_MODEL];
+export const SPEECH_MODELS: SpeechModelSpec[] = [...STT_MODELS, VAD_MODEL, KOKORO_MODEL];
 export const DEFAULT_STT_MODEL_ID = 'whisper-base.en';
 
 export function getSpeechModel(id: string | null | undefined): SpeechModelSpec | null {
@@ -60,6 +75,10 @@ export function speechModelUrl(spec: SpeechModelSpec): string {
 // ------------------------------------------------------------------ preferences
 
 import { DEFAULT_VOICE_PERSONA_ID, getVoicePersona } from './voicePersonas.ts';
+import { type EmotionType, EMOTION_PROFILES } from './voice/emotionMixer.ts';
+import { DEFAULT_KOKORO_STYLE_ID, getKokoroStyle } from './voice/kokoroStyles.ts';
+
+export type TtsEngine = 'system' | 'kokoro';
 
 export interface VoicePrefs {
   sttModelId: string;
@@ -78,6 +97,14 @@ export interface VoicePrefs {
   continuous: boolean;
   /** Active Voice Model persona (e.g. sol_natural, velvet_girlfriend, serena_nsfw_intimate) */
   personaId: string;
+  /** TTS synthesis engine: 'system' for Android TTS, 'kokoro' for neural Kokoro-82M */
+  ttsEngine: TtsEngine;
+  /** Active Kokoro style ID */
+  kokoroStyleId: string;
+  /** Active Kokoro emotion profile */
+  kokoroEmotion: EmotionType;
+  /** Emotion modulation strength 0..1 */
+  kokoroEmotionIntensity: number;
 }
 
 /** The old app's three sensitivity pills, kept: High / Normal / Low sensitivity. */
@@ -99,6 +126,10 @@ export const DEFAULT_VOICE_PREFS: VoicePrefs = {
   bargeIn: true,
   continuous: true,
   personaId: DEFAULT_VOICE_PERSONA_ID,
+  ttsEngine: 'system',
+  kokoroStyleId: DEFAULT_KOKORO_STYLE_ID,
+  kokoroEmotion: 'neutral',
+  kokoroEmotionIntensity: 0.5,
 };
 
 const clamp = (v: unknown, lo: number, hi: number, dflt: number): number =>
@@ -111,6 +142,11 @@ export function sanitizeVoicePrefs(raw: unknown): VoicePrefs {
   const r = raw as Record<string, unknown>;
   const stt = getSpeechModel(typeof r.sttModelId === 'string' ? r.sttModelId : null);
   const pId = typeof r.personaId === 'string' && getVoicePersona(r.personaId) ? r.personaId : d.personaId;
+  const engine: TtsEngine = r.ttsEngine === 'kokoro' ? 'kokoro' : 'system';
+  const kStyle = typeof r.kokoroStyleId === 'string' && getKokoroStyle(r.kokoroStyleId) ? r.kokoroStyleId : d.kokoroStyleId;
+  const kEmotion: EmotionType = typeof r.kokoroEmotion === 'string' && r.kokoroEmotion in EMOTION_PROFILES ? (r.kokoroEmotion as EmotionType) : d.kokoroEmotion;
+  const kIntensity = clamp(r.kokoroEmotionIntensity, 0, 1, d.kokoroEmotionIntensity);
+
   return {
     sttModelId: stt && stt.kind === 'stt' ? stt.id : d.sttModelId,
     language: typeof r.language === 'string' && /^(auto|[a-z]{2,3})$/.test(r.language) ? r.language : d.language,
@@ -123,6 +159,10 @@ export function sanitizeVoicePrefs(raw: unknown): VoicePrefs {
     bargeIn: typeof r.bargeIn === 'boolean' ? r.bargeIn : d.bargeIn,
     continuous: typeof r.continuous === 'boolean' ? r.continuous : d.continuous,
     personaId: pId,
+    ttsEngine: engine,
+    kokoroStyleId: kStyle,
+    kokoroEmotion: kEmotion,
+    kokoroEmotionIntensity: kIntensity,
   };
 }
 
