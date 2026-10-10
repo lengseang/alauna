@@ -4,8 +4,8 @@
 #include <vector>
 #include <cstdlib>
 #include <cstring>
-
 #include <mutex>
+#include <filesystem>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -101,6 +101,55 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeInit(
     params.rng_type = CPU_RNG;
     params.enable_mmap = true;
 
+    // Check companion files in the model's directory (for modular SDXL/Pony models)
+    std::string clipLPath, clipGPath, t5xxlPath, vaePath;
+    try {
+        std::filesystem::path p(modelPath);
+        std::filesystem::path dir = p.parent_path();
+
+        for (const auto& name : {"clip_l.safetensors", "clip_l.gguf", "clip_l-q8_0.gguf", "clip_l-fp16.gguf"}) {
+            auto cand = dir / name;
+            if (std::filesystem::exists(cand)) {
+                clipLPath = cand.string();
+                params.clip_l_path = clipLPath.c_str();
+                LOGI("Detected companion CLIP-L: %s", clipLPath.c_str());
+                break;
+            }
+        }
+
+        for (const auto& name : {"clip_g.safetensors", "clip_g.gguf", "clip_g-q8_0.gguf", "clip_g-fp16.gguf"}) {
+            auto cand = dir / name;
+            if (std::filesystem::exists(cand)) {
+                clipGPath = cand.string();
+                params.clip_g_path = clipGPath.c_str();
+                LOGI("Detected companion CLIP-G: %s", clipGPath.c_str());
+                break;
+            }
+        }
+
+        for (const auto& name : {"t5xxl.safetensors", "t5xxl.gguf", "t5xxl_fp16.gguf", "t5xxl_q4_k.gguf"}) {
+            auto cand = dir / name;
+            if (std::filesystem::exists(cand)) {
+                t5xxlPath = cand.string();
+                params.t5xxl_path = t5xxlPath.c_str();
+                LOGI("Detected companion T5XXL: %s", t5xxlPath.c_str());
+                break;
+            }
+        }
+
+        for (const auto& name : {"sdxl_vae.safetensors", "vae.safetensors", "sdxl_vae.gguf", "vae.gguf"}) {
+            auto cand = dir / name;
+            if (std::filesystem::exists(cand)) {
+                vaePath = cand.string();
+                params.vae_path = vaePath.c_str();
+                LOGI("Detected companion VAE: %s", vaePath.c_str());
+                break;
+            }
+        }
+    } catch (const std::exception& e) {
+        LOGW("Error while scanning companion model files: %s", e.what());
+    }
+
     LOGI("Initializing sd_ctx for model: %s with %d threads", modelPath, params.n_threads);
     sd_ctx_t* ctx = new_sd_ctx(&params);
     if (!ctx) {
@@ -111,6 +160,11 @@ Java_com_chiwiwi_sovereign_diffusion_NativeDiffusion_nativeInit(
     env->ReleaseStringUTFChars(jModelPath, modelPath);
 
     if (!ctx) {
+        std::string err = get_last_error();
+        if (err.find("get sd version from file failed") != std::string::npos) {
+            std::string enhanced = "Model missing text encoder: this model contains only diffusion UNet weights without embedded CLIP/VAE encoders. Standalone on-device generation requires an All-in-One checkpoint (e.g. Anything V5, DreamShaper 7 LCM, SD 1.5, AbsoluteReality) or companion CLIP-L/CLIP-G weights in the vault models directory. Original engine error: " + err;
+            set_last_error(enhanced.c_str());
+        }
         LOGE("Failed to create sd_ctx: %s", get_last_error().c_str());
         return 0;
     }

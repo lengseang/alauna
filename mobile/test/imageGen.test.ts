@@ -5,7 +5,9 @@ import { planGeneration } from '../src/core/imageGen/adaptivePlanner.ts';
 import {
   IMAGE_MODEL_MANIFESTS,
   getImageModelManifest,
+  getStandaloneImageModels,
   getUncensoredImageModels,
+  isStandaloneModel,
   verifyModelIntegrity,
 } from '../src/core/imageGen/modelRegistry.ts';
 import { ImageGenerationCoordinator } from '../src/core/imageGen/coordinator.ts';
@@ -191,4 +193,34 @@ test('imageGen runtime: no fabricated generation path (no synthesizer, no simula
   assert.doesNotMatch(src, /pngSynthesizer|synthesizeScene|setTimeout|delay\(/);
   assert.match(src, /LocalDiffusionEngine/);
   assert.match(src, /return linkedEngine !== null/, 'availability is whether a real engine is registered');
+});
+
+test('imageGen modelRegistry: classifies All-in-One vs Modular UNet models honestly', () => {
+  const standalone = getStandaloneImageModels();
+  assert.ok(standalone.length >= 8, 'Must have at least 8 All-in-One standalone diffusion models');
+
+  // Verify Anything V5 and MeinaHentai All-in-One models
+  const anythingV5 = getImageModelManifest('anything-v5-q4');
+  assert.ok(anythingV5, 'anything-v5-q4 must be registered');
+  assert.equal(anythingV5.packageFormat, 'all-in-one');
+  assert.equal(anythingV5.downloadSizeBytes, 1_570_410_496);
+  assert.equal(anythingV5.sha256, '9f2facb57132e1c0714262d1d562e334d1f05da259a2a424c3c5b2ee0ae108f2');
+
+  const meinaHentai = getImageModelManifest('meina-hentai-sd15');
+  assert.ok(meinaHentai, 'meina-hentai-sd15 must be registered');
+  assert.equal(meinaHentai.packageFormat, 'all-in-one');
+  assert.equal(meinaHentai.downloadSizeBytes, 2_132_651_163);
+  assert.equal(meinaHentai.sha256, 'bb81be7c6f006b2511fb548d18912f759c659cd82d88040fc78bbe4cc65b965c');
+
+  // Verify standalone status helper
+  assert.equal(isStandaloneModel('anything-v5-q4'), true);
+  assert.equal(isStandaloneModel('dreamshaper-7-lcm-f16'), true);
+  assert.equal(isStandaloneModel('sd-turbo-q4'), true);
+  assert.equal(isStandaloneModel('pony-diffusion-v6-xl-q8'), false);
+  assert.equal(isStandaloneModel('realvisxl-v5-q4'), false);
+  assert.equal(isStandaloneModel('cyberrealistic-xl-v4-q4'), false);
+
+  // Integrity checks on new models
+  assert.equal(verifyModelIntegrity(anythingV5, anythingV5.downloadSizeBytes, anythingV5.sha256).valid, true);
+  assert.equal(verifyModelIntegrity(meinaHentai, meinaHentai.downloadSizeBytes, meinaHentai.sha256).valid, true);
 });

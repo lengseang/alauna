@@ -195,6 +195,7 @@ export interface ImageModelManifest {
   sha256: string;
   downloadSizeBytes: number;
   contentPolicy: 'standard' | 'uncensored' | 'heretic';
+  packageFormat?: 'all-in-one' | 'modular-unet';
   hfRepo?: string;
   hfFile?: string;
   tags?: string[];

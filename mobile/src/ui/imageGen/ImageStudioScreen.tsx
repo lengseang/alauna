@@ -90,11 +90,13 @@ export function ImageStudioScreen() {
   const [qualityMode, setQualityMode] = useState<QualityMode>('balanced');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [selectedModelId, setSelectedModelId] = useState<string>(
-    IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'realvisxl-v5-q4')?.modelId ??
+    IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'anything-v5-q4')?.modelId ??
+      IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'dreamshaper-7-lcm-f16')?.modelId ??
+      IMAGE_MODEL_MANIFESTS.find((m) => m.modelId === 'sd-turbo-q4')?.modelId ??
       IMAGE_MODEL_MANIFESTS[0].modelId,
   );
   const [seedInput, setSeedInput] = useState<string>('');
-  const [modelFilter, setModelFilter] = useState<'all' | 'uncensored' | 'fast' | 'installed'>('all');
+  const [modelFilter, setModelFilter] = useState<'all' | 'standalone' | 'uncensored' | 'fast' | 'installed'>('all');
   const [viewerImage, setViewerImage] = useState<ImageAssetMetadata | null>(null);
 
   // Initialize storage index and model status check on mount
@@ -128,6 +130,9 @@ export function ImageStudioScreen() {
       if (modelFilter === 'installed') {
         return modelStates[m.modelId]?.status === 'installed';
       }
+      if (modelFilter === 'standalone') {
+        return m.packageFormat !== 'modular-unet';
+      }
       if (modelFilter === 'uncensored') {
         return m.contentPolicy === 'uncensored' || m.contentPolicy === 'heretic';
       }
@@ -141,6 +146,14 @@ export function ImageStudioScreen() {
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       showToast('Please enter an image prompt first.');
+      return;
+    }
+
+    if (selectedManifest.packageFormat === 'modular-unet') {
+      showToast(
+        'Selected model is a Modular UNet (requires external CLIP). Please select an All-in-One model for standalone generation.',
+        4500,
+      );
       return;
     }
 
@@ -239,6 +252,11 @@ export function ImageStudioScreen() {
             </View>
 
             <View style={s.modelBannerBadgeRow}>
+              {selectedManifest.packageFormat === 'modular-unet' ? (
+                <Tag label="MODULAR UNET" />
+              ) : (
+                <Tag label="ALL-IN-ONE" selected tone="accent" />
+              )}
               {selectedManifest.contentPolicy === 'uncensored' || selectedManifest.contentPolicy === 'heretic' ? (
                 <Tag label="UNCENSORED" selected tone="accent" />
               ) : (
@@ -259,6 +277,15 @@ export function ImageStudioScreen() {
               </Text>
             </View>
           </Card>
+
+          {selectedManifest.packageFormat === 'modular-unet' && (
+            <View style={{ marginTop: 8 }}>
+              <Notice tone="quiet" title="Modular UNet Checkpoint">
+                This model contains only diffusion UNet weights and requires companion CLIP-L/CLIP-G encoders in your vault.
+                For single-file standalone on-device generation, switch to an All-in-One model (e.g. Anything V5, DreamShaper 7 LCM, or SD 1.5).
+              </Notice>
+            </View>
+          )}
 
           {/* Prompt Entry Box */}
           <View style={s.section}>
@@ -545,6 +572,12 @@ export function ImageStudioScreen() {
               onPress={() => setModelFilter('all')}
             />
             <Tag
+              label="All-in-One"
+              selected={modelFilter === 'standalone'}
+              tone="accent"
+              onPress={() => setModelFilter('standalone')}
+            />
+            <Tag
               label="Uncensored"
               selected={modelFilter === 'uncensored'}
               tone="accent"
@@ -586,6 +619,11 @@ export function ImageStudioScreen() {
                     </View>
 
                     <View style={s.modelBadgeRow}>
+                      {manifest.packageFormat === 'modular-unet' ? (
+                        <Tag label="MODULAR UNET" />
+                      ) : (
+                        <Tag label="ALL-IN-ONE" selected tone="accent" />
+                      )}
                       {isUncensored ? <Tag label="UNCENSORED" selected tone="accent" /> : <Tag label="STANDARD" />}
                       {isSelected ? <Tag label="ACTIVE" selected /> : null}
                     </View>
