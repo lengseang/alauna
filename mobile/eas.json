@@ -13,7 +13,7 @@
       },
       "cache": {
         "key": "alauna-dev-cache",
-        "customPaths": [
+        "paths": [
           "~/.gradle/caches"
         ]
       }
@@ -29,7 +29,7 @@
       },
       "cache": {
         "key": "alauna-preview-cache",
-        "customPaths": [
+        "paths": [
           "~/.gradle/caches"
         ]
       }
@@ -45,7 +45,7 @@
       },
       "cache": {
         "key": "alauna-prod-cache",
-        "customPaths": [
+        "paths": [
           "~/.gradle/caches"
         ]
       }
