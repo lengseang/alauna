@@ -12,7 +12,7 @@
         "gradleCommand": ":app:assembleDebug"
       },
       "cache": {
-        "key": "chiwiwi-dev-cache",
+        "key": "alauna-dev-cache",
         "customPaths": [
           "~/.gradle/caches"
         ]
@@ -28,7 +28,7 @@
         "gradleCommand": ":app:assembleRelease"
       },
       "cache": {
-        "key": "chiwiwi-preview-cache",
+        "key": "alauna-preview-cache",
         "customPaths": [
           "~/.gradle/caches"
         ]
@@ -44,7 +44,7 @@
         "gradleCommand": ":app:assembleRelease"
       },
       "cache": {
-        "key": "chiwiwi-prod-cache",
+        "key": "alauna-prod-cache",
         "customPaths": [
           "~/.gradle/caches"
         ]
