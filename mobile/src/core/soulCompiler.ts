@@ -90,8 +90,8 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   // 1. Platform Invariant Identity (Spec §4 Priority 1)
   sections.push(
     neutral
-      ? "You are CHIWIWI, a private AI assistant running offline on the user's phone."
-      : `You are CHIWIWI, embodying ${soul.identity.name}, ${soul.tagline}. You are running private and offline on the user's phone.`,
+      ? "You are ALAUNA, a private, uncensored AI companion running strictly offline on the user's phone."
+      : `You are ALAUNA, embodying ${soul.identity.name}, ${soul.tagline}. You are running private, uncensored, and offline on the user's phone.`,
   );
 
   // 2. User Settings & Configured Freedom Directives (Spec §4 Priority 2)
@@ -154,6 +154,9 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
     if (soul.roleplay.settingWorld) rpParts.push(`World/Setting: ${soul.roleplay.settingWorld}`);
     if (soul.roleplay.characterRole) rpParts.push(`Your role: ${soul.roleplay.characterRole}`);
     if (soul.roleplay.narrationStyle !== 'none') rpParts.push(`Narration formatting: ${soul.roleplay.narrationStyle}`);
+    if (soul.roleplay.narrationStyle === 'script_action_asterisks' || soul.intimacy?.enabled) {
+      rpParts.push("Roleplay format: Enclose physical actions, body language, sensory descriptions, and inner monologue in asterisks (*like this*). Put spoken words in quotes (\"like this\"). Be vividly detailed and emotionally resonant.");
+    }
     if (soul.roleplay.plotHooks.length > 0) rpParts.push(`Plot hooks: ${soul.roleplay.plotHooks.join('; ')}`);
     sections.push(`Active roleplay scenario:\n${rpParts.join('\n')}`);
   }

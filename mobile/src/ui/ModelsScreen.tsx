@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, SectionList, View } from 'react-native';
-import { ALL_CAPABILITIES, CAPABILITY_INFO, IMAGE_TOOLS, MODEL_CATALOG, PARAM_BANDS, isSmallUncensored, libraryFacets, paramBand, type ModelGrade } from '../core/catalog.ts';
+import { ALL_CAPABILITIES, CAPABILITY_INFO, MODEL_CATALOG, PARAM_BANDS, isSmallUncensored, libraryFacets, paramBand, type ModelGrade } from '../core/catalog.ts';
 import { defaultContext, recommendModel } from '../core/fit.ts';
 import { formatBytes, formatDuration, formatSpeed } from '../core/format.ts';
 import { getDeviceProfile } from '../services/device.ts';
@@ -180,20 +180,6 @@ export function ModelsScreen() {
     </View>
   );
 
-  const imageTools = (
-    <View style={s.footer}>
-      <SectionHeader title="Image Studio" hint="Synthesize and download images on-device with uncensored local diffusion models." />
-      <Row
-        title="Open Image Studio"
-        subtitle="Prompt generator, Hugging Face model installer, multi-stage diffusion pipeline & vault gallery."
-        value="Launch"
-        onPress={() => push('image/studio')}
-      />
-      {IMAGE_TOOLS.map((tool) => (
-        <Row key={tool.id} title={`${tool.name} ${tool.uniqueTag}`} subtitle={`${tool.bestFor} ${tool.note} ${tool.ramNote}`} value="Standalone" />
-      ))}
-    </View>
-  );
 
   const empty = (
     <View style={s.empty}>
@@ -219,7 +205,7 @@ export function ModelsScreen() {
         ItemSeparatorComponent={Divider}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={header}
-        ListFooterComponent={<>{footer}{imageTools}</>}
+        ListFooterComponent={footer}
         ListEmptyComponent={empty}
         contentContainerStyle={s.list}
         keyboardShouldPersistTaps="handled"

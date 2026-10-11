@@ -8,7 +8,6 @@ import { SoulLibraryScreen } from './soul/SoulLibraryScreen';
 import { SoulStudioScreen } from './soul/SoulStudioScreen';
 import { ModelFreedomScreen } from './soul/ModelFreedomScreen';
 import { KnowledgeGraphScreen } from './soul/KnowledgeGraphScreen';
-import { ImageStudioScreen } from './imageGen/ImageStudioScreen';
 
 /**
  * Route registry: name -> screen. Add ONE line per screen (wave 2: S1 chat extras, S2 vault/downloads/speculative,
@@ -36,7 +35,6 @@ export const SCREENS = {
   'soul/studio': SoulStudioScreen,
   'soul/freedom': ModelFreedomScreen,
   'soul/graph': KnowledgeGraphScreen,
-  'image/studio': ImageStudioScreen,
 } satisfies Record<string, React.ComponentType>;
 
 export type RouteName = keyof typeof SCREENS;

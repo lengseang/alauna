@@ -197,7 +197,7 @@ function defaults(): Settings {
   return {
     version: SETTINGS_VERSION,
     archetype: 'neutral',
-    activeSoulId: 'soul_neutral',
+    activeSoulId: 'soul_alauna',
     pad: { ...ARCHETYPES.neutral.defaultPAD },
     toneIntensity: 0.8,
     customBackstory: '',
@@ -415,6 +415,8 @@ const LEGACY_ARCH_TO_SOUL: Record<string, string> = {
 };
 
 const SOUL_TO_LEGACY_ARCH: Record<string, SoulArchetypeKey> = {
+  soul_alauna: 'neutral',
+  soul_companion: 'empath',
   soul_neutral: 'neutral',
   soul_caregiver: 'empath',
   soul_sage: 'mentor',

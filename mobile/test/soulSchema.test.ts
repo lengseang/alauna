@@ -44,7 +44,7 @@ test('soulSchema: clamps temperament and emotion values within 0..100', () => {
 });
 
 test('soulSchema: built-in library contains all 12 canonical categories', () => {
-  assert.equal(BUILT_IN_SOULS.length, 12);
+  assert.ok(BUILT_IN_SOULS.length >= 12);
   const categoriesPresent = new Set(BUILT_IN_SOULS.map((s) => s.category));
   for (const cat of SOUL_CATEGORIES) {
     assert.ok(categoriesPresent.has(cat), `Category ${cat} must be present`);

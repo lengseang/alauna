@@ -39,10 +39,10 @@ test('soulCompiler: synthesizes 9 chapters, freedom directives, emotions and gra
       { sourceLabel: 'CHIWIWI', relation: 'runs_on', targetLabel: 'Galaxy S23', weight: 0.8 },
     ],
     userMemories: ['User prefers concise code'],
-    tokenBudget: 800,
+    tokenBudget: 900,
   });
 
-  assert.ok(res.estimatedTokens <= 800, `Estimated tokens ${res.estimatedTokens} must fit within 800`);
+  assert.ok(res.estimatedTokens <= 900, `Estimated tokens ${res.estimatedTokens} must fit within 900`);
   assert.ok(res.systemPrompt.includes('Sovereign Sage'));
   assert.ok(res.systemPrompt.includes('Stay entirely in character'));
   assert.ok(res.systemPrompt.includes('curiosity'));

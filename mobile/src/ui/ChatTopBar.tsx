@@ -13,10 +13,14 @@ import { IconButton } from './IconButton';
 import { Text } from './Text';
 import { useIsInstalled } from './useInstalled';
 
+import { SoulAvatarView } from './soul/SoulAvatarView';
+import { useSoulLibrary } from '../services/soulStore.ts';
+
 interface Props {
   onMenu: () => void;
   onModel: () => void;
   onSoul: () => void;
+  onVoice?: () => void;
   onSettings: () => void;
   onNewChat: () => void;
   /** This chat has its own soul (Soul button shows selected). */
@@ -26,41 +30,49 @@ interface Props {
 }
 
 /**
- * Menu (left), model name + Eclipse + live status (centre, opens the model sheet), this chat's Soul, Settings and
- * New chat (right). The status line and the Eclipse are the proof of life, straight from the engine store.
+ * Menu (left), character avatar + model name + live status (centre), Live Voice call,
+ * Soul/Persona, Settings and New chat (right).
  */
-export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSoul, onSettings, onNewChat, soulOverride, incognito }: Props) {
+export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSoul, onVoice, onSettings, onNewChat, soulOverride, incognito }: Props) {
   const insets = useSafeAreaInsets();
   const s = useStyles();
   const eng = useEngineStatus();
   const settings = useSettings();
+  const { activeSoul } = useSoulLibrary();
   const spec = getModel(settings.activeModelId);
   const installed = useIsInstalled(spec?.id);
   const line = describeEngine(eng, spec, installed);
   const name = spec?.name ?? 'Choose a model';
+  const characterName = activeSoul?.identity?.name ?? 'Alauna';
+
   return (
     <View style={[s.bar, { paddingTop: insets.top }]}>
       <IconButton icon="menu" label="Open menu" onPress={onMenu} />
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${name}. ${line.text}${incognito ? '. Incognito chat, not saved' : ''}`}
-        accessibilityHint="Switch, load or unload the model"
+        accessibilityLabel={`${characterName}. Model: ${name}. ${line.text}${incognito ? '. Incognito chat, not saved' : ''}`}
+        accessibilityHint="Switch character or model"
         onPress={onModel}
         style={({ pressed }) => [s.model, pressed && s.pressed]}
       >
         <View style={s.nameRow}>
-          <Eclipse state={eclipseFor(line.kind)} progress={eng.progress} size={18} />
-          {incognito ? <Icon name="incognito" size={18} /> : null}
-          <Text variant="strong" numberOfLines={1} style={s.shrink}>
-            {name}
-          </Text>
+          <SoulAvatarView avatar={activeSoul?.identity?.avatar} name={characterName} size={28} />
+          <View style={s.textCol}>
+            <View style={s.titleLine}>
+              <Text variant="strong" numberOfLines={1} style={s.shrink}>
+                {characterName}
+              </Text>
+              <Eclipse state={eclipseFor(line.kind)} progress={eng.progress} size={14} />
+              {incognito ? <Icon name="incognito" size={14} /> : null}
+            </View>
+            <Text variant="small" tone={line.tone} numberOfLines={1}>
+              {incognito ? `Incognito · ${name}` : `${name} · ${line.text}`}
+            </Text>
+          </View>
         </View>
-        <Text variant="small" tone={line.tone} numberOfLines={1}>
-          {incognito ? `Incognito · ${line.text}` : line.text}
-        </Text>
       </Pressable>
-      <IconButton icon="persona" label={soulOverride ? 'This chat’s soul (custom)' : 'This chat’s soul'} selected={soulOverride} onPress={onSoul} />
-      <IconButton icon="settings" label="Settings" onPress={onSettings} />
+      {onVoice ? <IconButton icon="mic" label="Live voice call" onPress={onVoice} /> : null}
+      <IconButton icon="persona" label={soulOverride ? 'Character profile (custom)' : 'Character profile'} selected={soulOverride} onPress={onSoul} />
       <IconButton icon="compose" label="New chat" onPress={onNewChat} />
     </View>
   );
@@ -70,6 +82,8 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
   bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, backgroundColor: colors.bg, borderBottomWidth: line, borderBottomColor: colors.border },
   model: { flex: 1, minHeight: hit, justifyContent: 'center', paddingHorizontal: space.sm, paddingVertical: space.xs },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  textCol: { flex: 1, minWidth: 0 },
+  titleLine: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   shrink: { flexShrink: 1 },
   pressed: { backgroundColor: colors.accentSoft },
 }));

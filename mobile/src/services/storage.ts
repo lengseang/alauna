@@ -25,7 +25,7 @@ import { getDeviceProfile } from './device.ts';
 import { settingsStore, updateSettings } from './settings.ts';
 
 /** Must equal expo.android.package in app.json (checked by test/config.test.ts). */
-export const APP_PACKAGE = 'com.chiwiwi.sovereign';
+export const APP_PACKAGE = 'com.alauna.app';
 export const VAULT_DIRNAME = 'CHIWIWI';
 const CONFIG_FILE = 'chiwiwi_storage_config.json';
 

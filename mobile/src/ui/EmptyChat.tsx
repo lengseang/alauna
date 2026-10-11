@@ -10,7 +10,12 @@ import { SetupCard } from './SetupCard';
 import { Text } from './Text';
 import { Wordmark } from './Wordmark';
 
-const PROMPTS = ['Explain how a rainbow forms, simply.', 'Write a short poem about monsoon rain.', 'Plan a 3-day trip to Siem Reap.', 'Give me 5 tips for learning to code faster.'];
+const PROMPTS = [
+  "Come closer... tell me what you've been thinking about today.",
+  "Let's roleplay: an unexpected encounter late at night.",
+  "Describe our private sanctuary and how you imagine us.",
+  "Tell me a secret you haven't told anyone else...",
+];
 
 /**
  * First thing you see in a new chat: wordmark, one greeting line, then either four tappable prompts
@@ -36,7 +41,7 @@ export function EmptyChat({ hasModel, loading, incognito }: { hasModel: boolean;
           {hasModel ? (
             <>
               <Text variant="title" style={s.center}>
-                What shall we explore?
+                I'm all yours.
               </Text>
               <View style={s.prompts}>
                 {PROMPTS.map((p) => (

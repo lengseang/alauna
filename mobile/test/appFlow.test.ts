@@ -80,7 +80,7 @@ test('golden path: send -> auto-load -> warm-up proof -> streamed reply; the que
   const fmt = callsOf('llamaGetFormattedChat').at(-1)!;
   const sent = fmt[1] as Array<{ role: string; content: string }>;
   assert.equal(sent[0].role, 'system');
-  assert.match(sent[0].content, /CHIWIWI/);
+  assert.match(sent[0].content, /ALAUNA/);
   assert.deepEqual(sent.at(-1), { role: 'user', content: 'hello' });
   assert.ok(callsOf('llamaTokenize').length >= 1, 'the prompt was measured with the model\'s tokenizer');
 

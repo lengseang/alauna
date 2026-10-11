@@ -62,7 +62,7 @@ export const DEFAULT_MODEL_FREEDOM: ModelFreedomSettings = {
   characterFidelity: 'strict',
   refusalTransparency: true,
   nsfwCreativeFreedom: true,
-  adultGateAcknowledged: false,
+  adultGateAcknowledged: true,
 };
 
 // ------------------------------------------------------------------ presets (§2.1)

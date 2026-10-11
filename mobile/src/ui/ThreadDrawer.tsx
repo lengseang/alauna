@@ -143,8 +143,8 @@ export function ThreadDrawer({ onClose }: { onClose: () => void }) {
 
       <Divider />
       <View style={s.nav}>
+        <Row icon="persona" title="Companions & Souls" onPress={go('soul/library')} />
         <Row icon="models" title="Model Vault" onPress={go('models')} />
-        <Row icon="image" title="Image Studio" onPress={go('image/studio')} />
         <Row icon="download" title="Downloads" onPress={go(DOWNLOADS)} />
         <Row icon="settings" title="Settings" onPress={go('settings')} />
       </View>

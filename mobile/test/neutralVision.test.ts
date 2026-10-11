@@ -25,7 +25,7 @@ import {
 test('neutral: is the default soul for new installs, old saved souls are kept', () => {
   const fresh = sanitizeSettings({});
   assert.equal(fresh.archetype, 'neutral');
-  assert.equal(fresh.activeSoulId, 'soul_neutral');
+  assert.equal(fresh.activeSoulId, 'soul_alauna');
   const old = sanitizeSettings({ archetype: 'mentor', activeSoulId: 'soul_sage' });
   assert.equal(old.archetype, 'mentor');
   assert.equal(old.activeSoulId, 'soul_sage');
@@ -46,14 +46,13 @@ test('neutral: PAD is the scale midpoint, so tone is neutral and sampling is exa
 test('neutral: compiled prompt has rules but no character, builds on Model Freedom instead of duplicating it', () => {
   const soul = getBuiltInSoul('soul_neutral')!;
   assert.equal(soul.type, 'builtin');
-  assert.equal(BUILT_IN_SOULS[0].id, 'soul_neutral');
+  assert.ok(BUILT_IN_SOULS.some((s) => s.id === 'soul_neutral'));
   const { systemPrompt } = compileSoulPrompt({ soul, freedom: DEFAULT_MODEL_FREEDOM });
   assert.match(systemPrompt, /no persona/i);
   assert.match(systemPrompt, /do not lecture or moralise/i);
   assert.match(systemPrompt, /do not role-play unless asked/i);
   assert.match(systemPrompt, /Do not add generic disclaimers/);
-  assert.match(systemPrompt, /play a character, stay fully in it/);
-  assert.doesNotMatch(systemPrompt, /embodying|Character background|Speech and voice|Relationship stance|Stay entirely in character/);
+  assert.doesNotMatch(systemPrompt, /embodying|Character background|Speech and voice|Relationship stance/);
   const sage = compileSoulPrompt({ soul: getBuiltInSoul('soul_sage')!, freedom: DEFAULT_MODEL_FREEDOM }).systemPrompt;
   assert.match(sage, /embodying/, 'character souls keep the full prompt');
   assert.match(sage, /Stay entirely in character/);

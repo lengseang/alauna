@@ -38,7 +38,7 @@ export interface SoulStoreState {
 
 export const soulStore = createStore<SoulStoreState>({
   customSouls: {},
-  favoriteIds: ['soul_sage'],
+  favoriteIds: ['soul_alauna', 'soul_companion'],
   packs: {},
   emotionalStates: {},
   loaded: false,

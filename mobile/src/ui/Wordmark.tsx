@@ -7,7 +7,7 @@ export function Wordmark({ breathing = false }: { breathing?: boolean }) {
   return (
     <Breathe active={breathing}>
       <Text variant="wordmark" tone="accent" accessibilityRole="header">
-        CHIWIWI
+        ALAUNA
       </Text>
     </Breathe>
   );

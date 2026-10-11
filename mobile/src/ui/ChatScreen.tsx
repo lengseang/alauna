@@ -142,7 +142,7 @@ export function ChatScreen() {
   return (
     <DrawerLayout open={drawer} onOpenChange={setDrawer} drawer={<ThreadDrawer onClose={closeDrawer} />}>
       <View style={s.root}>
-        <ChatTopBar onMenu={openDrawer} onModel={openSheet} onNewChat={onNew} onSoul={onSoul} onSettings={onSettings} soulOverride={chat.thread.soulOverride} incognito={chat.thread.incognito} />
+        <ChatTopBar onMenu={openDrawer} onModel={openSheet} onNewChat={onNew} onSoul={onSoul} onVoice={openVoice} onSettings={onSettings} soulOverride={chat.thread.soulOverride} incognito={chat.thread.incognito} />
         {crashNotice}
         {chat.saveError ? (
           <View style={s.banner}>
@@ -180,7 +180,7 @@ export function ChatScreen() {
               ) : null}
             </View>
           )}
-          <Composer placeholder={anyInstalled ? 'Message CHIWIWI' : 'Get a model to start chatting'} onVoice={openVoice} />
+          <Composer placeholder={anyInstalled ? 'Message Alauna' : 'Get a model to start chatting'} onVoice={openVoice} />
         </KeyboardAvoidingView>
         <ModelSheet visible={sheet} onClose={closeSheet} />
         <VoiceOverlay visible={voice} onClose={closeVoice} />

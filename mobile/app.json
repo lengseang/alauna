@@ -1,28 +1,29 @@
 {
   "expo": {
-    "name": "CHIWIWI",
-    "slug": "chiwiwi",
-    "version": "1.0.4",
+    "name": "ALAUNA",
+    "slug": "alauna",
+    "scheme": "alauna",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "backgroundColor": "#080A17",
+    "backgroundColor": "#09090C",
     "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.chiwiwi.sovereign",
-      "backgroundColor": "#080A17"
+      "bundleIdentifier": "com.alauna.app",
+      "backgroundColor": "#09090C"
     },
     "android": {
-      "package": "com.chiwiwi.sovereign",
-      "versionCode": 4,
-      "backgroundColor": "#080A17",
+      "package": "com.alauna.app",
+      "versionCode": 1,
+      "backgroundColor": "#09090C",
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundColor": "#080A17"
+        "backgroundColor": "#09090C"
       },
       "permissions": [
         "android.permission.INTERNET",
@@ -55,10 +56,10 @@
           "image": "./assets/splash-icon-light.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FAF6EC",
+          "backgroundColor": "#09090C",
           "dark": {
             "image": "./assets/android-icon-foreground.png",
-            "backgroundColor": "#080A17"
+            "backgroundColor": "#09090C"
           }
         }
       ],
@@ -66,15 +67,15 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "CHIWIWI lets you attach photos to a chat. They stay on this phone.",
-          "cameraPermission": "CHIWIWI lets you take a photo to attach to a chat. It stays on this phone.",
-          "microphonePermission": "CHIWIWI turns your voice into text on this phone. Audio never leaves the device."
+          "photosPermission": "Alauna lets you share private photos with your companion. All data stays offline on this phone.",
+          "cameraPermission": "Alauna lets you take a photo to share with your companion. It stays strictly offline on this phone.",
+          "microphonePermission": "Alauna uses your microphone for real-time voice conversations. Audio is processed purely on-device and never leaves the phone."
         }
       ],
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "CHIWIWI uses Face ID to unlock your private chats."
+          "faceIDPermission": "Alauna uses biometric authentication to protect your private intimate chats."
         }
       ]
     ],

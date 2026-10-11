@@ -26,7 +26,7 @@ test('modelFreedom: DEFAULT_MODEL_FREEDOM provides independent non-bundled defau
   assert.equal(DEFAULT_MODEL_FREEDOM.characterFidelity, 'strict');
   assert.equal(DEFAULT_MODEL_FREEDOM.refusalTransparency, true);
   assert.equal(DEFAULT_MODEL_FREEDOM.nsfwCreativeFreedom, true);
-  assert.equal(DEFAULT_MODEL_FREEDOM.adultGateAcknowledged, false);
+  assert.equal(DEFAULT_MODEL_FREEDOM.adultGateAcknowledged, true);
 });
 
 test('modelFreedom: presets for standard, relaxed, and unfiltered are distinct', () => {
@@ -177,7 +177,7 @@ test('modelCompiler: compiles priority order per spec §4 and formats Chapter 09
 
   // Verify priority order:
   // 1. Identity comes first
-  const identityIdx = prompt.indexOf('You are CHIWIWI, embodying Intimate Companion');
+  const identityIdx = prompt.indexOf('You are ALAUNA, embodying Intimate Companion');
   // 2. Interaction guidelines (freedom directives) come next
   const freedomIdx = prompt.indexOf('Interaction guidelines:');
   // 3. Speech directives
