@@ -9,18 +9,18 @@ import { Text } from '../Text';
 import { Group, Rows } from './parts';
 
 const THEMES: Array<{ pref: ThemePref; title: string; subtitle: string }> = [
-  { pref: 'system', title: 'Follow my phone', subtitle: 'Nyx at night, Helios by day' },
-  { pref: 'dark', title: 'Nyx', subtitle: 'Starry night: indigo sky, gold leaf' },
-  { pref: 'light', title: 'Helios', subtitle: 'Sunlit day: marble and bronze' },
+  { pref: 'system', title: 'Follow my phone', subtitle: 'Nocturne Velvet at night, Crystal Aurora by day' },
+  { pref: 'dark', title: 'Nocturne Velvet', subtitle: 'Amethyst obsidian & neon fuchsia glow' },
+  { pref: 'light', title: 'Crystal Aurora', subtitle: 'Lavender mist & electric violet cards' },
 ];
 const SIZE_LABEL: Record<string, string> = { '1': 'Default', '1.15': 'Large', '1.3': 'Largest' };
 
-/** Settings > Appearance: theme (System / Nyx / Helios), text size, haptics, reduced motion. Saved by the theme provider. */
+/** Settings > Appearance: theme (System / Nocturne Velvet / Crystal Aurora), text size, haptics, reduced motion. Saved by the theme provider. */
 export function AppearanceScreen() {
   const { pref, setPref, textScale, setTextScale, motion, setMotion, haptics, setHaptics, systemReduceMotion } = useThemePref();
   return (
     <Screen title="Appearance" onBack={goBack} scroll>
-      <Group index={1} title="Theme" hint="Nyx is the night sky, Helios the sun. Both keep the same sharp corners.">
+      <Group index={1} title="Theme" hint="Nocturne Velvet is the luminous night, Crystal Aurora the radiant day.">
         <Rows>
           {THEMES.map((t) => (
             <ListRow key={t.pref} title={t.title} subtitle={t.subtitle} selected={pref === t.pref} onPress={() => setPref(t.pref)} />
