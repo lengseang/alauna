@@ -3,9 +3,11 @@ import { Image, Pressable, View, type StyleProp, type ViewStyle } from 'react-na
 import { makeStyles, useTheme } from '../../theme';
 import type { SoulAvatar } from '../../core/soulSchema.ts';
 import { Icon, type IconName } from '../Icon';
+import { getCharacterImage } from './characterAssets';
 
 export interface SoulAvatarViewProps {
   avatar?: SoulAvatar;
+  soulId?: string;
   name?: string;
   size?: number;
   style?: StyleProp<ViewStyle>;
@@ -29,7 +31,7 @@ const PRESET_ICONS: Record<string, IconName> = {
  * Modern Liquid Glass Avatar renderer.
  * Rounded squircle curvature, liquid glass glow, and image support.
  */
-export function SoulAvatarView({ avatar, name = 'Soul', size = 48, style, onPress }: SoulAvatarViewProps) {
+export function SoulAvatarView({ avatar, soulId, name = 'Soul', size = 48, style, onPress }: SoulAvatarViewProps) {
   const { colors, radius } = useTheme();
   const s = useStyles();
 
@@ -37,9 +39,18 @@ export function SoulAvatarView({ avatar, name = 'Soul', size = 48, style, onPres
   const borderCol = avatar?.accentColor ? avatar.accentColor : colors.border;
   const r = Math.round(size * 0.28);
 
-  const content = avatar?.imageUri ? (
+  const fallbackAsset =
+    getCharacterImage(avatar?.presetId) ||
+    getCharacterImage(soulId) ||
+    getCharacterImage(name);
+
+  const imageSource = avatar?.imageUri
+    ? { uri: avatar.imageUri }
+    : fallbackAsset;
+
+  const content = imageSource ? (
     <Image
-      source={{ uri: avatar.imageUri }}
+      source={imageSource}
       style={{ width: '100%', height: '100%', borderRadius: r }}
       resizeMode="cover"
     />

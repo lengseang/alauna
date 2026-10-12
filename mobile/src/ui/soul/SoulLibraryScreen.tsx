@@ -285,6 +285,7 @@ export function SoulLibraryScreen() {
                 <View style={s.avatarContainer}>
                   <SoulAvatarView
                     avatar={soul.identity.avatar}
+                    soulId={soul.id}
                     size={64}
                     name={soul.name}
                     onPress={() => handlePickAvatar(soul.id, soul.name)}

@@ -65,7 +65,7 @@ export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSo
         onPress={onModel}
         style={({ pressed }) => [s.glassPill, pressed && s.glassPillPressed]}
       >
-        <SoulAvatarView avatar={activeSoul?.identity?.avatar} name={characterName} size={28} />
+        <SoulAvatarView avatar={activeSoul?.identity?.avatar} soulId={activeSoul?.id} name={characterName} size={28} />
         <View style={s.pillCenter}>
           <View style={s.pillTitleRow}>
             <Text variant="strong" numberOfLines={1} style={s.characterName}>
