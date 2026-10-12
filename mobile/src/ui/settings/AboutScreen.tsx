@@ -124,7 +124,7 @@ export function AboutScreen() {
 
   const share = async () => {
     try {
-      await Share.share({ title: 'CHIWIWI diagnostics', message: buildDiagnostics(sections(), new Date()) });
+      await Share.share({ title: 'ALAUNA diagnostics', message: buildDiagnostics(sections(), new Date()) });
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e));
     }

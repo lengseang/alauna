@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Pressable } from 'react-native';
+import { View, Pressable, ScrollView } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { makeStyles, useTheme } from '../../theme';
 import type { SoulDefinition } from '../../core/soulSchema.ts';
@@ -18,9 +18,12 @@ import { BUILT_IN_SOULS } from '../../core/builtInSouls.ts';
 import { showToast } from '../../services/toast.ts';
 import { Button } from '../Button';
 import { Card } from '../Card';
+import { Divider } from '../Divider';
 import { Field, SearchField } from '../Field';
 import { goBack, push, resetTo } from '../nav';
+import { Row } from '../Row';
 import { Screen } from '../Screen';
+import { Sheet } from '../Sheet';
 import { Tag } from '../Tag';
 import { Text } from '../Text';
 import { Icon } from '../Icon';
@@ -28,6 +31,12 @@ import { SoulAvatarView } from './SoulAvatarView';
 
 type FilterTab = 'all' | 'female' | 'male' | 'nsfw' | 'romance' | 'archetype';
 type SortOption = 'featured' | 'intimacy' | 'name';
+
+const SORT_LABELS: Record<SortOption, string> = {
+  featured: 'Featured',
+  intimacy: 'Intimacy',
+  name: 'A-Z',
+};
 
 export function SoulLibraryScreen() {
   const { customSouls, favoriteIds } = useSoulLibrary();
@@ -38,6 +47,7 @@ export function SoulLibraryScreen() {
   const [search, setSearch] = useState('');
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
   const [sortOption, setSortOption] = useState<SortOption>('featured');
+  const [sortOpen, setSortOpen] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
 
@@ -203,69 +213,47 @@ export function SoulLibraryScreen() {
         </View>
       )}
 
-      {/* Compact Search Bar */}
+      {/* Compact Search Field */}
       <SearchField
-        label="Search companions by name, romance style, setting..."
+        label="Search companions"
         value={search}
         onChangeText={setSearch}
       />
 
-      {/* Filter and Sort Pills */}
-      <View style={s.controlsRow}>
-        <View style={s.filterRow}>
-          <Tag
-            label="All"
-            selected={filterTab === 'all'}
-            onPress={() => setFilterTab('all')}
-          />
-          <Tag
-            label="♀ Female"
-            selected={filterTab === 'female'}
-            onPress={() => setFilterTab('female')}
-          />
-          <Tag
-            label="♂ Male"
-            selected={filterTab === 'male'}
-            onPress={() => setFilterTab('male')}
-          />
-          <Tag
-            label="18+ Explicit"
-            selected={filterTab === 'nsfw'}
-            onPress={() => setFilterTab('nsfw')}
-          />
-          <Tag
-            label="Romance"
-            selected={filterTab === 'romance'}
-            onPress={() => setFilterTab('romance')}
-          />
-          <Tag
-            label="Archetypes"
-            selected={filterTab === 'archetype'}
-            onPress={() => setFilterTab('archetype')}
-          />
-        </View>
+      {/* Sleek Horizontal Filter Pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={s.chipScroll}
+        contentContainerStyle={s.chips}
+      >
+        <Tag label="All" selected={filterTab === 'all'} onPress={() => setFilterTab('all')} tone={filterTab === 'all' ? 'accent' : undefined} />
+        <Tag label="♀ Female" selected={filterTab === 'female'} onPress={() => setFilterTab('female')} tone={filterTab === 'female' ? 'accent' : undefined} />
+        <Tag label="♂ Male" selected={filterTab === 'male'} onPress={() => setFilterTab('male')} tone={filterTab === 'male' ? 'accent' : undefined} />
+        <Tag label="18+ Explicit" selected={filterTab === 'nsfw'} onPress={() => setFilterTab('nsfw')} tone={filterTab === 'nsfw' ? 'accent' : undefined} />
+        <Tag label="Romance" selected={filterTab === 'romance'} onPress={() => setFilterTab('romance')} tone={filterTab === 'romance' ? 'accent' : undefined} />
+        <Tag label="Archetypes" selected={filterTab === 'archetype'} onPress={() => setFilterTab('archetype')} tone={filterTab === 'archetype' ? 'accent' : undefined} />
+      </ScrollView>
 
-        <View style={s.sortRow}>
-          <Text variant="small" tone="muted">Sort:</Text>
-          <Tag
-            label="Featured"
-            selected={sortOption === 'featured'}
-            onPress={() => setSortOption('featured')}
-          />
-          <Tag
-            label="Intimacy"
-            selected={sortOption === 'intimacy'}
-            onPress={() => setSortOption('intimacy')}
-          />
-          <Tag
-            label="A-Z"
-            selected={sortOption === 'name'}
-            onPress={() => setSortOption('name')}
-          />
-        </View>
+      {/* Compact Meta & Sort Bar */}
+      <View style={s.metaBar}>
+        <Text variant="small" tone="muted">
+          {`${filteredSouls.length} ${filteredSouls.length === 1 ? 'companion' : 'companions'}`}
+        </Text>
+        <Pressable
+          style={({ pressed }) => [s.sortPill, pressed && { opacity: 0.7 }]}
+          onPress={() => setSortOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Sort by: ${SORT_LABELS[sortOption]}`}
+        >
+          <Icon name="sort" size={12} color={colors.accent} />
+          <Text variant="small" tone="accent">{SORT_LABELS[sortOption]}</Text>
+          <Icon name="chevron" size={10} color={colors.accent} rotate={90} />
+        </Pressable>
       </View>
 
-      {/* Companion Model Cards */}
+      {/* Encapsulated Companion Cards */}
       <View style={s.soulList}>
         {filteredSouls.map((soul) => {
           const isActive = activeSoul.id === soul.id;
@@ -275,127 +263,142 @@ export function SoulLibraryScreen() {
           const intimacy = soul.identity.intimacyLevel;
 
           return (
-            <Card
-              key={soul.id}
-              style={s.modelCard}
-              selected={isActive}
-            >
-              {/* Card Header & Avatar Area */}
+            <Card key={soul.id} style={s.modelCard} selected={isActive}>
+              {/* Top Hero Row: Avatar + Name + Badges */}
               <View style={s.cardHero}>
-                <View style={s.avatarContainer}>
+                <Pressable
+                  style={s.avatarWrapper}
+                  onPress={() => handlePickAvatar(soul.id, soul.name)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Update photo for ${soul.name}`}
+                >
                   <SoulAvatarView
                     avatar={soul.identity.avatar}
                     soulId={soul.id}
-                    size={64}
+                    size={52}
                     name={soul.name}
-                    onPress={() => handlePickAvatar(soul.id, soul.name)}
                   />
-                  <Pressable
-                    style={s.photoBadge}
-                    onPress={() => handlePickAvatar(soul.id, soul.name)}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Choose photo for ${soul.name}`}
-                  >
-                    <Icon name="camera" size={14} color={colors.accent} />
-                    <Text variant="small" style={{ fontSize: 10, color: colors.accent, fontWeight: '700' }}>
-                      PHOTO
-                    </Text>
-                  </Pressable>
-                </View>
+                  <View style={s.photoBadgeSmall}>
+                    <Icon name="camera" size={10} color={colors.accent} />
+                  </View>
+                </Pressable>
 
                 <View style={s.heroDetails}>
                   <View style={s.nameRow}>
-                    <Text variant="body" style={{ fontWeight: '700', fontSize: 17 }}>
+                    <Text variant="strong" style={s.nameText}>
                       {soul.name}
                     </Text>
-                    {isActive ? (
-                      <Tag label="ACTIVE COMPANION" tone="accent" />
-                    ) : null}
+                    <View style={s.tagCluster}>
+                      {gender === 'female' ? <Tag label="♀" /> : gender === 'male' ? <Tag label="♂" /> : null}
+                      {intimacy === 'explicit' ? (
+                        <Tag label="18+" tone="danger" />
+                      ) : intimacy === 'passionate' ? (
+                        <Tag label="Sensual" tone="accent" />
+                      ) : null}
+                      {isActive ? <Tag label="ACTIVE" tone="accent" /> : null}
+                    </View>
                   </View>
 
-                  <View style={s.badgePills}>
-                    {gender === 'female' ? (
-                      <Tag label="♀ Female" />
-                    ) : gender === 'male' ? (
-                      <Tag label="♂ Male" />
-                    ) : null}
-
-                    {intimacy === 'explicit' ? (
-                      <Tag label="18+ Explicit" tone="danger" />
-                    ) : intimacy === 'passionate' ? (
-                      <Tag label="Sensual" tone="accent" />
-                    ) : intimacy === 'romantic' ? (
-                      <Tag label="Romance" />
-                    ) : null}
-
-                    {isFav ? <Tag label="★ Favorite" tone="accent" /> : null}
-                  </View>
-
-                  {soul.identity.setting ? (
-                    <Text variant="small" tone="muted" numberOfLines={1} style={s.settingText}>
-                      ✦ {soul.identity.setting}
-                    </Text>
-                  ) : null}
+                  <Text variant="small" tone="muted" numberOfLines={2} style={s.taglineText}>
+                    {soul.tagline}
+                  </Text>
                 </View>
               </View>
 
-              {/* Tagline / Premise */}
-              <View style={s.taglineBox}>
-                <Text variant="small" tone="muted" numberOfLines={3} style={{ fontStyle: 'italic', lineHeight: 18 }}>
-                  &ldquo;{soul.tagline}&rdquo;
-                </Text>
-              </View>
-
-              {/* Action Buttons */}
-              <View style={s.cardActions}>
-                {isActive ? (
-                  <Button
-                    label="Chat Now"
-                    variant="primary"
-                    onPress={() => resetTo('chat')}
-                  />
+              {/* Encapsulated Bottom Row: Setting hint + Action buttons */}
+              <View style={s.cardBottomRow}>
+                {soul.identity.setting ? (
+                  <Text variant="small" tone="muted" numberOfLines={1} style={s.settingSnippet}>
+                    ✦ {soul.identity.setting}
+                  </Text>
                 ) : (
-                  <Button
-                    label="Set Active"
-                    variant="primary"
-                    onPress={() => {
-                      setActiveSoul(soul.id);
-                      showToast(`Set "${soul.name}" as active companion.`);
-                    }}
-                  />
+                  <View style={{ flex: 1 }} />
                 )}
 
-                <Button
-                  label="Studio"
-                  variant="quiet"
-                  onPress={() => push('soul/studio', { soulId: soul.id })}
-                />
+                <View style={s.cardActions}>
+                  {isActive ? (
+                    <Button
+                      label="Chat"
+                      variant="primary"
+                      onPress={() => resetTo('chat')}
+                    />
+                  ) : (
+                    <Button
+                      label="Choose"
+                      variant="primary"
+                      onPress={() => {
+                        setActiveSoul(soul.id);
+                        showToast(`Set "${soul.name}" as active companion.`);
+                      }}
+                    />
+                  )}
 
-                <Button
-                  label={isFav ? '★ Saved' : '☆ Favorite'}
-                  variant="quiet"
-                  onPress={() => toggleFavoriteSoul(soul.id)}
-                />
-
-                <Button
-                  label="Duplicate"
-                  variant="quiet"
-                  onPress={() => handleDuplicate(soul.id)}
-                />
-
-                {!isBuiltIn ? (
                   <Button
-                    label="Delete"
-                    variant="danger"
-                    onPress={() => handleDelete(soul.id)}
+                    label="Studio"
+                    variant="quiet"
+                    onPress={() => push('soul/studio', { soulId: soul.id })}
                   />
-                ) : null}
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={isFav ? 'Remove favorite' : 'Add favorite'}
+                    onPress={() => toggleFavoriteSoul(soul.id)}
+                    style={({ pressed }) => [s.favBtn, isFav && s.favBtnActive, pressed && { opacity: 0.7 }]}
+                  >
+                    <Text style={[s.favIcon, { color: isFav ? colors.accent : colors.muted }]}>
+                      {isFav ? '★' : '☆'}
+                    </Text>
+                  </Pressable>
+
+                  {!isBuiltIn ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete custom companion"
+                      onPress={() => handleDelete(soul.id)}
+                      style={({ pressed }) => [s.deleteBtn, pressed && { opacity: 0.7 }]}
+                    >
+                      <Icon name="trash" size={14} color={colors.danger} />
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
             </Card>
           );
         })}
       </View>
+
+      {/* Sort Sheet Modal */}
+      <Sheet visible={sortOpen} onClose={() => setSortOpen(false)} title="Sort companions">
+        <Row
+          title="Featured"
+          subtitle="Active companion and favorites first"
+          selected={sortOption === 'featured'}
+          onPress={() => {
+            setSortOption('featured');
+            setSortOpen(false);
+          }}
+        />
+        <Divider />
+        <Row
+          title="Intimacy Level"
+          subtitle="Explicit (18+) and passionate companions first"
+          selected={sortOption === 'intimacy'}
+          onPress={() => {
+            setSortOption('intimacy');
+            setSortOpen(false);
+          }}
+        />
+        <Divider />
+        <Row
+          title="Name (A-Z)"
+          subtitle="Alphabetical order"
+          selected={sortOption === 'name'}
+          onPress={() => {
+            setSortOption('name');
+            setSortOpen(false);
+          }}
+        />
+      </Sheet>
     </Screen>
   );
 }
@@ -415,24 +418,36 @@ const useStyles = makeStyles(({ space, colors, radius, line }) => ({
     justifyContent: 'flex-end',
     gap: space.sm,
   },
-  controlsRow: {
-    gap: space.sm,
-    marginTop: space.sm,
+  chipScroll: {
+    marginHorizontal: -space.lg,
+    flexGrow: 0,
+    marginTop: space.xs,
   },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  chips: {
+    paddingHorizontal: space.lg,
     gap: space.xs,
+    alignItems: 'center',
   },
-  sortRow: {
+  metaBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: space.xs,
+  },
+  sortPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
-    flexWrap: 'wrap',
+    paddingHorizontal: space.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: line,
+    borderColor: colors.border,
   },
   soulList: {
-    gap: space.md,
-    marginTop: space.md,
+    gap: space.sm,
+    marginTop: space.xs,
   },
   modelCard: {
     gap: space.sm,
@@ -441,52 +456,92 @@ const useStyles = makeStyles(({ space, colors, radius, line }) => ({
   },
   cardHero: {
     flexDirection: 'row',
-    gap: space.md,
+    gap: space.sm,
+    alignItems: 'flex-start',
   },
-  avatarContainer: {
-    alignItems: 'center',
-    gap: space.xs,
+  avatarWrapper: {
+    position: 'relative',
   },
-  photoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: space.xs,
-    paddingVertical: 2,
+  photoBadgeSmall: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
     borderRadius: radius.pill,
+    backgroundColor: colors.surface,
     borderWidth: line,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroDetails: {
     flex: 1,
-    gap: space.xs,
+    gap: 3,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: space.sm,
-  },
-  badgePills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: space.xs,
   },
-  settingText: {
-    marginTop: 2,
+  nameText: {
+    fontSize: 16,
+    letterSpacing: 0.2,
   },
-  taglineBox: {
-    paddingHorizontal: space.sm,
-    paddingVertical: space.xs,
-    borderRadius: radius.xs,
-    backgroundColor: colors.surfaceAlt,
+  tagCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  taglineText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 1,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.sm,
+    paddingTop: space.xs,
+    borderTopWidth: line,
+    borderTopColor: colors.border,
+  },
+  settingSnippet: {
+    flex: 1,
+    fontSize: 11,
   },
   cardActions: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: space.sm,
-    marginTop: space.xs,
     alignItems: 'center',
+    gap: space.xs,
+  },
+  favBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: line,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  favBtnActive: {
+    borderColor: colors.accent,
+  },
+  favIcon: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  deleteBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: line,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 }));

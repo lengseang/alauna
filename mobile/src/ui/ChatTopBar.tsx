@@ -57,28 +57,28 @@ export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSo
         <Icon name="menu" size={22} color={s.iconColor.color} />
       </Pressable>
 
-      {/* Floating Liquid Glass Model & Companion Pill */}
+      {/* Standalone Minimalist Model & Companion Header (No Box) */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${characterName}. Model: ${name}. ${line.text}${incognito ? '. Incognito chat' : ''}`}
         accessibilityHint="Switch character or model"
         onPress={onModel}
-        style={({ pressed }) => [s.glassPill, pressed && s.glassPillPressed]}
+        style={({ pressed }) => [s.modelHeader, pressed && s.modelHeaderPressed]}
       >
-        <SoulAvatarView avatar={activeSoul?.identity?.avatar} soulId={activeSoul?.id} name={characterName} size={28} />
-        <View style={s.pillCenter}>
-          <View style={s.pillTitleRow}>
+        <SoulAvatarView avatar={activeSoul?.identity?.avatar} soulId={activeSoul?.id} name={characterName} size={30} />
+        <View style={s.headerCenter}>
+          <View style={s.headerTitleRow}>
             <Text variant="strong" numberOfLines={1} style={s.characterName}>
               {characterName}
             </Text>
             <View style={[s.statusDot, line.kind === 'ready' ? s.dotReady : line.kind === 'loading' ? s.dotLoading : s.dotIdle]} />
             {incognito ? <Icon name="incognito" size={13} color={s.iconColor.color} /> : null}
+            <Icon name="chevron" size={12} color={s.mutedColor.color} />
           </View>
           <Text variant="small" tone="muted" numberOfLines={1} style={s.modelSubtitle}>
             {name}
           </Text>
         </View>
-        <Icon name="chevron" size={14} color={s.iconColor.color} />
       </Pressable>
 
       {/* Right Controls: Voice Call & New Chat */}
@@ -138,34 +138,27 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
     opacity: 0.6,
     transform: [{ scale: 0.94 }],
   },
-  glassPill: {
+  modelHeader: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: space.sm + 2,
-    paddingVertical: 5,
-    backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    borderWidth: line,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.12)',
-    shadowColor: colors.accent,
-    shadowOpacity: isDark ? 0.2 : 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    gap: space.xs + 2,
+    paddingHorizontal: space.xs,
+    paddingVertical: 2,
+    backgroundColor: 'transparent',
+    gap: space.xs + 4,
   },
-  glassPillPressed: {
-    opacity: 0.88,
+  modelHeaderPressed: {
+    opacity: 0.65,
     transform: [{ scale: 0.98 }],
   },
-  pillCenter: {
+  headerCenter: {
     flex: 1,
     minWidth: 0,
   },
-  pillTitleRow: {
+  headerTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   characterName: {
     fontSize: 13,
@@ -200,5 +193,8 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
   },
   accentColor: {
     color: colors.accent,
+  },
+  mutedColor: {
+    color: colors.muted,
   },
 }));

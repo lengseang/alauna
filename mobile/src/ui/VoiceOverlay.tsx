@@ -124,29 +124,42 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={close} statusBarTranslucent>
       <View style={[s.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
-        {/* Dynamic Celestial Backdrop Aura (Sun shine light / Moon light dark) */}
+        {/* Dynamic Toned Celestial Backdrop Aura */}
         <View pointerEvents="none" style={s.ambientBackdrop}>
           <Svg width="100%" height="100%">
             <Defs>
-              <RadialGradient id="bgAura" cx="50%" cy="40%" rx="60%" ry="50%">
+              <RadialGradient id="bgAura1" cx="50%" cy="38%" rx="55%" ry="45%">
                 <Stop
                   offset="0%"
-                  stopColor={isDark ? '#0284C7' : '#F59E0B'}
-                  stopOpacity={isDark ? '0.22' : '0.18'}
+                  stopColor={isDark ? '#8B5CF6' : '#F59E0B'}
+                  stopOpacity={isDark ? '0.18' : '0.14'}
                 />
                 <Stop
                   offset="60%"
-                  stopColor={isDark ? '#0369A1' : '#FCD34D'}
-                  stopOpacity={isDark ? '0.08' : '0.05'}
+                  stopColor={isDark ? '#06B6D4' : '#FB7185'}
+                  stopOpacity={isDark ? '0.07' : '0.04'}
                 />
                 <Stop
                   offset="100%"
-                  stopColor={isDark ? '#0284C7' : '#F59E0B'}
+                  stopColor={isDark ? '#8B5CF6' : '#F59E0B'}
+                  stopOpacity="0"
+                />
+              </RadialGradient>
+              <RadialGradient id="bgAura2" cx="50%" cy="58%" rx="50%" ry="40%">
+                <Stop
+                  offset="0%"
+                  stopColor={isDark ? '#EC4899' : '#C084FC'}
+                  stopOpacity={isDark ? '0.12' : '0.08'}
+                />
+                <Stop
+                  offset="100%"
+                  stopColor={isDark ? '#EC4899' : '#C084FC'}
                   stopOpacity="0"
                 />
               </RadialGradient>
             </Defs>
-            <Circle cx="50%" cy="40%" r="55%" fill="url(#bgAura)" />
+            <Circle cx="50%" cy="38%" r="52%" fill="url(#bgAura1)" />
+            <Circle cx="50%" cy="58%" r="48%" fill="url(#bgAura2)" />
           </Svg>
         </View>
 
@@ -182,13 +195,14 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
         <View style={s.centerStage}>
           <VoiceOrb
             phase={v.phase}
-            size={200}
+            size={190}
             onPress={handleOrbPress}
             label={status}
           />
 
           <View style={s.phaseContainer}>
             <View style={s.statusPill}>
+              <View style={[s.liveDot, v.phase === 'speaking' ? s.liveDotSpeaking : v.phase === 'listening' ? s.liveDotListening : s.liveDotIdle]} />
               <Text variant="small" tone="accent" style={s.statusPillText} accessibilityLiveRegion="polite">
                 {status.toLowerCase()}
               </Text>
@@ -351,18 +365,14 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
     minHeight: 44,
   },
   roundTopBtn: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: line,
-    borderColor: colors.border,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
   },
   topTitle: {
     fontSize: 16,
@@ -373,16 +383,12 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
-    paddingVertical: 6,
-    paddingHorizontal: space.md,
-    backgroundColor: colors.surface,
+    paddingVertical: 5,
+    paddingHorizontal: space.sm + 2,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
     borderRadius: radius.pill,
     borderWidth: line,
-    borderColor: colors.border,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
   },
   personaPillText: {
     fontSize: 12,
@@ -402,17 +408,30 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
     alignItems: 'center',
     gap: space.xs,
   },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.pill,
+  },
+  liveDotSpeaking: {
+    backgroundColor: colors.accent,
+  },
+  liveDotListening: {
+    backgroundColor: '#10B981',
+  },
+  liveDotIdle: {
+    backgroundColor: colors.muted,
+  },
   statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: space.md,
     paddingVertical: 5,
-    backgroundColor: colors.surface,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
     borderRadius: radius.pill,
     borderWidth: line,
-    borderColor: colors.border,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
   },
   statusPillText: {
     fontSize: 13,
@@ -478,18 +497,14 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
     zIndex: 10,
   },
   roundActionBtn: {
-    width: 52,
-    height: 52,
+    width: 48,
+    height: 48,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
     borderWidth: line,
-    borderColor: colors.border,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.accent,
-    shadowOpacity: isDark ? 0.3 : 0.08,
-    shadowRadius: 10,
-    elevation: 3,
   },
   roundActionBtnActive: {
     backgroundColor: colors.accent,
@@ -500,20 +515,20 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
     transform: [{ scale: 0.96 }],
   },
   mainVoiceButton: {
-    width: 72,
-    height: 72,
+    width: 66,
+    height: 66,
     borderRadius: radius.pill,
     backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: colors.accent,
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowOpacity: isDark ? 0.35 : 0.2,
+    shadowRadius: 12,
+    elevation: 4,
   },
   mainVoiceButtonActive: {
-    backgroundColor: colors.danger,
-    shadowColor: colors.danger,
+    backgroundColor: '#F43F5E',
+    shadowColor: '#F43F5E',
   },
   mainVoiceButtonPressed: {
     opacity: 0.85,

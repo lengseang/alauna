@@ -37,90 +37,90 @@ export function Orb({ size = 150, onPress, label = 'Alauna Bubble' }: Props) {
   const tapSquishY = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Broad vertical floating drift wave (3.6s cycle)
+    // Buoyant vertical floating drift (slow, graceful 5.8s air current)
     const float = Animated.loop(
       Animated.sequence([
         Animated.timing(floatAnim, {
           toValue: 1,
-          duration: 3600,
+          duration: 5800,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(floatAnim, {
           toValue: 0,
-          duration: 3600,
+          duration: 5800,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
 
-    // Horizontal swaying drift & tilt (4.8s cycle)
+    // Horizontal swaying drift & subtle atmospheric tilt (6.8s cycle)
     const sway = Animated.loop(
       Animated.sequence([
         Animated.timing(swayAnim, {
           toValue: 1,
-          duration: 4800,
-          easing: Easing.inOut(Easing.quad),
+          duration: 6800,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(swayAnim, {
           toValue: 0,
-          duration: 4800,
-          easing: Easing.inOut(Easing.quad),
+          duration: 6800,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
 
-    // Organic surface tension breathing (fluid squish and stretch)
+    // Organic surface tension breathing (subtle, authentic 5.2s liquid meniscus)
     const morph = Animated.loop(
       Animated.sequence([
         Animated.timing(morphAnim, {
           toValue: 1,
-          duration: 2600,
-          easing: Easing.inOut(Easing.ease),
+          duration: 5200,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(morphAnim, {
           toValue: 0,
-          duration: 2600,
-          easing: Easing.inOut(Easing.ease),
+          duration: 5200,
+          easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
 
-    // Satellite micro-bubbles orbital motion
+    // Satellite micro-bubbles orbital motion (smooth 7.2s orbit)
     const sat = Animated.loop(
       Animated.sequence([
         Animated.timing(satelliteAnim, {
           toValue: 1,
-          duration: 5400,
+          duration: 7200,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(satelliteAnim, {
           toValue: 0,
-          duration: 5400,
+          duration: 7200,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
       ])
     );
 
-    // Living companion temperament pulse (gentle heartbeat aura)
+    // Living companion temperament pulse (gentle, rhythmic starlight aura)
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 2200,
+          duration: 3600,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 0,
-          duration: 2200,
+          duration: 3600,
           easing: Easing.inOut(Easing.sin),
           useNativeDriver: true,
         }),
@@ -142,47 +142,47 @@ export function Orb({ size = 150, onPress, label = 'Alauna Bubble' }: Props) {
     };
   }, [floatAnim, swayAnim, morphAnim, satelliteAnim, pulseAnim]);
 
-  // Broader physical trajectory
+  // Authentic buoyant trajectory
   const translateY = floatAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-26, 26],
+    outputRange: [-16, 16],
   });
 
   const translateX = swayAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-18, 18],
+    outputRange: [-10, 10],
   });
 
   const rotate = swayAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['-5deg', '5deg'],
+    outputRange: ['-2.5deg', '2.5deg'],
   });
 
-  // Dynamic fluid surface tension squish
+  // Authentic fluid surface tension breathing (gentle 2.5% meniscus)
   const scaleX = morphAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.92, 1.08],
+    outputRange: [0.975, 1.025],
   });
 
   const scaleY = morphAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1.08, 0.92],
+    outputRange: [1.025, 0.975],
   });
 
   // Satellite micro-bubble trajectories
   const sat1Y = satelliteAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-18, 14],
+    outputRange: [-12, 10],
   });
 
   const sat2Y = satelliteAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [14, -20],
+    outputRange: [10, -14],
   });
 
   const sat3Y = satelliteAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-10, 16],
+    outputRange: [-8, 12],
   });
 
   const handlePressIn = () => {
@@ -194,45 +194,45 @@ export function Orb({ size = 150, onPress, label = 'Alauna Bubble' }: Props) {
 
     Animated.parallel([
       Animated.spring(tapScale, {
-        toValue: 0.88,
-        friction: 4,
-        tension: 100,
+        toValue: 0.94,
+        friction: 6,
+        tension: 50,
         useNativeDriver: true,
       }),
       Animated.spring(tapSquishX, {
-        toValue: 1.15,
-        friction: 4,
-        tension: 100,
+        toValue: 1.04,
+        friction: 6,
+        tension: 50,
         useNativeDriver: true,
       }),
       Animated.spring(tapSquishY, {
-        toValue: 0.85,
-        friction: 4,
-        tension: 100,
+        toValue: 0.96,
+        friction: 6,
+        tension: 50,
         useNativeDriver: true,
       }),
     ]).start();
   };
 
   const handlePressOut = () => {
-    // Multi-stage elastic liquid jiggle rebound
+    // Gentle organic fluid settling (real bubble surface tension damping)
     Animated.parallel([
       Animated.spring(tapScale, {
         toValue: 1,
-        friction: 2.8,
-        tension: 60,
+        friction: 6.5,
+        tension: 35,
         useNativeDriver: true,
       }),
       Animated.spring(tapSquishX, {
         toValue: 1,
-        friction: 2.8,
-        tension: 60,
+        friction: 6.5,
+        tension: 35,
         useNativeDriver: true,
       }),
       Animated.spring(tapSquishY, {
         toValue: 1,
-        friction: 2.8,
-        tension: 60,
+        friction: 6.5,
+        tension: 35,
         useNativeDriver: true,
       }),
     ]).start();

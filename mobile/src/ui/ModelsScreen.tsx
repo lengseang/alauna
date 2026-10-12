@@ -113,7 +113,12 @@ export function ModelsScreen() {
 
   const toolbar = (
     <View style={s.toolbar}>
-      <SearchField label="Search companion models" value={f.search} onChangeText={(search) => set({ search })} />
+      <View style={s.searchRow}>
+        <View style={s.searchFieldWrapper}>
+          <SearchField label="Search companion models" value={f.search} onChangeText={(search) => set({ search })} />
+        </View>
+        <DownloadsIconButton />
+      </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={s.chipScroll} contentContainerStyle={s.chips}>
         <Tag label="All Models" count={MODEL_CATALOG.length} selected={tab === 'all'} onPress={() => onSelectTab('all')} tone={tab === 'all' ? 'accent' : undefined} />
         <Tag label="Uncensored Roleplay" count={facets.policy.Uncensored} selected={tab === 'uncensored'} onPress={() => onSelectTab('uncensored')} tone={tab === 'uncensored' ? 'accent' : undefined} />
@@ -147,7 +152,6 @@ export function ModelsScreen() {
           {`${device.name}${ram ? ` · ${formatBytes(ram)} RAM` : ''} · 100% Offline & Sovereign`}
         </Text>
       </View>
-      <DownloadsLink />
     </View>
   );
 
@@ -202,20 +206,73 @@ export function ModelsScreen() {
   );
 }
 
-/** Live one-line state of the queue; subscribes on its own so progress ticks never re-render the list. */
-function DownloadsLink() {
+/** Compact download queue button with live counter badge to the right of the search bar. */
+function DownloadsIconButton() {
   const { summary } = useDownloadsHub();
+  const { colors } = useTheme();
+  const s = useStyles();
   const busy = summary.active + summary.queued + summary.paused + summary.failed;
-  const parts: string[] = [];
-  if (summary.active) parts.push(`${summary.active} downloading${summary.speedBps > 0 ? ` at ${formatSpeed(summary.speedBps)}` : ''}${summary.etaSec > 0 ? `, ${formatDuration(summary.etaSec)} left` : ''}`);
-  if (summary.queued) parts.push(`${summary.queued} queued`);
-  if (summary.paused) parts.push(`${summary.paused} paused`);
-  if (summary.failed) parts.push(`${summary.failed} failed`);
-  return <Row title="Downloads" subtitle={busy ? parts.join(' · ') : 'Nothing downloading. Queue, speed and disk use live here.'} value={busy ? String(busy) : undefined} onPress={() => push('downloads')} />;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Downloads${busy ? `, ${busy} items` : ''}`}
+      accessibilityHint="Open downloads queue"
+      onPress={() => push('downloads')}
+      style={({ pressed }) => [s.downloadsIconBtn, pressed && s.downloadsIconBtnPressed]}
+    >
+      <Icon name="download" size={20} color={busy ? colors.accent : colors.text} />
+      {busy > 0 ? (
+        <View style={s.downloadsBadge}>
+          <Text style={s.downloadsBadgeText}>{busy > 9 ? '9+' : busy}</Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
 }
 
 const useStyles = makeStyles(({ space, colors, line, radius }) => ({
   toolbar: { gap: space.sm },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: space.sm,
+  },
+  searchFieldWrapper: {
+    flex: 1,
+  },
+  downloadsIconBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: line,
+    borderColor: colors.border,
+  },
+  downloadsIconBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.95 }],
+  },
+  downloadsBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  downloadsBadgeText: {
+    color: colors.onAccent,
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 12,
+  },
   chipScroll: { marginHorizontal: -space.lg, flexGrow: 0 },
   chips: { paddingHorizontal: space.lg, gap: space.sm, alignItems: 'center' },
   metaBar: {

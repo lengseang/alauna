@@ -56,8 +56,8 @@ export function VoiceOrb({
     Animated.spring(bounceAnim, {
       toValue: targetLevel,
       useNativeDriver: true,
-      friction: 4,
-      tension: 60,
+      friction: 6.5,
+      tension: 45,
     }).start();
   }, [currentVolume, phase, bounceAnim]);
 
@@ -133,26 +133,26 @@ export function VoiceOrb({
   const errorColor = colors.danger;
   const activeColor = phase === 'error' ? errorColor : neonMain;
 
-  // Physical voice bounce interpolation
+  // Physical voice bounce interpolation (calibrated for toned, elegant reactivity)
   const voiceScale = bounceAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1.0, 1.38],
+    outputRange: [1.0, 1.15],
   });
 
   const voiceRippleScale = bounceAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1.0, 1.55],
+    outputRange: [1.0, 1.25],
   });
 
   // Base harmonic pulse
   const baseScale = breathAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: phase === 'speaking' ? [0.96, 1.12] : phase === 'listening' ? [0.97, 1.04] : [0.98, 1.02],
+    outputRange: phase === 'speaking' ? [0.97, 1.06] : phase === 'listening' ? [0.98, 1.03] : [0.985, 1.015],
   });
 
   const auraOpacity = breathAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: phase === 'speaking' ? [0.45, 0.9] : phase === 'listening' ? [0.3, 0.7] : [0.15, 0.35],
+    outputRange: phase === 'speaking' ? [0.35, 0.68] : phase === 'listening' ? [0.22, 0.48] : [0.12, 0.28],
   });
 
   const rippleScale = waveAnim.interpolate({
