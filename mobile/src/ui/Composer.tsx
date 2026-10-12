@@ -237,38 +237,37 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
 });
 
 const TILE = 64;
-const useStyles = makeStyles(({ colors, space, line, isDark }) => ({
+const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
   wrap: {
-    paddingHorizontal: space.sm,
+    paddingHorizontal: space.md,
     paddingTop: space.xs,
+    paddingBottom: space.xs,
     gap: space.xs,
     backgroundColor: 'transparent',
   },
   bar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: isDark
-      ? 'rgba(15, 19, 41, 0.78)' // Greek starry night liquid glass
-      : 'rgba(243, 236, 219, 0.84)', // Greek marble/alabaster liquid glass
+    backgroundColor: isDark ? '#14112E' : '#FFFFFF',
     borderWidth: line,
-    borderColor: isDark
-      ? 'rgba(230, 199, 106, 0.14)' // No heavy frame: subtle golden shimmer edge
-      : 'rgba(138, 90, 0, 0.14)', // No heavy frame: subtle bronze shimmer edge
-    paddingLeft: 2,
-    paddingRight: 4,
-    paddingVertical: 2,
-    minHeight: 50,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingLeft: 6,
+    paddingRight: 6,
+    paddingVertical: 4,
+    minHeight: 52,
+    shadowColor: colors.accent,
+    shadowOpacity: isDark ? 0.25 : 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
   barFocus: {
-    borderColor: isDark
-      ? 'rgba(230, 199, 106, 0.38)'
-      : 'rgba(138, 90, 0, 0.38)',
-    backgroundColor: isDark
-      ? 'rgba(20, 26, 52, 0.90)'
-      : 'rgba(250, 245, 234, 0.94)',
+    borderColor: colors.borderStrong,
+    shadowOpacity: isDark ? 0.35 : 0.15,
   },
   attachBtn: {
-    marginBottom: 1,
+    marginBottom: 2,
+    borderRadius: radius.pill,
   },
   input: {
     flex: 1,
@@ -283,9 +282,9 @@ const useStyles = makeStyles(({ colors, space, line, isDark }) => ({
   actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
     alignSelf: 'flex-end',
-    marginBottom: 1,
+    marginBottom: 2,
   },
   thinkPill: {
     flexDirection: 'row',
@@ -293,9 +292,10 @@ const useStyles = makeStyles(({ colors, space, line, isDark }) => ({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 5,
+    borderRadius: radius.pill,
     borderWidth: line,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)',
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.03)',
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
     minHeight: 34,
     marginRight: 2,
   },
@@ -308,14 +308,15 @@ const useStyles = makeStyles(({ colors, space, line, isDark }) => ({
     fontWeight: '600',
   },
   voiceBtn: {
-    backgroundColor: isDark ? 'rgba(230, 199, 106, 0.08)' : 'rgba(138, 90, 0, 0.08)',
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.pill,
   },
   tiles: { gap: space.sm, paddingRight: space.lg },
-  imageTile: { width: TILE, height: TILE, borderWidth: line, borderColor: colors.border },
-  fileTile: { height: TILE, width: 168, borderWidth: line, borderColor: colors.border, backgroundColor: colors.surface },
-  thumb: { width: '100%', height: '100%' },
+  imageTile: { width: TILE, height: TILE, borderWidth: line, borderColor: colors.border, borderRadius: radius.md },
+  fileTile: { height: TILE, width: 168, borderWidth: line, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: radius.md },
+  thumb: { width: '100%', height: '100%', borderRadius: radius.md },
   fileBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingLeft: space.sm, paddingRight: space.xl },
   fileName: { flex: 1 },
-  badge: { position: 'absolute', top: 0, right: 0, width: 20, height: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt },
+  badge: { position: 'absolute', top: 0, right: 0, width: 20, height: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surfaceAlt, borderRadius: radius.pill },
   pressed: { opacity: 0.7 },
 }));

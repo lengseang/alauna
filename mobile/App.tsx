@@ -31,6 +31,8 @@ const hideSplash = () => {
   splashHidden = true;
   void SplashScreen.hideAsync().catch(() => {});
 };
+// Fail-safe: never allow the native splash screen to stay frozen longer than 600ms
+setTimeout(hideSplash, 600);
 
 /** The last model is auto-loaded once per launch, unless the previous run died loading it (Chat then asks first). */
 type AutoLoad = { id: string; name: string; done: boolean } | null | undefined;

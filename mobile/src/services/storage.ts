@@ -272,10 +272,15 @@ export async function openAllFilesAccessSettings(): Promise<void> {
 
 /** Run at launch and whenever the app returns to the foreground. */
 export async function initStorage(): Promise<void> {
-  const config = await readConfig();
+  let config = await readConfig();
   if (!config) {
-    storageStore.setState({ status: 'unconfigured', config: null, reason: undefined });
-    return;
+    try {
+      config = await useInternalStorage();
+      return;
+    } catch {
+      storageStore.setState({ status: 'unconfigured', config: null, reason: undefined });
+      return;
+    }
   }
   try {
     if (config.mode === 'internal') {
@@ -283,18 +288,28 @@ export async function initStorage(): Promise<void> {
     } else {
       const probe = await probeWritable(config.rootPath);
       if (!probe.ok) {
-        storageStore.setState({
-          status: 'unavailable',
-          config,
-          reason: `The saved folder is not accessible any more (${probe.error}). Was the SD card removed or access revoked?`,
-        });
-        return;
+        // Fallback to internal storage so the user is never stuck
+        try {
+          config = await useInternalStorage();
+          return;
+        } catch {
+          storageStore.setState({
+            status: 'unavailable',
+            config,
+            reason: `The saved folder is not accessible any more (${probe.error}). Falling back to app storage.`,
+          });
+          return;
+        }
       }
       ensureLayout(config.rootPath);
     }
     storageStore.setState({ status: 'ready', config, reason: undefined });
   } catch (e) {
-    storageStore.setState({ status: 'unavailable', config, reason: message(e) });
+    try {
+      await useInternalStorage();
+    } catch {
+      storageStore.setState({ status: 'unavailable', config, reason: message(e) });
+    }
   }
 }
 

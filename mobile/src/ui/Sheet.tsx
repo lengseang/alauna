@@ -85,13 +85,20 @@ export function Sheet({ visible, onClose, title, children, footer }: SheetProps)
   );
 }
 
-const useStyles = makeStyles(({ colors, space, line }) => ({
+const useStyles = makeStyles(({ colors, space, line, radius }) => ({
   root: { flex: 1, justifyContent: 'flex-end' },
   fill: { flex: 1 },
   scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.scrim },
-  sheet: { backgroundColor: colors.surface, borderTopWidth: line, borderColor: colors.borderStrong, paddingHorizontal: space.lg },
+  sheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    borderTopWidth: line,
+    borderColor: colors.borderStrong,
+    paddingHorizontal: space.lg,
+  },
   gripArea: { height: space.xl, alignItems: 'center', justifyContent: 'center' },
-  grip: { width: 32, height: 2, backgroundColor: colors.borderStrong },
+  grip: { width: 36, height: 4, borderRadius: radius.pill, backgroundColor: colors.borderStrong },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md },
   title: { flex: 1 },
   close: { minHeight: hit, minWidth: hit, alignItems: 'center', justifyContent: 'center' },

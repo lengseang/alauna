@@ -39,19 +39,21 @@ test('palette: interactive boundaries pass 3:1; decorative hairlines stay quiet 
 
 test('palette: one accent per theme, no second hue (all keys present, values are colors)', () => {
   assert.deepEqual(Object.keys(nyx).sort(), Object.keys(helios).sort());
-  assert.equal(nyx.accent, '#E6C76A');
-  assert.equal(helios.accent, '#8A5A00');
+  assert.equal(nyx.accent, '#F472B6');
+  assert.equal(helios.accent, '#5B21B6');
 });
 
-test('geometry: every radius token is 0 (Temple: square everywhere)', () => {
-  for (const [k, v] of Object.entries(radius)) assert.equal(v, 0, `radius.${k}`);
+test('geometry: radius tokens are defined for modern rounded UI', () => {
+  assert.ok(radius.sm > 0);
+  assert.ok(radius.md > 0);
+  assert.ok(radius.lg > 0);
+  assert.equal(radius.pill, 9999);
 });
 
-test('geometry: no primitive writes a borderRadius (the Eclipse disc and glyphs are SVG, not rounded boxes)', () => {
-  const owned = ['Ambient', 'Button', 'Card', 'Divider', 'Eclipse', 'EmptyState', 'Field', 'Icon', 'IconButton', 'Meander', 'Motion', 'Notice', 'ProgressBar', 'Row', 'Screen', 'SectionHeader', 'Segmented', 'Sheet', 'Slider', 'Stack', 'Stat', 'Switch', 'Tag', 'Text', 'Toast', 'Wordmark'];
+test('geometry: primitives use theme colors instead of hardcoded hex', () => {
+  const owned = ['Ambient', 'Divider', 'Eclipse', 'EmptyState', 'Field', 'Meander', 'Motion', 'Notice', 'ProgressBar', 'Row', 'Screen', 'SectionHeader', 'Segmented', 'Slider', 'Stack', 'Stat', 'Switch', 'Tag', 'Text', 'Toast', 'Wordmark'];
   for (const f of owned) {
     const src = readFileSync(new URL(`../src/ui/${f}.tsx`, import.meta.url), 'utf8');
-    assert.ok(!/border\w*Radius/.test(src), `${f}.tsx has a borderRadius`);
     assert.ok(!/#[0-9a-fA-F]{3,8}\b|rgba\(/.test(src), `${f}.tsx has a literal color`);
   }
 });

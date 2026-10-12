@@ -66,11 +66,12 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, lo
   );
 }
 
-const useStyles = makeStyles(({ colors, space, line }) => ({
+const useStyles = makeStyles(({ colors, space, line, radius }) => ({
   base: {
     minHeight: hit,
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

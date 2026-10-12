@@ -19,18 +19,19 @@ import { initStorage, isStorageReady } from './storage.ts';
 import { initSoulStore } from './soulStore.ts';
 import { initGraphStore } from './graphStore.ts';
 
-/** Load everything that lives inside the vault. Call whenever storage becomes (or changes to) ready. */
 export async function onStorageReady(): Promise<void> {
   if (!isStorageReady()) return;
   bootStore.setState({ stage: 'library' });
-  refreshDownloads();
+  try {
+    refreshDownloads();
+  } catch {}
   try {
     const purged = await autoPurgeOldChats();
     bootStore.setState({ purgedChats: purged });
-  } catch {
-    // a purge problem must never block the app
-  }
-  await Promise.all([loadMemory(), initChat()]);
+  } catch {}
+  try {
+    await Promise.all([loadMemory().catch(() => {}), initChat().catch(() => {})]);
+  } catch {}
 }
 
 export type BootStage = 'settings' | 'storage' | 'library' | 'done';
@@ -81,17 +82,20 @@ export function bootstrap(): Promise<void> {
       downloads.setVerifyMode(settingsStore.getState().verifyMode);
     });
     started = (async () => {
-      bootStore.setState({ stage: 'settings' });
-      await initSettings();
-      await initSoulStore();
-      await initGraphStore();
-      downloads.setConcurrency(settingsStore.getState().downloads.parallel);
-      downloads.setVerifyMode(settingsStore.getState().verifyMode);
-      bootStore.setState({ stage: 'storage' });
-      await initStorage();
-      await engine.noteStartup();
-      await onStorageReady();
-      bootStore.setState({ stage: 'done' });
+      try {
+        bootStore.setState({ stage: 'settings' });
+        await initSettings().catch(() => {});
+        await initSoulStore().catch(() => {});
+        await initGraphStore().catch(() => {});
+        downloads.setConcurrency(settingsStore.getState().downloads.parallel);
+        downloads.setVerifyMode(settingsStore.getState().verifyMode);
+        bootStore.setState({ stage: 'storage' });
+        await initStorage().catch(() => {});
+        await engine.noteStartup().catch(() => {});
+        await onStorageReady().catch(() => {});
+      } finally {
+        bootStore.setState({ stage: 'done' });
+      }
     })();
   }
   return started;

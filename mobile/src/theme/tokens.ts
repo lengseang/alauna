@@ -4,10 +4,9 @@
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 
 /**
- * Temple geometry: every corner is square. The keys stay so older call sites (`radius.md`, `radius.pill`) compile and
- * render square. Never write a literal borderRadius; the only round things are the Eclipse disc and icon glyphs.
+ * Modern fluid geometry: smooth rounded corners and pill buttons.
  */
-export const radius = { none: 0, sm: 0, md: 0, lg: 0, pill: 0 } as const;
+export const radius = { none: 0, xs: 6, sm: 12, md: 18, lg: 24, xl: 30, pill: 9999 } as const;
 
 /** The ONLY font sizes in the app (sp), before the user's text-size choice. Nothing below 14. */
 export const size = { sm: 14, md: 16, lg: 20, xl: 28 } as const;
@@ -15,11 +14,11 @@ export const size = { sm: 14, md: 16, lg: 20, xl: 28 } as const;
 /** Minimum touch target (dp). */
 export const hit = 48;
 
-/** Hairline rule width (dp). Dividers, card edges, inputs, meander. */
+/** Hairline rule width (dp). Dividers, card edges, inputs. */
 export const line = 1;
 
-/** Icons are always 24dp, 1.5 stroke, square caps and mitred joins (sharp, like cut stone). */
-export const icon = { size: 24, stroke: 1.5 } as const;
+/** Icons: 24dp grid, friendly 1.8 stroke, rounded stroke caps and joins. */
+export const icon = { size: 24, stroke: 1.8 } as const;
 
 /**
  * Durations (ms). Enter slower than exit; nothing above 400 for UI feedback.

@@ -78,12 +78,35 @@ export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSo
   );
 });
 
-const useStyles = makeStyles(({ colors, space, line }) => ({
-  bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xs, backgroundColor: colors.bg, borderBottomWidth: line, borderBottomColor: colors.border },
-  model: { flex: 1, minHeight: hit, justifyContent: 'center', paddingHorizontal: space.sm, paddingVertical: space.xs },
+const useStyles = makeStyles(({ colors, space, line, radius }) => ({
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs,
+    backgroundColor: colors.bg,
+    borderBottomWidth: line,
+    borderBottomColor: colors.border,
+    gap: space.xs,
+  },
+  model: {
+    flex: 1,
+    minHeight: hit,
+    justifyContent: 'center',
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    borderWidth: line,
+    borderColor: colors.border,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   textCol: { flex: 1, minWidth: 0 },
   titleLine: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   shrink: { flexShrink: 1 },
-  pressed: { backgroundColor: colors.accentSoft },
+  pressed: { backgroundColor: colors.surfaceAlt },
 }));

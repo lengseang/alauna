@@ -5,7 +5,7 @@ import { Inter_400Regular } from '@expo-google-fonts/inter/400Regular';
 import { Inter_600SemiBold } from '@expo-google-fonts/inter/600SemiBold';
 import type { FontFamilies } from './tokens';
 
-const GIVE_UP_MS = 3000;
+const GIVE_UP_MS = 350;
 
 /**
  * Inter (UI, 400 + 600) and Cinzel (wordmark only). Deep imports keep the other 100+ font files out of the bundle.

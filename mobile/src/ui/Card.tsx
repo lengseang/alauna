@@ -40,10 +40,10 @@ export function Card({ children, onPress, selected, framed, accessibilityLabel, 
   );
 }
 
-const useStyles = makeStyles(({ colors, space, line }) => ({
-  card: { backgroundColor: colors.surface, borderWidth: line, borderColor: colors.border, padding: space.lg, gap: space.md },
-  frame: { borderWidth: line, borderColor: colors.border, padding: 3 },
-  framedInner: { borderColor: colors.borderStrong },
+const useStyles = makeStyles(({ colors, space, line, radius }) => ({
+  card: { backgroundColor: colors.surface, borderWidth: line, borderColor: colors.border, borderRadius: radius.lg, padding: space.lg, gap: space.md },
+  frame: { borderWidth: line, borderColor: colors.border, borderRadius: radius.lg + 3, padding: 3 },
+  framedInner: { borderColor: colors.borderStrong, borderRadius: radius.lg },
   selected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   pressed: { backgroundColor: colors.surfaceAlt },
 }));

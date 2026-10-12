@@ -23,6 +23,8 @@ test('config: only permissions that a shipped feature uses are declared', () => 
     'android.permission.WRITE_EXTERNAL_STORAGE',
     'android.permission.RECORD_AUDIO', // voice mode (services/voice/stt.ts), requested only when voice mode starts
     'android.permission.CAMERA', // attach sheet "Camera" (services/attachments.ts), requested only when tapped
+    'android.permission.USE_BIOMETRIC', // app lock (services/security.ts)
+    'android.permission.USE_FINGERPRINT',
   ]);
   for (const p of perms) assert.ok(allowed.has(p), `unexpected permission ${p}`);
   // Features that do not exist must not ask for their permissions (honesty + privacy). Photos use the system photo

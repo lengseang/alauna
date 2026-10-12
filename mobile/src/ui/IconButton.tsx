@@ -51,13 +51,13 @@ export function IconButton({ icon, label, onPress, tone = 'default', selected, d
   );
 }
 
-const useStyles = makeStyles(({ colors, line }) => ({
-  base: { width: hit, height: hit, alignItems: 'center', justifyContent: 'center' },
-  outline: { borderWidth: line, borderColor: colors.borderStrong },
-  filled: { backgroundColor: colors.accent },
-  filledOff: { backgroundColor: colors.surfaceAlt },
-  selected: { backgroundColor: colors.accentSoft },
-  pressed: { backgroundColor: colors.accentSoft },
+const useStyles = makeStyles(({ colors, line, radius }) => ({
+  base: { width: hit, height: hit, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+  outline: { borderWidth: line, borderColor: colors.borderStrong, borderRadius: radius.pill },
+  filled: { backgroundColor: colors.accent, borderRadius: radius.pill },
+  filledOff: { backgroundColor: colors.surfaceAlt, borderRadius: radius.pill },
+  selected: { backgroundColor: colors.accentSoft, borderRadius: radius.pill },
+  pressed: { backgroundColor: colors.accentSoft, borderRadius: radius.pill },
   pressedFilled: { opacity: 0.82 },
   disabled: { opacity: 0.45 },
 }));

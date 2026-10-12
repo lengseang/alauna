@@ -124,12 +124,12 @@ export function VoiceOrb({
   const auraRadius = size * 0.40;
   const outerRadius = size * 0.46;
 
-  // Neon theme palettes:
-  // - Helios (Light): Sun shine golden amber neon (#F59E0B, #FBBF24, #D97706, #FFFBEB)
-  // - Nyx (Dark): Moon light celestial cyan starlight neon (#38BDF8, #67E8F9, #818CF8, #F0F9FF)
-  const neonMain = isDark ? '#38BDF8' : '#F59E0B';
-  const neonGlow = isDark ? '#67E8F9' : '#FBBF24';
-  const neonHighlight = isDark ? '#E0F2FE' : '#FEF3C7';
+  // Iridescent theme palettes:
+  // - Helios (Light): Pearlescent violet / rose / cyan aura
+  // - Nyx (Dark): Luminous neon fuchsia / electric cyan starlight aura
+  const neonMain = isDark ? '#EC4899' : '#8B5CF6';
+  const neonGlow = isDark ? '#38BDF8' : '#C084FC';
+  const neonHighlight = isDark ? '#FDF2F8' : '#FFFFFF';
   const errorColor = colors.danger;
   const activeColor = phase === 'error' ? errorColor : neonMain;
 

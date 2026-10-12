@@ -3,54 +3,50 @@ import Svg, { Path } from 'react-native-svg';
 import { icon as iconToken, useTheme } from '../theme';
 
 /**
- * One coherent stroke set: 24dp grid, 1.5 stroke, square caps, mitred joins (cut stone, no rounded corners).
- * Only `stop` and `more` are filled. Rule: a view shows few icons (Chat: menu, new, attach, send/stop); icons never
- * replace a label on a Button, and every IconButton carries a spoken label.
+ * Friendly, modern rounded icons (Lucide / Feather inspired).
+ * 24dp grid, 1.8 stroke, round caps, round joins.
  */
 const D = {
-  menu: 'M4 7h16M4 12h16M4 17h10',
-  compose: 'M11 4H4v16h16v-7M17.5 3.5l3 3L11 16H8v-3z',
-  send: 'M12 20V5M5.5 11.5 12 5l6.5 6.5',
-  stop: 'M7 7h10v10H7z',
-  back: 'M20 12H4.5M11 5.5 4.5 12l6.5 6.5',
-  chevron: 'M9 5l7 7-7 7',
-  plus: 'M12 4v16M4 12h16',
-  check: 'M4.5 12.5l5 5 10-10',
-  close: 'M5.5 5.5l13 13M18.5 5.5l-13 13',
-  more: 'M4.5 10.5h3v3h-3zM10.5 10.5h3v3h-3zM16.5 10.5h3v3h-3z',
-  chat: 'M4 5h16v11H11l-5 4v-4H4z',
-  search: 'M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 1 0 0-13zM15.5 15.5 20.5 20.5',
-  filter: 'M4 5h16l-6 7.5V18l-4 2v-7.5z',
-  sort: 'M7 4v15.5M3.5 16 7 19.5 10.5 16M13 6h8M13 11h6M13 16h3.5',
-  download: 'M12 3.5v12M7 10.5l5 5 5-5M4 20h16',
-  /** Model Vault: a temple front. */
-  models: 'M3 9 12 4l9 5zM5.5 9.5v8.5M10 9.5v8.5M14 9.5v8.5M18.5 9.5v8.5M3 20.5h18',
-  pause: 'M8 5v14M16 5v14',
-  play: 'M7 4.5v15L19 12z',
-  mic: 'M9 3h6v10H9zM5.5 10.5v1a6.5 6.5 0 0 0 13 0v-1M12 18v3M8.5 21h7',
-  camera: 'M3 7h4.5l2-3h5l2 3H21v13H3zM12 9.5a3.75 3.75 0 1 0 0 7.5a3.75 3.75 0 1 0 0-7.5z',
-  image: 'M3 4h18v16H3zM3 16l5-5 4 4 3-3 6 6M15 7.5h2.5V10H15z',
-  file: 'M6 3h8l5 5v13H6zM14 3v5h5M9 13h6M9 17h6',
-  attach: 'M16.5 7v8.5a4.5 4.5 0 0 1-9 0V6a3 3 0 0 1 6 0v9a1.5 1.5 0 0 1-3 0V8',
-  settings: 'M4 7h9M17 7h3M4 17h3M11 17h9M13 5h4v4h-4zM7 15h4v4H7z',
-  /** Soul / persona: a theatre mask, cut square. */
-  persona: 'M5 4h14v8l-7 8-7-8zM8 9.5h3M13 9.5h3M10 14h4',
-  /** Memory: stacked tablets (Mnemosyne). */
-  memory: 'M12 3l9 5-9 5-9-5zM3 12.5l9 5 9-5M3 16.5l9 5 9-5',
-  shield: 'M12 3l8 3v7l-8 8-8-8V6z',
-  lock: 'M5 11h14v10H5zM8 11V4h8v7M12 15v2.5',
-  storage: 'M4 4h16v6H4zM4 14h16v6H4zM7 7h2M7 17h2',
-  chip: 'M7 7h10v10H7zM10 10h4v4h-4zM9.5 3v4M14.5 3v4M9.5 17v4M14.5 17v4M3 9.5h4M3 14.5h4M17 9.5h4M17 14.5h4',
-  speaker: 'M4 9h4l5-4v14l-5-4H4zM16 9.5l1.5 2.5-1.5 2.5M19 7l3 5-3 5',
-  bolt: 'M13.5 3 5 13.5h6.5L10.5 21 19 10.5h-6.5z',
-  trash: 'M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6',
-  pin: 'M8.5 3h7M10 3v6l-3.5 4h11L14 9V3M12 13v8',
-  edit: 'M15 4l5 5L9 20H4v-5zM12.5 6.5l5 5',
-  incognito: 'M2.5 12C5 7.5 8.5 5.5 12 5.5s7 2 9.5 6.5c-2.5 4.5-6 6.5-9.5 6.5S5 16.5 2.5 12zM12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5zM4 4l16 16',
-  sun: 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1',
-  moon: 'M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
-  /** Brain / reasoning think glyph: two cerebral hemispheres, square cut */
+  menu: 'M3 12h18M3 6h18M3 18h18',
+  compose: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
+  send: 'M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z',
+  stop: 'M9 9h6v6H9z',
+  back: 'M19 12H5M12 19l-7-7 7-7',
+  chevron: 'M9 18l6-6-6-6',
+  plus: 'M12 5v14M5 12h14',
+  check: 'M20 6 9 17l-5-5',
+  close: 'M18 6 6 18M6 6l12 12',
+  more: 'M12 12m-1 0a1 1 0 1 0 2 0 1 1 0 1 0-2 0M19 12m-1 0a1 1 0 1 0 2 0 1 1 0 1 0-2 0M5 12m-1 0a1 1 0 1 0 2 0 1 1 0 1 0-2 0',
+  chat: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z',
+  search: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35',
+  filter: 'M22 3H2l8 9.46V19l4 2v-8.54L22 3z',
+  sort: 'M3 6h18M6 12h12M9 18h6',
+  download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  models: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+  pause: 'M6 4h4v16H6zM14 4h4v16h-4z',
+  play: 'M5 3l14 9-14 9V3z',
+  mic: 'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zM19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8',
+  camera: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  image: 'M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21',
+  file: 'M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM13 2v7h7',
+  attach: 'M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
+  persona: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  memory: 'M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-5.04zM14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-5.04z',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  lock: 'M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4',
+  storage: 'M21 8H3a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2zM21 16H3a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2zM7 10h.01M7 18h.01',
+  chip: 'M18 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3',
+  speaker: 'M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14',
+  bolt: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+  trash: 'M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2',
+  pin: 'M16 3l1 1-3 3 4 4-1 1-4-4-3 3 1 1-1 1-3-3-4 4-1-1 4-4-3-3 1-1 1 1 3-3-4-4 1-1 4 4 3-3z',
+  edit: 'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z',
+  incognito: 'M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24M1 1l22 22',
+  sun: 'M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
+  moon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
   brain: 'M9.5 4a3.5 3.5 0 0 0-3.5 3.5c0 .6.15 1.15.4 1.65A3.5 3.5 0 0 0 4 12.5 3.5 3.5 0 0 0 6.5 16v1a3 3 0 0 0 3 3h.5V4h-.5zM14.5 4a3.5 3.5 0 0 1 3.5 3.5c0 .6-.15 1.15-.4 1.65A3.5 3.5 0 0 1 20 12.5 3.5 3.5 0 0 1 17.5 16v1a3 3 0 0 1-3 3h-.5V4h.5z',
+  sparkles: 'M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275L12 3z',
 } as const;
 
 /** Alias names used in the plan (new, soul, voice, turbo, compute, eye-off, think) map onto the same glyphs. */
@@ -82,8 +78,8 @@ export function Icon({ name, color, size = iconToken.size, rotate }: IconProps) 
       fill={FILLED.has(name) ? c : 'none'}
       stroke={c}
       strokeWidth={iconToken.stroke}
-      strokeLinecap="square"
-      strokeLinejoin="miter"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       style={rotate ? { transform: [{ rotate: `${rotate}deg` }] } : undefined}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
