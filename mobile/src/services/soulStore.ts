@@ -147,6 +147,32 @@ export function saveCustomSoul(soul: SoulDefinition): SoulDefinition {
   return sanitized;
 }
 
+export function updateSoulAvatar(soulId: string, imageUri: string): SoulDefinition | null {
+  const soul = getSoul(soulId);
+  if (!soul) return null;
+  const isBuiltIn = soul.type === 'builtin';
+  const targetId = isBuiltIn ? `${soul.id}_custom` : soul.id;
+  const targetName = isBuiltIn ? `${soul.name}` : soul.name;
+  const updated: SoulDefinition = {
+    ...soul,
+    id: targetId,
+    name: targetName,
+    type: 'custom',
+    identity: {
+      ...soul.identity,
+      avatar: {
+        ...soul.identity.avatar,
+        type: 'file',
+        imageUri,
+      },
+    },
+    updatedAt: Date.now(),
+  };
+  const saved = saveCustomSoul(updated);
+  setActiveSoul(saved.id);
+  return saved;
+}
+
 export function deleteCustomSoul(soulId: string): boolean {
   if (BUILT_IN_SOUL_MAP[soulId]) return false; // Cannot delete built-ins
   const customSouls = { ...soulStore.getState().customSouls };

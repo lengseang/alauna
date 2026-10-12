@@ -74,17 +74,69 @@ export function DrawerLayout({ open, onOpenChange, drawer, children }: DrawerLay
 
   return (
     <View style={s.root}>
-      <View style={s.fill} {...openPan.panHandlers} importantForAccessibility={open ? 'no-hide-descendants' : 'auto'} accessibilityElementsHidden={open}>
+      {/* Sliding Door Chat View: pushes to the right as the drawer opens */}
+      <Animated.View
+        style={[
+          s.fill,
+          {
+            transform: [
+              {
+                translateX: p.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, W],
+                }),
+              },
+            ],
+          },
+        ]}
+        {...openPan.panHandlers}
+        importantForAccessibility={open ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={open}
+      >
         {children}
-      </View>
-      <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[s.scrim, { opacity: p }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close menu" style={s.fill} onPress={() => onOpenChange(false)} />
+        {/* Translucent glass scrim over the pushed chat; tapping closes the door */}
+        <Animated.View
+          pointerEvents={open ? 'auto' : 'none'}
+          style={[
+            s.scrim,
+            {
+              opacity: p.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.45],
+              }),
+            },
+          ]}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close menu"
+            style={s.fill}
+            onPress={() => onOpenChange(false)}
+          />
+        </Animated.View>
       </Animated.View>
+
+      {/* Sliding Drawer Panel: slides from -W to 0 synchronously */}
       <Animated.View
         {...closePan.panHandlers}
         importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
         accessibilityElementsHidden={!open}
-        style={[s.panel, { width: W, paddingTop: insets.top, paddingBottom: insets.bottom, transform: [{ translateX: p.interpolate({ inputRange: [0, 1], outputRange: [-W, 0] }) }] }]}
+        style={[
+          s.panel,
+          {
+            width: W,
+            paddingTop: insets.top,
+            paddingBottom: insets.bottom,
+            transform: [
+              {
+                translateX: p.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-W, 0],
+                }),
+              },
+            ],
+          },
+        ]}
       >
         {drawer}
       </Animated.View>

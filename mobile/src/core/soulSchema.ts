@@ -49,6 +49,8 @@ export const SOUL_CATEGORIES: SoulCategory[] = [
 export interface SoulIdentity {
   name: string;
   nickname?: string;
+  gender?: string;
+  intimacyLevel?: string;
   characterType: 'original' | 'historical' | 'fictional' | 'archetypal';
   setting: string;
   background: string;
@@ -334,6 +336,8 @@ export function sanitizeSoul(raw: unknown, fallbackId = 'soul_custom'): SoulDefi
   const identity: SoulIdentity = {
     name: cleanStr(rawIdent.name) || name,
     nickname: cleanStr(rawIdent.nickname) || undefined,
+    gender: cleanStr(rawIdent.gender) || undefined,
+    intimacyLevel: cleanStr(rawIdent.intimacyLevel) || undefined,
     characterType: ['original', 'historical', 'fictional', 'archetypal'].includes(rawIdent.characterType as string)
       ? (rawIdent.characterType as SoulIdentity['characterType'])
       : 'original',

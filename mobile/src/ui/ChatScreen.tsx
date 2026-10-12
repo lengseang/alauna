@@ -149,7 +149,10 @@ export function ChatScreen() {
             <Notice tone="danger">{chat.saveError}</Notice>
           </View>
         ) : null}
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.fill}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={s.fill}
+        >
           {messages.length === 0 ? (
             <EmptyChat hasModel={anyInstalled} loading={engineState === 'mounting'} incognito={chat.thread.incognito} />
           ) : (

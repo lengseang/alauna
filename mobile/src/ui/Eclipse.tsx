@@ -69,14 +69,25 @@ export function Eclipse({ state, progress = 0, size = 24, label }: EclipseProps)
         {state === 'loading' ? (
           <Circle cx={c} cy={c} r={ring} fill="none" stroke={colors.accent} strokeWidth={stroke} strokeDasharray={`${circ} ${circ}`} strokeDashoffset={circ * (1 - lit)} transform={`rotate(-90 ${c} ${c})`} />
         ) : null}
-        {/* The disc: a moon phase in Nyx, the same geometry as a rising sun in Helios. */}
-        {lit > 0 ? <Path d={moonPhasePath(lit, c, c, disc)} fill={colors.accent} /> : null}
-        {lit > 0 && lit < 1 ? <Circle cx={c} cy={c} r={disc} fill="none" stroke={colors.accent} strokeOpacity={0.35} strokeWidth={stroke * 0.75} /> : null}
-        {!isDark && state !== 'error' && state !== 'idle'
-          ? RAYS.map((a) => (
-              <Line key={a} x1={c + Math.cos(a) * size * 0.45} y1={c + Math.sin(a) * size * 0.45} x2={c + Math.cos(a) * size * 0.5} y2={c + Math.sin(a) * size * 0.5} stroke={colors.accent} strokeWidth={stroke} strokeOpacity={lit} />
-            ))
-          : null}
+        {/* Liquid Glass Bubble Core */}
+        {lit > 0 ? (
+          <Circle
+            cx={c}
+            cy={c}
+            r={disc * lit}
+            fill={colors.accent}
+            fillOpacity={state === 'busy' ? 0.9 : 0.75}
+          />
+        ) : null}
+        {lit > 0 ? (
+          <Circle
+            cx={c - disc * 0.3}
+            cy={c - disc * 0.3}
+            r={disc * 0.25 * lit}
+            fill={colors.text}
+            fillOpacity={0.7}
+          />
+        ) : null}
         {state === 'error' ? <Line x1={c - disc} y1={c + disc} x2={c + disc} y2={c - disc} stroke={colors.danger} strokeWidth={stroke} /> : null}
       </Svg>
     </View>

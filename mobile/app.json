@@ -17,6 +17,7 @@
       "package": "com.alauna.app",
       "versionCode": 3,
       "backgroundColor": "#09090C",
+      "softwareKeyboardLayoutMode": "resize",
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
