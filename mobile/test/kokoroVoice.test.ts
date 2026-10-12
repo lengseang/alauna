@@ -7,6 +7,8 @@ import {
   listKokoroStyles,
   kokoroStyleUrl,
   DEFAULT_KOKORO_STYLE_ID,
+  findMatchingKokoroVoice,
+  resolveKokoroSpeechParameters,
   type KokoroStyleSpec,
 } from '../src/core/voice/kokoroStyles.ts';
 import {
@@ -201,4 +203,77 @@ test('kokoro prefs sanitization: engine switching, style ID, and emotion intensi
   assert.equal(corrupt.kokoroStyleId, DEFAULT_KOKORO_STYLE_ID);
   assert.equal(corrupt.kokoroEmotion, 'neutral');
   assert.equal(corrupt.kokoroEmotionIntensity, 1.0); // clamped to 1
+});
+
+test('kokoro voice matching: distinguishes gender and accents across Android voice signatures', () => {
+  const simulatedVoices = [
+    { id: 'en-us-x-sfg#female_1-local', name: 'en-us-x-sfg-local', language: 'en-US', needsNetwork: false },
+    { id: 'en-us-x-tpd#female_2-local', name: 'en-us-x-tpd-local', language: 'en-US', needsNetwork: false },
+    { id: 'en-us-x-iom#male_1-local', name: 'en-us-x-iom-local', language: 'en-US', needsNetwork: false },
+    { id: 'en-us-x-iob#male_2-local', name: 'en-us-x-iob-local', language: 'en-US', needsNetwork: false },
+    { id: 'en-gb-x-rjs#female_1-local', name: 'en-gb-x-rjs-local', language: 'en-GB', needsNetwork: false },
+    { id: 'en-gb-x-gba#male_1-local', name: 'en-gb-x-gba-local', language: 'en-GB', needsNetwork: false },
+  ];
+
+  // American female style
+  const heartStyle = getKokoroStyle('af_heart');
+  assert.ok(heartStyle);
+  const matchedHeart = findMatchingKokoroVoice(heartStyle, simulatedVoices);
+  assert.ok(matchedHeart?.includes('female') || matchedHeart?.includes('sfg') || matchedHeart?.includes('tpd'));
+
+  // American male style
+  const adamStyle = getKokoroStyle('am_adam');
+  assert.ok(adamStyle);
+  const matchedAdam = findMatchingKokoroVoice(adamStyle, simulatedVoices);
+  assert.ok(matchedAdam?.includes('male') || matchedAdam?.includes('iom') || matchedAdam?.includes('iob'));
+
+  // British male style
+  const georgeStyle = getKokoroStyle('bm_george');
+  assert.ok(georgeStyle);
+  const matchedGeorge = findMatchingKokoroVoice(georgeStyle, simulatedVoices);
+  assert.equal(matchedGeorge, 'en-gb-x-gba#male_1-local');
+
+  // British female style
+  const aliceStyle = getKokoroStyle('bf_alice');
+  assert.ok(aliceStyle);
+  const matchedAlice = findMatchingKokoroVoice(aliceStyle, simulatedVoices);
+  assert.equal(matchedAlice, 'en-gb-x-rjs#female_1-local');
+
+  // Empty or null cases
+  assert.equal(findMatchingKokoroVoice(null, simulatedVoices), null);
+  assert.equal(findMatchingKokoroVoice(heartStyle, []), null);
+  assert.equal(findMatchingKokoroVoice(heartStyle, null), null);
+});
+
+test('kokoro voice matching: supports Samsung S23 Ultra SMT voice naming conventions', () => {
+  const samsungVoices = [
+    { id: 'com.samsung.SMT.en_US_f00', name: 'English (United States) Female', language: 'en_US', needsNetwork: false },
+    { id: 'com.samsung.SMT.en_US_m00', name: 'English (United States) Male', language: 'en_US', needsNetwork: false },
+  ];
+
+  const bellaStyle = getKokoroStyle('af_bella');
+  assert.equal(findMatchingKokoroVoice(bellaStyle, samsungVoices), 'com.samsung.SMT.en_US_f00');
+
+  const fenrirStyle = getKokoroStyle('am_fenrir');
+  assert.equal(findMatchingKokoroVoice(fenrirStyle, samsungVoices), 'com.samsung.SMT.en_US_m00');
+});
+
+test('kokoro parameter resolution: computes distinct acoustic parameters for emotions and personas', () => {
+  const heartStyle = getKokoroStyle('af_heart');
+  assert.ok(heartStyle);
+
+  const excited = resolveKokoroSpeechParameters(heartStyle, null, 'excited', 1.0);
+  const whisper = resolveKokoroSpeechParameters(heartStyle, null, 'whisper', 1.0);
+  const neutral = resolveKokoroSpeechParameters(heartStyle, null, 'neutral', 1.0);
+
+  assert.ok(excited.pitch > neutral.pitch, 'Excited pitch must be higher than neutral');
+  assert.ok(excited.rate > neutral.rate, 'Excited rate must be faster than neutral');
+  assert.ok(whisper.rate < neutral.rate, 'Whisper rate must be slower than neutral');
+
+  // Persona binding
+  const persona = getVoicePersona('velvet_girlfriend');
+  assert.ok(persona);
+  const resolvedPersona = resolveKokoroSpeechParameters(heartStyle, persona);
+  assert.equal(resolvedPersona.emotion, persona.kokoroEmotion);
+  assert.ok(resolvedPersona.pitch > 0 && resolvedPersona.rate > 0);
 });

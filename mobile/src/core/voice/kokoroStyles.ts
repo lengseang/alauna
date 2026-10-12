@@ -380,3 +380,114 @@ export function listKokoroStyles(category?: KokoroCategory | 'all'): KokoroStyle
 export function kokoroStyleUrl(spec: KokoroStyleSpec): string {
   return `https://huggingface.co/${KOKORO_REPO}/resolve/main/${spec.filename}`;
 }
+
+import { computeAcousticModulation, type EmotionType } from './emotionMixer.ts';
+
+export interface NativeVoiceLike {
+  id: string;
+  name: string;
+  language: string;
+  needsNetwork?: boolean | null;
+}
+
+export interface PersonaSpeechContext {
+  pitch: number;
+  rate: number;
+  kokoroEmotion?: EmotionType;
+  kokoroEmotionIntensity?: number;
+}
+
+/**
+ * Intelligently matches an on-device TTS voice for a given Kokoro-82M style specification.
+ * Distinguishes gender (female / male), accent (American / British), and engine voice signatures
+ * across Google Speech Services, Samsung Text-to-Speech (Galaxy S23 Ultra), and OEM TTS engines.
+ */
+export function findMatchingKokoroVoice(
+  styleSpec: KokoroStyleSpec | null,
+  installedVoices: NativeVoiceLike[] | null
+): string | null {
+  if (!styleSpec || !installedVoices || installedVoices.length === 0) return null;
+
+  // Filter on-device voices first (ignore network voices if on-device voices are present)
+  const localVoices = installedVoices.filter((v) => !v.needsNetwork);
+  const voicePool = localVoices.length > 0 ? localVoices : installedVoices;
+
+  const isBritish = styleSpec.accent === 'british';
+  const isFemale = styleSpec.gender === 'female';
+
+  // 1. Language matching: prefer matching exact dialect (en-GB for british, en-US for american)
+  const langFiltered = voicePool.filter((v) => {
+    const l = (v.language || '').toLowerCase().replace(/_/g, '-');
+    if (isBritish) return l.startsWith('en-gb') || l.includes('gb') || l.includes('gbr');
+    return l.startsWith('en-us') || l.includes('us') || l.includes('usa');
+  });
+
+  const candidates = langFiltered.length > 0 ? langFiltered : voicePool.filter((v) => (v.language || '').toLowerCase().startsWith('en'));
+  const pool = candidates.length > 0 ? candidates : voicePool;
+
+  // 2. Gender classification regex
+  // Google TTS:
+  //   Females: sfg (voice 1), tpd (voice 2), iol (voice 3), tpc (voice 4)
+  //   Males:   iom (voice 1), iob (voice 2), iod (voice 3), ioe (voice 4)
+  // Samsung TTS (Galaxy S23 Ultra):
+  //   Females: f00, _f, female
+  //   Males:   m00, _m, male
+  const femalePattern = /(^|[^a-z])(female|woman|girl|feminine|fem)($|[^a-z])|(_|\b)f[0-9]|sfg|tpd|iol|tpc|eva|zira|samantha|victoria|karen/i;
+  const malePattern = /(^|[^a-z])(male|man|guy|boy|masculine|masc)($|[^a-z])|(_|\b)m[0-9]|iom|iob|iod|ioe|david|george|daniel|oliver/i;
+
+  const matchesGender = (v: { id: string; name: string }) => {
+    const text = `${v.id} ${v.name}`;
+    if (isFemale) {
+      return femalePattern.test(text) && !malePattern.test(text);
+    } else {
+      return malePattern.test(text) && !femalePattern.test(text);
+    }
+  };
+
+  const genderFiltered = pool.filter(matchesGender);
+  const finalPool = genderFiltered.length > 0 ? genderFiltered : pool;
+
+  // 3. Deterministic style mapping
+  // Map different Kokoro style IDs to different voices in finalPool so different styles sound distinctly different
+  let styleHash = 0;
+  for (let i = 0; i < styleSpec.id.length; i++) {
+    styleHash = (styleHash << 5) - styleHash + styleSpec.id.charCodeAt(i);
+    styleHash |= 0;
+  }
+  const index = Math.abs(styleHash) % finalPool.length;
+  return finalPool[index].id;
+}
+
+/**
+ * Resolves effective TTS voice, pitch, and speed for Kokoro neural synthesis.
+ */
+export function resolveKokoroSpeechParameters(
+  styleSpec: KokoroStyleSpec | null,
+  persona: PersonaSpeechContext | null,
+  emotionOverride?: EmotionType,
+  intensityOverride?: number,
+  installedVoices?: NativeVoiceLike[] | null
+): {
+  voiceId: string | null;
+  pitch: number;
+  rate: number;
+  emotion: EmotionType;
+  emotionIntensity: number;
+} {
+  const emotion = emotionOverride ?? persona?.kokoroEmotion ?? 'neutral';
+  const intensity = intensityOverride ?? persona?.kokoroEmotionIntensity ?? 0.5;
+
+  const basePitch = persona ? persona.pitch : (styleSpec ? styleSpec.pitch : 1.0);
+  const baseRate = persona ? persona.rate : (styleSpec ? styleSpec.speed : 1.0);
+
+  const mod = computeAcousticModulation(basePitch, baseRate, emotion, intensity);
+  const voiceId = findMatchingKokoroVoice(styleSpec, installedVoices ?? null);
+
+  return {
+    voiceId,
+    pitch: mod.pitch,
+    rate: mod.rate,
+    emotion,
+    emotionIntensity: intensity,
+  };
+}

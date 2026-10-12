@@ -135,3 +135,9 @@ export async function resolvePersonaStyleVector(
 
   return { vector: blended, effectivePitch, effectiveRate };
 }
+
+export {
+  findMatchingKokoroVoice,
+  resolveKokoroSpeechParameters,
+} from '../../core/voice/kokoroStyles.ts';
+

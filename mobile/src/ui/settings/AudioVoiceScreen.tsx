@@ -22,9 +22,9 @@ import { LANGUAGE_CHOICES, languageName, speechFraction, speechLine, vadPresetFo
 import { ChoiceRow, Group, Rows } from './parts';
 
 import { getVoicePersona, listVoicePersonas, type VoicePersona } from '../../core/voicePersonas.ts';
-import { previewPersonaVoice } from '../../services/voice/tts.ts';
+import { previewPersonaVoice, previewKokoroStyle } from '../../services/voice/tts.ts';
 import { EMOTION_PROFILES, type EmotionType } from '../../core/voice/emotionMixer.ts';
-import { getKokoroStyle } from '../../core/voice/kokoroStyles.ts';
+import { getKokoroStyle, KOKORO_STYLES, type KokoroStyleSpec } from '../../core/voice/kokoroStyles.ts';
 
 /** One speech model: pick it (radio), see its real state, download / pause / resume / cancel / delete. */
 function SpeechModelRow({ spec, selected, onSelect }: { spec: SpeechModelSpec; selected: boolean; onSelect?: () => void }) {
@@ -131,6 +131,8 @@ export function AudioVoiceScreen() {
   const [endMs, setEndMs] = useState(prefs.endOfSpeechMs);
   const [personaCategory, setPersonaCategory] = useState<'normal' | 'companion' | 'nsfw_adult'>('normal');
   const [previewingPersonaId, setPreviewingPersonaId] = useState<string | null>(null);
+  const [styleSheet, setStyleSheet] = useState(false);
+  const [previewingKokoro, setPreviewingKokoro] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -225,6 +227,41 @@ export function AudioVoiceScreen() {
           <View style={s.kokoroSection}>
             <SpeechModelRow spec={KOKORO_MODEL} selected={true} />
             <Text variant="small">Kokoro-82M is an 82M-parameter neural engine with 512-D style vectors and mathematical emotion blending for high-fidelity speech.</Text>
+            {(() => {
+              const activeStyle = getKokoroStyle(prefs.kokoroStyleId);
+              return (
+                <View style={s.styleCard}>
+                  <View style={s.styleHeader}>
+                    <Text variant="label">Active Kokoro Style</Text>
+                    <Tag label={`${activeStyle?.accent === 'british' ? 'British' : 'American'} ${activeStyle?.gender === 'female' ? 'Female' : 'Male'}`} tone="accent" />
+                  </View>
+                  <Text variant="heading">{activeStyle?.name ?? prefs.kokoroStyleId}</Text>
+                  <Text variant="small" tone="muted">{activeStyle?.description ?? ''}</Text>
+                  <View style={s.actions}>
+                    <Button
+                      label="Select Style"
+                      variant="quiet"
+                      onPress={() => setStyleSheet(true)}
+                    />
+                    <Button
+                      label={previewingKokoro ? 'Stop' : `Test Voice (${activeStyle?.name ?? 'Kokoro'})`}
+                      icon={previewingKokoro ? 'stop' : 'speaker'}
+                      variant="primary"
+                      onPress={async () => {
+                        if (previewingKokoro) {
+                          await stopSpeaking();
+                          setPreviewingKokoro(false);
+                        } else {
+                          setPreviewingKokoro(true);
+                          await previewVoice();
+                          setPreviewingKokoro(false);
+                        }
+                      }}
+                    />
+                  </View>
+                </View>
+              );
+            })()}
           </View>
         ) : null}
 
@@ -334,7 +371,7 @@ export function AudioVoiceScreen() {
           variant="quiet"
           onPress={async () => {
             if (tts.speaking) return stopSpeaking();
-            const ok = await previewVoice({ voice: prefs.ttsVoice, rate, pitch });
+            const ok = await previewVoice(prefs.ttsEngine === 'system' ? { voice: prefs.ttsVoice, rate, pitch } : {});
             if (!ok) showToast(ttsStore.getState().lastError ?? TTS_MISSING);
           }}
         />
@@ -351,6 +388,21 @@ export function AudioVoiceScreen() {
           }}
         />
       </Group>
+
+      <Sheet visible={styleSheet} onClose={() => setStyleSheet(false)} title="Kokoro Neural Styles">
+        {KOKORO_STYLES.map((st) => (
+          <ListRow
+            key={st.id}
+            title={`${st.name} (${st.accent === 'british' ? 'British' : 'American'} ${st.gender === 'female' ? 'Female' : 'Male'})`}
+            subtitle={`${st.description}\nBase pitch: ${st.pitch.toFixed(2)}x · Speed: ${st.speed.toFixed(2)}x`}
+            selected={prefs.kokoroStyleId === st.id}
+            onPress={() => {
+              updateVoicePrefs({ kokoroStyleId: st.id });
+              setStyleSheet(false);
+            }}
+          />
+        ))}
+      </Sheet>
 
       <Sheet visible={voiceSheet} onClose={() => setVoiceSheet(false)} title="Voice">
         <ListRow
@@ -409,6 +461,19 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
     borderWidth: line,
     borderColor: colors.border,
     marginBottom: space.sm,
+  },
+  styleCard: {
+    padding: space.md,
+    backgroundColor: colors.surface,
+    borderWidth: line,
+    borderColor: colors.border,
+    gap: space.xs,
+    marginTop: space.xs,
+  },
+  styleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   emotionControls: {
     gap: space.xs,
