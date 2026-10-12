@@ -1,17 +1,17 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "=========================================="
-Write-Host "CHIWIWI SOVEREIGN APK RELEASE BUILD PIPELINE"
+Write-Host "ALAUNA PRODUCTION APK RELEASE PIPELINE"
 Write-Host "=========================================="
 
 $env:ANDROID_HOME = "C:\Users\BAMBOO\AppData\Local\Android\Sdk"
 $env:ANDROID_SDK_ROOT = "C:\Users\BAMBOO\AppData\Local\Android\Sdk"
 $env:JAVA_HOME = "C:\Program Files\Java\jdk-17"
 
-$androidDir = "D:\1111-Works\CHIWIWI\mobile\android"
+$androidDir = "D:\1111-Works\alauna\mobile\android"
 Set-Location $androidDir
 
-$apkSource = "D:\1111-Works\CHIWIWI\mobile\android\app\build\outputs\apk\release\app-release.apk"
+$apkSource = "D:\1111-Works\alauna\mobile\android\app\build\outputs\apk\release\app-release.apk"
 if (Test-Path $apkSource) {
     Remove-Item -Path $apkSource -Force
 }
@@ -28,8 +28,8 @@ if (-not (Test-Path $apkSource)) {
     exit 1
 }
 
-$apkDestMobile = "D:\1111-Works\CHIWIWI\mobile\chiwiwi-v0.13.apk"
-$apkDestRoot = "D:\1111-Works\CHIWIWI\chiwiwi-v0.13.apk"
+$apkDestMobile = "D:\1111-Works\alauna\mobile\alauna-v1.0.2.apk"
+$apkDestRoot = "D:\1111-Works\alauna\alauna-v1.0.2.apk"
 
 Write-Host "[2/3] Copying APK to destination releases..."
 Copy-Item -Path $apkSource -Destination $apkDestMobile -Force
@@ -42,9 +42,9 @@ $sha256 = (Get-FileHash -Path $apkDestMobile -Algorithm SHA256).Hash
 
 Write-Host "------------------------------------------"
 Write-Host "APK BUILD SUCCESSFUL"
-Write-Host "File:       chiwiwi-v0.13.apk"
-Write-Host "Size:       $fileSizeMb MB ($($fileItem.Length) bytes)"
-Write-Host "SHA256:     $sha256"
+Write-Host "File:        alauna-v1.0.2.apk"
+Write-Host "Size:        $fileSizeMb MB ($($fileItem.Length) bytes)"
+Write-Host "SHA256:      $sha256"
 Write-Host "Mobile Path: $apkDestMobile"
 Write-Host "Root Path:   $apkDestRoot"
 Write-Host "------------------------------------------"
