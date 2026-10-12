@@ -42,10 +42,10 @@ export function SoulEffects({ pad, toneIntensity }: { pad: PADVector; toneIntens
 }
 
 const SCENARIOS: Array<{ id: string; label: string; prompt?: string }> = [
-  { id: 'intro', label: 'Introduce yourself' },
-  { id: 'architecture', label: 'Systems and architecture', prompt: 'How should we decouple our session storage from the mobile UI thread?' },
-  { id: 'crisis', label: 'Outage and crisis triage', prompt: 'The production deploy failed and customer demo begins in 15 minutes. What do we do?' },
-  { id: 'creative', label: 'Creative strategy', prompt: 'Give me a distinctive brand concept and tagline for our sovereign on-device AI assistant.' },
+  { id: 'intro', label: 'Whisper a greeting', prompt: 'Whisper a warm, intimate greeting to me as we meet tonight.' },
+  { id: 'latenight', label: 'Late night conversation', prompt: 'It is late, the room is quiet and dimly lit. What is on your mind, darling?' },
+  { id: 'flirt', label: 'Playful tease', prompt: 'Tease me playfully about how much time we spend together.' },
+  { id: 'devotion', label: 'Passionate moment', prompt: 'Tell me how deeply you care about our bond and what I mean to you.' },
 ];
 
 /**
@@ -68,7 +68,7 @@ export function SoulPreview({ soul }: { soul: ThreadSoul }) {
     <View style={s.stack}>
       <View style={s.tags}>
         {SCENARIOS.map((x) => (
-          <Tag key={x.id} label={x.label} onPress={() => setScenario(x.id)} selected={scenario === x.id} />
+          <Tag key={x.id} label={x.label} onPress={() => setScenario(x.id)} selected={scenario === x.id} tone="accent" />
         ))}
       </View>
       <Button label="Write a preview" icon="play" busyLabel="Writing..." onPress={write} variant="quiet" />
@@ -90,7 +90,7 @@ export function SoulPreview({ soul }: { soul: ThreadSoul }) {
               .filter(Boolean)
               .join(' · ')}
           </Text>
-          {out.key !== key ? <Text variant="small">You changed the soul after this preview was written. Write it again to hear the new one.</Text> : null}
+          {out.key !== key ? <Text variant="small">You changed the personality settings after this preview was written. Generate again to hear the new tone.</Text> : null}
         </Card>
       ) : null}
       <Button
@@ -108,9 +108,7 @@ export function SoulPreview({ soul }: { soul: ThreadSoul }) {
 }
 
 /**
- * The whole soul editor: archetype, the three PAD feelings (bipolar sliders), intensity, your own instructions, what it
- * does to the model, and the live preview. Used for the global soul and for a chat's own soul.
- * Sliders are live locally and saved on release, so dragging never writes a file per pixel.
+ * The companion soul editor: archetype, warmth/passion, energy/flirt, initiative, instructions, and live testing.
  */
 export function SoulEditor({ soul, onChange }: { soul: ThreadSoul; onChange: (patch: Partial<ThreadSoul>) => void }) {
   const s = useStyles();
@@ -127,7 +125,7 @@ export function SoulEditor({ soul, onChange }: { soul: ThreadSoul; onChange: (pa
 
   return (
     <>
-      <Group index={1} title="Archetype" hint="Who answers. Picking one also sets the three feelings below to its own values.">
+      <Group title="Companion Archetype" hint="Choose the core personality style that guides responses and roleplay.">
         <Rows>
           {ARCHETYPE_KEYS.map((k) => (
             <ListRow key={k} title={ARCHETYPES[k].name} subtitle={ARCHETYPES[k].description} selected={soul.archetype === k} onPress={() => pick(k)} />
@@ -135,34 +133,34 @@ export function SoulEditor({ soul, onChange }: { soul: ThreadSoul; onChange: (pa
         </Rows>
       </Group>
 
-      <Group index={2} title="Feelings" hint="Pleasure, arousal, dominance: the three dials that shape tone, pace and candour.">
+      <Group title="Personality Dials" hint="Fine-tune warmth, teasing banter, initiative, and emotional intensity.">
         <View style={s.stack}>
-          <Slider label="Warmth" value={pad.pleasure} min={-1} max={1} step={0.05} origin={0} poles={['Blunt', 'Warm']} format={sig} onChange={(v) => setPad({ ...pad, pleasure: v })} onCommit={(v) => onChange({ pad: { ...pad, pleasure: v } })} />
-          <Slider label="Energy" value={pad.arousal} min={0} max={1} step={0.05} poles={['Calm', 'Lively']} onChange={(v) => setPad({ ...pad, arousal: v })} onCommit={(v) => onChange({ pad: { ...pad, arousal: v } })} />
-          <Slider label="Directness" value={pad.dominance} min={0} max={1} step={0.05} poles={['Gentle', 'Direct']} onChange={(v) => setPad({ ...pad, dominance: v })} onCommit={(v) => onChange({ pad: { ...pad, dominance: v } })} />
-          <Slider label="Intensity" value={tone} min={0.1} max={1} step={0.05} poles={['Subtle', 'Strong']} format={(v) => `${Math.round(v * 100)}%`} hint="How strongly the feelings reach the sampling." onChange={setTone} onCommit={(v) => onChange({ toneIntensity: v })} />
-          <Button label="Reset to the archetype" variant="text" onPress={() => onChange({ pad: { ...ARCHETYPES[soul.archetype].defaultPAD }, toneIntensity: 0.8 })} />
+          <Slider label="Warmth & Passion" value={pad.pleasure} min={-1} max={1} step={0.05} origin={0} poles={['Cool / Reserved', 'Passionate / Warm']} format={sig} onChange={(v) => setPad({ ...pad, pleasure: v })} onCommit={(v) => onChange({ pad: { ...pad, pleasure: v } })} />
+          <Slider label="Playfulness & Flirt" value={pad.arousal} min={0} max={1} step={0.05} poles={['Calm & Gentle', 'Bold & Flirtatious']} onChange={(v) => setPad({ ...pad, arousal: v })} onCommit={(v) => onChange({ pad: { ...pad, arousal: v } })} />
+          <Slider label="Initiative & Dominance" value={pad.dominance} min={0} max={1} step={0.05} poles={['Follows Your Lead', 'Takes Charge / Bold']} onChange={(v) => setPad({ ...pad, dominance: v })} onCommit={(v) => onChange({ pad: { ...pad, dominance: v } })} />
+          <Slider label="Intimacy Intensity" value={tone} min={0.1} max={1} step={0.05} poles={['Subtle', 'Deep & Unfiltered']} format={(v) => `${Math.round(v * 100)}%`} hint="How intensely the personality traits influence roleplay." onChange={setTone} onCommit={(v) => onChange({ toneIntensity: v })} />
+          <Button label="Reset to Archetype Defaults" variant="text" onPress={() => onChange({ pad: { ...ARCHETYPES[soul.archetype].defaultPAD }, toneIntensity: 0.8 })} />
         </View>
       </Group>
 
-      <Group index={3} title="Your instructions">
+      <Group title="Custom Roleplay & Backstory">
         <Field
-          label="Extra instructions (optional)"
-          hint={`${text.length} of ${BACKSTORY_MAX} characters reach the model.`}
+          label="Custom Backstory / Fantasy Instructions"
+          hint={`${text.length} of ${BACKSTORY_MAX} characters.`}
           value={text}
           onChangeText={setText}
           onBlur={() => onChange({ customBackstory: text.trim() })}
-          placeholder="e.g. Always answer in Khmer. Keep replies short."
+          placeholder="e.g. You are Alauna, deeply devoted and affectionate. Stay in character, speak intimately, and call me darling."
           multiline
           maxLength={BACKSTORY_MAX}
         />
       </Group>
 
-      <Group index={4} title="What it changes">
+      <Group title="Roleplay Response Tuning">
         <SoulEffects pad={pad} toneIntensity={tone} />
       </Group>
 
-      <Group index={5} title="Try it" hint="Written live by the model that is loaded now, with exactly this prompt and sampling.">
+      <Group title="Live Roleplay Test" hint="Tested live with the currently loaded offline model.">
         <SoulPreview soul={live} />
       </Group>
     </>

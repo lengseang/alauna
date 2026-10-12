@@ -181,11 +181,21 @@ export function InstalledRow({ spec, active, slotLabel, onOpen, onDelete }: Inst
   );
 }
 
-const useStyles = makeStyles(({ colors, space }) => ({
-  row: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingVertical: space.md },
+const useStyles = makeStyles(({ colors, space, radius, line }) => ({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    padding: space.md,
+    marginVertical: 4,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: line,
+    borderColor: colors.border,
+  },
   info: { flex: 1, gap: space.xs, minHeight: 56 },
   head: { gap: space.xs, minHeight: 48 },
-  pressed: { backgroundColor: colors.accentSoft },
+  pressed: { opacity: 0.75 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, paddingTop: space.xs },
   action: { minWidth: 84 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: space.xs },

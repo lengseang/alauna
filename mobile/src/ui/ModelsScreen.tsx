@@ -93,84 +93,61 @@ export function ModelsScreen() {
     [eng, settings.verified, ram, nCtx, grouped, open],
   );
 
-  const toolbar = (
-    <>
-      <SearchField label="Search models" value={f.search} onChangeText={(search) => set({ search })} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={s.chipScroll} contentContainerStyle={s.chips}>
-        <Tag label="Uncensored" count={facets.policy.Uncensored} selected={f.policies.includes('Uncensored')} onPress={() => set({ policies: toggle(f.policies, 'Uncensored') })} tone="accent" accessibilityHint="Shows only models with refusals removed" />
-        <Tag label="Uncensored · small (≤4B)" count={smallCount} selected={f.smallUncensored} onPress={() => set({ smallUncensored: !f.smallUncensored })} tone="accent" accessibilityHint="Uncensored models of at most 4 billion parameters, quick on a phone" />
-        {PARAM_BANDS.map((b, i) => (
-          <Tag key={b.id} label={b.label} count={bandCounts[i]} selected={f.bands.includes(b.id)} onPress={() => set({ bands: toggle(f.bands, b.id) })} accessibilityHint={`Models with ${b.label} parameters`} />
-        ))}
-        {ALL_CAPABILITIES.map((c) => (
-          <Tag key={c} label={CAPABILITY_INFO[c].label} count={facets.capabilities[c]} selected={f.caps.includes(c)} onPress={() => set({ caps: toggle(f.caps, c) })} accessibilityHint={CAPABILITY_INFO[c].meaning} />
-        ))}
-        {GRADES.map((g) => (
-          <Tag key={g} label={`Grade ${g}`} count={facets.grades[g]} selected={f.grades.includes(g)} onPress={() => set({ grades: toggle(f.grades, g) })} />
-        ))}
-        <Tag label="Standard" count={facets.policy.Standard} selected={f.policies.includes('Standard')} onPress={() => set({ policies: toggle(f.policies, 'Standard') })} />
-        {ram ? <Tag label="Fits this phone" count={fitCount} selected={f.fits} onPress={() => set({ fits: !f.fits })} accessibilityHint="Hides models that need more memory than this phone has" /> : null}
-        <Tag label="Installed" count={installedIds.length} selected={f.installed} onPress={() => set({ installed: !f.installed })} />
-      </ScrollView>
-      {/* Spacious Sort Dropdown Selector */}
-      <Pressable
-        style={({ pressed }) => [
-          s.sortDropdown,
-          pressed && { opacity: 0.75 },
-        ]}
-        onPress={() => setSortOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={`Sort by: ${sortInfo(f.sort).label}`}
-      >
-        <View style={s.sortDropdownLeft}>
-          <Icon name="sort" size={16} color={colors.accent} />
-          <Text variant="small" tone="muted">SORT BY:</Text>
-          <Text variant="strong" numberOfLines={1} style={s.sortValue}>
-            {sortInfo(f.sort).label}
-          </Text>
-        </View>
-        <Icon name="chevron" size={14} color={colors.muted} rotate={90} />
-      </Pressable>
+  type VaultTab = 'all' | 'uncensored' | 'vision' | 'pocket' | 'installed';
+  const [tab, setTab] = useState<VaultTab>('all');
 
-      {/* Spacious Grouping & Matching Controls */}
-      <View style={s.controls}>
-        <View style={s.match}>
-          <Segmented
-            label="Group by"
-            options={[
-              { value: 'grade', label: 'Group: Grade' },
-              { value: 'params', label: 'Group: Parameters' },
-            ]}
-            value={groupBy}
-            onChange={setGroupBy}
-          />
-        </View>
-        <View style={s.match}>
-          <Segmented
-            label="Match tags"
-            options={[
-              { value: 'AND', label: 'All tags' },
-              { value: 'OR', label: 'Any tag' },
-            ]}
-            value={f.match}
-            onChange={(match) => set({ match })}
-            disabled={f.caps.length < 2}
-          />
-        </View>
+  const onSelectTab = (t: VaultTab) => {
+    setTab(t);
+    if (t === 'all') {
+      set({ policies: [], caps: [], smallUncensored: false, installed: false });
+    } else if (t === 'uncensored') {
+      set({ policies: ['Uncensored'], caps: [], smallUncensored: false, installed: false });
+    } else if (t === 'vision') {
+      set({ policies: [], caps: ['Image'], smallUncensored: false, installed: false });
+    } else if (t === 'pocket') {
+      set({ policies: [], caps: [], smallUncensored: true, installed: false });
+    } else if (t === 'installed') {
+      set({ policies: [], caps: [], smallUncensored: false, installed: true });
+    }
+  };
+
+  const toolbar = (
+    <View style={s.toolbar}>
+      <SearchField label="Search companion models" value={f.search} onChangeText={(search) => set({ search })} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={s.chipScroll} contentContainerStyle={s.chips}>
+        <Tag label="All Models" count={MODEL_CATALOG.length} selected={tab === 'all'} onPress={() => onSelectTab('all')} tone={tab === 'all' ? 'accent' : undefined} />
+        <Tag label="Uncensored Roleplay" count={facets.policy.Uncensored} selected={tab === 'uncensored'} onPress={() => onSelectTab('uncensored')} tone={tab === 'uncensored' ? 'accent' : undefined} />
+        <Tag label="Vision & Photos" count={facets.capabilities.Image} selected={tab === 'vision'} onPress={() => onSelectTab('vision')} tone={tab === 'vision' ? 'accent' : undefined} />
+        <Tag label="Fast Pocket" count={smallCount} selected={tab === 'pocket'} onPress={() => onSelectTab('pocket')} tone={tab === 'pocket' ? 'accent' : undefined} />
+        <Tag label="Installed" count={installedIds.length} selected={tab === 'installed'} onPress={() => onSelectTab('installed')} tone={tab === 'installed' ? 'accent' : undefined} />
+      </ScrollView>
+
+      {/* Sleek Minimalist Meta & Sort Bar */}
+      <View style={s.metaBar}>
+        <Text variant="small" tone="muted">{`${models.length} ${models.length === 1 ? 'model' : 'models'} available`}</Text>
+        <Pressable
+          style={({ pressed }) => [s.sortPill, pressed && { opacity: 0.7 }]}
+          onPress={() => setSortOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Sort by: ${sortInfo(f.sort).label}`}
+        >
+          <Icon name="sort" size={12} color={colors.accent} />
+          <Text variant="small" tone="accent">{sortInfo(f.sort).label}</Text>
+          <Icon name="chevron" size={10} color={colors.accent} rotate={90} />
+        </Pressable>
       </View>
-    </>
+    </View>
   );
 
   const header = (
     <View style={s.header}>
-      <Text variant="small">{`${device.name}${ram ? ` · ${formatBytes(ram)} memory` : ''}. ${models.length} of ${MODEL_CATALOG.length} models. They download once, then work offline.`}</Text>
-      {showRecommended && recommended ? <SetupCard spec={recommended} deviceName={device.name} tone="recommended" /> : null}
-      <View>
-        <DownloadsLink />
-        <Divider />
-        <Row title="Speculative decoding" subtitle={settings.speculative.enabled ? 'On. Tap for the draft, live acceptance and speed-up.' : 'Off. A small draft guesses ahead so the big model answers faster.'} value={settings.speculative.enabled ? 'On' : 'Off'} onPress={() => push('speculative')} />
-        <Divider />
+      <View style={s.devicePill}>
+        <View style={s.deviceDot} />
+        <Text variant="small" tone="muted">
+          {`${device.name}${ram ? ` · ${formatBytes(ram)} RAM` : ''} · 100% Offline & Sovereign`}
+        </Text>
       </View>
+      <DownloadsLink />
     </View>
   );
 
@@ -237,34 +214,47 @@ function DownloadsLink() {
   return <Row title="Downloads" subtitle={busy ? parts.join(' · ') : 'Nothing downloading. Queue, speed and disk use live here.'} value={busy ? String(busy) : undefined} onPress={() => push('downloads')} />;
 }
 
-const useStyles = makeStyles(({ space, colors, line }) => ({
+const useStyles = makeStyles(({ space, colors, line, radius }) => ({
+  toolbar: { gap: space.sm },
   chipScroll: { marginHorizontal: -space.lg, flexGrow: 0 },
   chips: { paddingHorizontal: space.lg, gap: space.sm, alignItems: 'center' },
-  sortDropdown: {
+  metaBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: space.md,
-    paddingVertical: space.sm,
+    paddingVertical: space.xs,
+  },
+  sortPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceAlt,
     borderWidth: line,
     borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-    minHeight: 44,
   },
-  sortDropdownLeft: {
+  header: { gap: space.md, paddingTop: space.md, paddingBottom: space.sm },
+  devicePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    flex: 1,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    borderWidth: line,
+    borderColor: colors.border,
   },
-  sortValue: {
-    flexShrink: 1,
+  deviceDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
   },
-  controls: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  match: { flex: 1 },
   list: { paddingHorizontal: space.lg, paddingBottom: space.xxl },
-  header: { gap: space.lg, paddingTop: space.lg, paddingBottom: space.sm },
-  sectionHead: { paddingTop: space.xl, paddingBottom: space.xs },
+  sectionHead: { paddingTop: space.lg, paddingBottom: space.xs },
   footer: { paddingTop: space.xl },
   empty: { gap: space.md, paddingVertical: space.xl },
 }));

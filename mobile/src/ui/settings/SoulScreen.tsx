@@ -21,8 +21,8 @@ export function SoulScreen() {
   const { facts } = useMemory();
   const soul = globalSoul(settings);
   return (
-    <Screen title="Soul" onBack={goBack} scroll>
-      <Text tone="muted">How CHIWIWI talks. New chats follow this soul; a chat can have its own from the chat menu.</Text>
+    <Screen title="Companion Soul" onBack={goBack} scroll>
+      <Text tone="muted">Customize Alauna's intimacy, passion, and personality dynamics. Every chat reflects this soul unless customized individually.</Text>
       <Button
         label="Open Soul Library & Studio"
         variant="primary"
@@ -35,9 +35,9 @@ export function SoulScreen() {
         </Notice>
       ) : null}
       <SoulEditor soul={soul} onChange={setGlobalSoul} />
-      <Group index={6} title="Memory" hint="Facts the soul keeps in mind in every chat.">
+      <Group title="Companion Memory" hint="Personal facts and memories Alauna keeps in mind across chats.">
         <Rows>
-          <ListRow title="Memory" subtitle={`${facts.length} ${facts.length === 1 ? 'fact' : 'facts'} remembered`} onPress={() => push('settings/memory')} />
+          <ListRow title="Memory Vault" subtitle={`${facts.length} ${facts.length === 1 ? 'fact' : 'facts'} remembered`} onPress={() => push('settings/memory')} />
         </Rows>
       </Group>
     </Screen>

@@ -14,33 +14,23 @@ export interface MeanderProps {
   style?: StyleProp<ViewStyle>;
 }
 
-/** The Greek-key rule: a hairline meander band, or a few keys running into a plain rule. Decorative, hidden from screen readers. */
-export function Meander({ height = 10, tone = 'accent', units, style }: MeanderProps) {
-  const { colors, line } = useTheme();
-  const [width, setWidth] = useState(0);
-  const pad = line; // keep the stroke inside the box
+/** Modern minimalist liquid glass hairline accent divider. Decorative, hidden from screen readers. */
+export function Meander({ tone = 'accent', style }: MeanderProps) {
+  const { colors } = useTheme();
   return (
     <View
-      onLayout={(e) => setWidth(Math.round(e.nativeEvent.layout.width))}
-      style={[{ height: height + pad * 2, overflow: 'hidden' }, style]}
+      style={[
+        {
+          height: 1,
+          backgroundColor: tone === 'accent' ? colors.accent : colors.border,
+          opacity: tone === 'accent' ? 0.35 : 0.6,
+          marginVertical: 4,
+        },
+        style,
+      ]}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
-    >
-      {width > 0 ? (
-        <Svg width={width} height={height + pad * 2}>
-          <Path
-            d={meanderPath(width - pad * 2, height, units)}
-            transform={`translate(${pad} ${pad})`}
-            fill="none"
-            stroke={tone === 'accent' ? colors.accent : colors.border}
-            strokeOpacity={tone === 'accent' ? 0.55 : 1}
-            strokeWidth={line}
-            strokeLinecap="square"
-            strokeLinejoin="miter"
-          />
-        </Svg>
-      ) : null}
-    </View>
+    />
   );
 }

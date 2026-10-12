@@ -40,10 +40,35 @@ export function Card({ children, onPress, selected, framed, accessibilityLabel, 
   );
 }
 
-const useStyles = makeStyles(({ colors, space, line, radius }) => ({
-  card: { backgroundColor: colors.surface, borderWidth: line, borderColor: colors.border, borderRadius: radius.lg, padding: space.lg, gap: space.md },
-  frame: { borderWidth: line, borderColor: colors.border, borderRadius: radius.lg + 3, padding: 3 },
-  framedInner: { borderColor: colors.borderStrong, borderRadius: radius.lg },
-  selected: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
-  pressed: { backgroundColor: colors.surfaceAlt },
+const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
+  card: {
+    backgroundColor: colors.surface,
+    borderWidth: line,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(99, 102, 241, 0.12)',
+    borderRadius: radius.xl,
+    padding: space.lg,
+    gap: space.md,
+    shadowColor: colors.accent,
+    shadowOpacity: isDark ? 0.12 : 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  frame: {
+    borderWidth: line,
+    borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(99, 102, 241, 0.18)',
+    borderRadius: radius.xl + 4,
+    padding: 3,
+  },
+  framedInner: {
+    borderColor: colors.borderStrong,
+    borderRadius: radius.xl,
+  },
+  selected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  pressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
 }));

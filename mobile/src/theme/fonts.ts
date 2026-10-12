@@ -20,6 +20,6 @@ export function useAppFonts(): { families: FontFamilies; done: boolean } {
     return () => clearTimeout(id);
   }, []);
   const ok = loaded && !error;
-  const families = useMemo<FontFamilies>(() => (ok ? { regular: 'Inter_400Regular', semibold: 'Inter_600SemiBold', wordmark: 'Cinzel_600SemiBold' } : {}), [ok]);
+  const families = useMemo<FontFamilies>(() => (ok ? { regular: 'Inter_400Regular', semibold: 'Inter_600SemiBold', wordmark: 'Inter_600SemiBold' } : {}), [ok]);
   return { families, done: loaded || !!error || gaveUp };
 }
