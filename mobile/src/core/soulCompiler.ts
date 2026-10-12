@@ -101,8 +101,12 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   }
 
   // 3. Soul Identity & Character Rules (Spec §4 Priority 3)
-  if (soul.identity.background && !neutral) {
-    sections.push(`Character background: ${soul.identity.background}`);
+  if (!neutral) {
+    const identParts: string[] = [];
+    if (soul.identity.setting) identParts.push(`Setting: ${soul.identity.setting}`);
+    if (soul.identity.ambientSoundscape) identParts.push(`Auditory soundscape & atmosphere: ${soul.identity.ambientSoundscape}`);
+    if (soul.identity.background) identParts.push(`Character background: ${soul.identity.background}`);
+    if (identParts.length > 0) sections.push(identParts.join('\n'));
   }
   if (neutral) {
     if (soul.identity.characterRules.length > 0) sections.push(soul.identity.characterRules.join('\n'));
@@ -152,6 +156,7 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   if (soul.roleplay.settingWorld || soul.roleplay.characterRole) {
     const rpParts: string[] = [];
     if (soul.roleplay.settingWorld) rpParts.push(`World/Setting: ${soul.roleplay.settingWorld}`);
+    if (soul.identity.ambientSoundscape) rpParts.push(`Auditory soundscape & atmosphere: ${soul.identity.ambientSoundscape}`);
     if (soul.roleplay.characterRole) rpParts.push(`Your role: ${soul.roleplay.characterRole}`);
     if (soul.roleplay.narrationStyle !== 'none') rpParts.push(`Narration formatting: ${soul.roleplay.narrationStyle}`);
     if (soul.roleplay.narrationStyle === 'script_action_asterisks' || soul.intimacy?.enabled) {

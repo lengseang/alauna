@@ -59,7 +59,7 @@ export async function listVoices(refresh = false): Promise<TtsVoice[]> {
 }
 
 import { getVoicePersona, type VoicePersona } from '../../core/voicePersonas.ts';
-
+import { getActiveSoul } from '../soulStore.ts';
 import { computeAcousticModulation, type EmotionType } from '../../core/voice/emotionMixer.ts';
 
 export interface SpeakOptions {
@@ -100,7 +100,13 @@ export function speak(text: string, opts: SpeakOptions = {}): boolean {
     return false;
   }
   const prefs = getVoicePrefs();
-  const persona = getVoicePersona(opts.personaId ?? prefs.personaId);
+  let soulVoiceId: string | undefined;
+  try {
+    soulVoiceId = getActiveSoul()?.identity?.voicePersonaId;
+  } catch {
+    // safe fallback if store not yet ready or in isolated tests
+  }
+  const persona = getVoicePersona(opts.personaId ?? soulVoiceId ?? prefs.personaId);
   const gen = generation;
   let finished = false;
   const finish = (error?: string) => {

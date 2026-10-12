@@ -64,6 +64,8 @@ export interface SoulIdentity {
   worldview: string;
   characterRules: string[];
   avatar: SoulAvatar;
+  voicePersonaId?: string;
+  ambientSoundscape?: string;
 }
 
 // --- Chapter 02: Emotional Psychology
@@ -353,6 +355,8 @@ export function sanitizeSoul(raw: unknown, fallbackId = 'soul_custom'): SoulDefi
     worldview: cleanStr(rawIdent.worldview).slice(0, 1000),
     characterRules: cleanStrArr(rawIdent.characterRules, 20),
     avatar,
+    voicePersonaId: cleanStr(rawIdent.voicePersonaId) || undefined,
+    ambientSoundscape: cleanStr(rawIdent.ambientSoundscape) || undefined,
   };
 
   const rawPsych = (r.psychology && typeof r.psychology === 'object' ? r.psychology : {}) as Record<string, unknown>;
