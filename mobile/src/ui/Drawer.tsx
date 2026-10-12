@@ -79,11 +79,22 @@ export function DrawerLayout({ open, onOpenChange, drawer, children }: DrawerLay
         style={[
           s.fill,
           {
+            borderRadius: p.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 16],
+            }),
+            overflow: 'hidden',
             transform: [
               {
                 translateX: p.interpolate({
                   inputRange: [0, 1],
                   outputRange: [0, W],
+                }),
+              },
+              {
+                scale: p.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 0.96],
                 }),
               },
             ],

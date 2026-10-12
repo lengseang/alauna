@@ -2,13 +2,12 @@ import React from 'react';
 import { Animated, View } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { useTheme } from '../theme';
-import { moonPhasePath } from './logic';
 import { useLoop } from './Motion';
 
 export type EclipseState = 'idle' | 'loading' | 'ready' | 'busy' | 'error';
 
 export interface EclipseProps {
-  /** idle = nothing loaded (empty ring); loading = disc waxes with `progress`; ready = full disc; busy = full disc, pulsing (generating); error = broken ring. */
+  /** idle = nothing loaded (empty ring); loading = disc waxes with `progress`; ready = full bubble; busy = pulsing aura; error = broken ring. */
   state: EclipseState;
   /** 0..1, used while loading (real engine/download progress only). */
   progress?: number;
@@ -18,12 +17,9 @@ export interface EclipseProps {
   label?: string;
 }
 
-const RAYS = Array.from({ length: 8 }, (_, i) => (i * Math.PI) / 4);
-
 /**
- * Proof of life. Nyx: a moon that waxes as the model loads and glows full when ready. Helios: the same disc as a sun
- * with eight ray ticks. While generating, a halo pulses (native driver; still under reduced motion). An error shows a
- * broken ring with a slash, so the state never rests on color alone.
+ * Proof of life liquid glass bubble status indicator.
+ * Displays real engine loading progress and generative pulsing aura.
  */
 export function Eclipse({ state, progress = 0, size = 24, label }: EclipseProps) {
   const { colors, isDark, line } = useTheme();
