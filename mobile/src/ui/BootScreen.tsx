@@ -1,17 +1,12 @@
 import React from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatBytes } from '../core/format.ts';
-import { getDeviceProfile } from '../services/device.ts';
 import { makeStyles } from '../theme';
 import { Ambient } from './Ambient';
 import { Button } from './Button';
 import type { BootStep } from './chatLogic';
-import { Eclipse } from './Eclipse';
-import { Icon } from './Icon';
-import { PulseDot } from './Motion';
+import { Orb } from './Orb';
 import { Text } from './Text';
-import { Wordmark } from './Wordmark';
 
 interface Props {
   steps: BootStep[];
@@ -24,50 +19,65 @@ interface Props {
 }
 
 /**
- * Boot HUD: the real startup steps as they run (no timers), the Eclipse waxing with them, and true facts about this
- * phone where the old splash had invented ones.
+ * Modern, aesthetic loading screen featuring the 3D Holographic Iridescent Orb,
+ * fluid progress pill, and friendly companion greeting.
  */
-export function BootScreen({ steps, fraction, location, onContinue }: Props) {
+export function BootScreen({ steps, fraction, onContinue }: Props) {
   const s = useStyles();
   const insets = useSafeAreaInsets();
-  const device = getDeviceProfile();
   const current = steps.find((x) => x.state === 'active');
-  const facts = [device.name, device.totalRamBytes ? `${formatBytes(device.totalRamBytes)} RAM` : null, location ?? null].filter(Boolean) as string[];
+  const percent = Math.min(100, Math.max(5, Math.round(fraction * 100)));
+
   return (
     <View style={[s.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Ambient />
       <View style={s.col}>
-        <Wordmark />
-        <Eclipse state="loading" progress={fraction} size={88} label={`Starting, ${Math.round(fraction * 100)} percent`} />
-        <Text variant="small" tone="accent" accessibilityLiveRegion="polite">
-          {current ? current.label : 'Ready'}
-        </Text>
-        <View style={s.steps}>
-          {steps.map((st) => (
-            <View key={st.key} style={s.step}>
-              <View style={s.mark}>{st.state === 'done' ? <Icon name="check" size={16} /> : st.state === 'active' ? <PulseDot size={6} /> : null}</View>
-              <Text variant="small" tone={st.state === 'pending' ? 'muted' : 'text'}>
-                {st.label}
-              </Text>
-            </View>
-          ))}
-        </View>
-        {facts.length ? (
-          <Text variant="small" style={s.center}>
-            {facts.join(' · ')}
+        {/* Floating 3D Iridescent Orb */}
+        <Orb size={130} label="Alauna waking up" />
+
+        <View style={s.textBox}>
+          <Text variant="display" style={s.title}>ALAUNA</Text>
+          <Text variant="body" tone="muted" style={s.subtitle}>
+            {current ? current.label : 'Waking up your private sanctuary...'}
           </Text>
+        </View>
+
+        {/* Sleek rounded progress bar */}
+        <View style={s.progressWrap}>
+          <View style={s.progressTrack}>
+            <View style={[s.progressFill, { width: `${percent}%` }]} />
+          </View>
+          <Text variant="small" tone="accent" style={s.percentText}>
+            {`${percent}%`}
+          </Text>
+        </View>
+
+        {onContinue ? (
+          <Button label="Open chat while it loads" variant="text" onPress={onContinue} />
         ) : null}
-        {onContinue ? <Button label="Open chat while it loads" variant="text" onPress={onContinue} /> : null}
       </View>
     </View>
   );
 }
 
-const useStyles = makeStyles(({ colors, space }) => ({
+const useStyles = makeStyles(({ colors, space, radius }) => ({
   root: { flex: 1, backgroundColor: colors.bg },
-  col: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.lg, padding: space.xl },
-  steps: { gap: space.xs, alignSelf: 'center' },
-  step: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 24 },
-  mark: { width: 16, alignItems: 'center' },
-  center: { textAlign: 'center' },
+  col: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.xl, padding: space.xl },
+  textBox: { alignItems: 'center', gap: space.xs },
+  title: { letterSpacing: 2, fontWeight: '700' },
+  subtitle: { textAlign: 'center' },
+  progressWrap: { width: 220, gap: space.xs, alignItems: 'center' },
+  progressTrack: {
+    width: '100%',
+    height: 6,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+    borderRadius: radius.pill,
+  },
+  percentText: { fontWeight: '600', fontSize: 12 },
 }));
