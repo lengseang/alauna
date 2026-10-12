@@ -3,7 +3,7 @@
     "name": "ALAUNA",
     "slug": "alauna",
     "scheme": "alauna",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#09090C",
@@ -15,7 +15,7 @@
     },
     "android": {
       "package": "com.alauna.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "backgroundColor": "#09090C",
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [

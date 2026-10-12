@@ -5,7 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getModel } from './src/core/catalog';
 import { getDeviceProfile } from './src/services/device';
 import { engine, useEngineStatus } from './src/services/engine';
-import { bootstrap, recheckStorage, useBoot } from './src/services/lifecycle';
+import { bootstrap, bootStore, recheckStorage, useBoot } from './src/services/lifecycle';
 import { isInstalled } from './src/services/modelLibrary';
 import { initSecurity, useSecurity } from './src/services/security';
 import { useSettings } from './src/services/settings';
@@ -118,6 +118,16 @@ function Root() {
     return () => sub.remove();
   }, []);
 
+  // Fail-safe: Never let the boot screen stay frozen longer than 2.5s under any circumstance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (boot.stage !== 'done') {
+        bootStore.setState({ stage: 'done' });
+      }
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [boot.stage]);
+
   const dataReady = settings.loaded && storage.status !== 'loading' && boot.stage === 'done';
   const gated = dataReady && !ready;
 
@@ -133,7 +143,7 @@ function Root() {
   const location = storage.config ? describeLocation(storage.config) : null;
 
   let body: React.ReactNode;
-  if (!device.supported) body = <EmptyState brand title="This phone cannot run CHIWIWI" body={device.unsupportedReason ?? 'This device is not supported.'} />;
+  if (!device.supported) body = <EmptyState brand title="This phone cannot run ALAUNA" body={device.unsupportedReason ?? 'This device is not supported.'} />;
   else if (!dataReady || !security.loaded) body = <BootStageView stage={boot.stage} securityLoaded={security.loaded} voiceLoaded={voice.loaded} auto={auto} location={location} />;
   else if (!ready) body = <OnboardingScreen />;
   else body = <RouteStack />;

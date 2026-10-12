@@ -23,15 +23,19 @@ export async function onStorageReady(): Promise<void> {
   if (!isStorageReady()) return;
   bootStore.setState({ stage: 'library' });
   try {
-    refreshDownloads();
-  } catch {}
-  try {
-    const purged = await autoPurgeOldChats();
-    bootStore.setState({ purgedChats: purged });
-  } catch {}
-  try {
-    await Promise.all([loadMemory().catch(() => {}), initChat().catch(() => {})]);
-  } catch {}
+    try {
+      refreshDownloads();
+    } catch {}
+    try {
+      const purged = await autoPurgeOldChats();
+      bootStore.setState({ purgedChats: purged });
+    } catch {}
+    try {
+      await Promise.all([loadMemory().catch(() => {}), initChat().catch(() => {})]);
+    } catch {}
+  } finally {
+    bootStore.setState({ stage: 'done' });
+  }
 }
 
 export type BootStage = 'settings' | 'storage' | 'library' | 'done';

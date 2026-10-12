@@ -132,16 +132,24 @@ export async function searchChats(query: string): Promise<ThreadMeta[]> {
 /** Call once the vault is ready: load history and open the latest chat (or a fresh one). */
 export async function initChat(): Promise<void> {
   if (!isStorageReady()) return;
-  const threads = await listThreads();
-  chatStore.setState({ threads });
-  if (threads.length > 0) {
-    const latest = await loadThread(threads[0].id);
-    if (latest) {
-      chatStore.setState({ thread: latest });
-      return;
-    }
+  try {
+    const task = (async () => {
+      const threads = await listThreads();
+      chatStore.setState({ threads });
+      if (threads.length > 0) {
+        const latest = await loadThread(threads[0].id);
+        if (latest) {
+          chatStore.setState({ thread: latest });
+          return;
+        }
+      }
+      chatStore.setState({ thread: freshThread() });
+    })();
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, 800));
+    await Promise.race([task, timeout]);
+  } catch {
+    chatStore.setState({ thread: freshThread() });
   }
-  chatStore.setState({ thread: freshThread() });
 }
 
 export function canSwitchThread(): boolean {

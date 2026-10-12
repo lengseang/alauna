@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { formatBytes } from '../core/format.ts';
 import { applyPickedFolder, canPickExternalFolder, chooseExternalFolder, getStorageChoices, openAllFilesAccessSettings, useInternalStorage, type ExternalResult } from '../services/storage.ts';
+import { expectExternalActivity } from '../services/security.ts';
 import { makeStyles } from '../theme';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -42,19 +43,32 @@ export function StoragePicker({ onDone }: Props) {
     [onDone],
   );
 
-  const chooseFolder = useCallback(async () => handle(await chooseExternalFolder()), [handle]);
+  const chooseFolder = useCallback(async () => {
+    expectExternalActivity();
+    try {
+      const res = await chooseExternalFolder();
+      await handle(res);
+    } catch (e) {
+      setPhase({ kind: 'error', message: e instanceof Error ? e.message : 'Folder selection failed.' });
+    }
+  }, [handle]);
 
   const grantAccess = useCallback(async () => {
     const p = phaseRef.current;
     if (p.kind !== 'needs_permission') return;
+    expectExternalActivity();
     await openAllFilesAccessSettings();
     await handle(await applyPickedFolder(p.pickedUri));
   }, [handle]);
 
   const useApp = useCallback(async () => {
-    await useInternalStorage();
-    setPhase({ kind: 'idle' });
-    await onDone();
+    try {
+      await useInternalStorage();
+      setPhase({ kind: 'idle' });
+      await onDone();
+    } catch (e) {
+      setPhase({ kind: 'error', message: e instanceof Error ? e.message : 'Could not activate app storage.' });
+    }
   }, [onDone]);
 
   // Coming back from the system "All files access" screen: re-check without another tap.

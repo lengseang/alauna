@@ -66,7 +66,7 @@ export function OnboardingScreen() {
             </Card>
 
             <Card>
-              <SectionHeader index={2} title="What CHIWIWI needs" meander={false} />
+              <SectionHeader index={2} title="What ALAUNA needs" meander={false} />
               {NEEDS.map((n) => (
                 <View key={n.title}>
                   <Text variant="strong">{n.title}</Text>

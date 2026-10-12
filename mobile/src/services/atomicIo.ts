@@ -15,7 +15,29 @@ export function directoryIO(dir: () => Directory): FileIO {
       const file = f(name);
       if (file.exists) file.delete();
     },
-    rename: (from, to) => f(from).rename(to),
+    rename: (from, to) => {
+      try {
+        f(from).rename(to);
+      } catch {
+        // Fallback for Android NIO where rename fails if destination exists or fails atomic move
+        const src = f(from);
+        const dst = f(to);
+        if (dst.exists) {
+          try {
+            dst.delete();
+          } catch {}
+        }
+        try {
+          f(from).rename(to);
+        } catch {
+          try {
+            const content = src.textSync();
+            dst.write(content);
+            src.delete();
+          } catch {}
+        }
+      }
+    },
     read: (name) => f(name).text(),
   };
 }

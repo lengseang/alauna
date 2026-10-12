@@ -162,20 +162,26 @@ export async function probeWritable(rootPath: string): Promise<{ ok: true } | { 
 }
 
 function ensureLayout(rootPath: string, subs: string[] = ['models', 'chats', 'media', 'gallery']): void {
-  const root = dirAt(rootPath);
-  if (!root.exists) root.create({ intermediates: true, idempotent: true });
-  for (const sub of subs) {
-    const d = new Directory(root, sub);
-    if (!d.exists) d.create({ idempotent: true });
-  }
-  // Keep gallery/media scanners out of the vault.
-  for (const dir of [root, new Directory(root, 'models')]) {
-    const nm = new File(dir, '.nomedia');
-    if (!nm.exists) {
-      nm.create();
-      nm.write('');
+  try {
+    const root = dirAt(rootPath);
+    if (!root.exists) root.create({ intermediates: true, idempotent: true });
+    for (const sub of subs) {
+      try {
+        const d = new Directory(root, sub);
+        if (!d.exists) d.create({ idempotent: true });
+      } catch {}
     }
-  }
+    // Keep gallery/media scanners out of the vault.
+    for (const dir of [root, new Directory(root, 'models')]) {
+      try {
+        const nm = new File(dir, '.nomedia');
+        if (!nm.exists) {
+          nm.create({ intermediates: true, overwrite: true });
+          nm.write('');
+        }
+      } catch {}
+    }
+  } catch {}
 }
 
 function activate(config: StorageConfig): StorageConfig {
@@ -183,7 +189,9 @@ function activate(config: StorageConfig): StorageConfig {
   // Keep the extra slots when the vault moves (minus one that now IS the vault).
   const previous = storageStore.getState().config?.slots ?? [];
   const next: StorageConfig = { ...config, version: 2, slots: config.slots ?? previous.filter((s) => s.rootPath !== config.rootPath) };
-  saveConfig(next);
+  try {
+    saveConfig(next);
+  } catch {}
   storageStore.setState({ status: 'ready', config: next, reason: undefined });
   invalidateModelIndex();
   return next;
@@ -278,7 +286,13 @@ export async function initStorage(): Promise<void> {
       config = await useInternalStorage();
       return;
     } catch {
-      storageStore.setState({ status: 'unconfigured', config: null, reason: undefined });
+      const fallbackConfig: StorageConfig = {
+        version: 2,
+        mode: 'internal',
+        rootPath: internalVaultPath(),
+        configuredAt: Date.now(),
+      };
+      activate(fallbackConfig);
       return;
     }
   }
@@ -293,11 +307,13 @@ export async function initStorage(): Promise<void> {
           config = await useInternalStorage();
           return;
         } catch {
-          storageStore.setState({
-            status: 'unavailable',
-            config,
-            reason: `The saved folder is not accessible any more (${probe.error}). Falling back to app storage.`,
-          });
+          const fallbackConfig: StorageConfig = {
+            version: 2,
+            mode: 'internal',
+            rootPath: internalVaultPath(),
+            configuredAt: Date.now(),
+          };
+          activate(fallbackConfig);
           return;
         }
       }
@@ -308,7 +324,13 @@ export async function initStorage(): Promise<void> {
     try {
       await useInternalStorage();
     } catch {
-      storageStore.setState({ status: 'unavailable', config, reason: message(e) });
+      const fallbackConfig: StorageConfig = {
+        version: 2,
+        mode: 'internal',
+        rootPath: internalVaultPath(),
+        configuredAt: Date.now(),
+      };
+      activate(fallbackConfig);
     }
   }
 }

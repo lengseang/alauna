@@ -30,7 +30,9 @@ function commit(facts: MemoryFact[]): void {
 export async function loadMemory(): Promise<void> {
   if (!isStorageReady()) return;
   try {
-    const facts = (await readWithFallback(io(), MEMORY_FILE, (text) => sanitizeFacts(JSON.parse(text)))) ?? [];
+    const loadPromise = readWithFallback(io(), MEMORY_FILE, (text) => sanitizeFacts(JSON.parse(text)));
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 800));
+    const facts = (await Promise.race([loadPromise, timeoutPromise])) ?? [];
     memoryStore.setState({ facts, loaded: true });
   } catch {
     memoryStore.setState({ facts: [], loaded: true });
