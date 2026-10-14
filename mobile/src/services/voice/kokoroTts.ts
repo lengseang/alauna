@@ -19,8 +19,9 @@ import { getVoicePersona, type VoicePersona } from '../../core/voicePersonas.ts'
 import { speechModelPath, isSpeechModelInstalled } from './speechModels.ts';
 import { uriToPath } from '../../core/paths.ts';
 import { vaultRoot, isStorageReady } from '../storage.ts';
+import { KOKORO_MODEL } from '../../core/voiceModels.ts';
 
-export const KOKORO_MODEL_ID = 'kokoro-82m-v1.0-onnx';
+export const KOKORO_MODEL_ID = KOKORO_MODEL.id;
 
 export interface KokoroServiceState {
   modelInstalled: boolean;

@@ -63,6 +63,7 @@ import { getActiveSoul } from '../soulStore.ts';
 import { computeAcousticModulation, type EmotionType } from '../../core/voice/emotionMixer.ts';
 import { getKokoroStyle, DEFAULT_KOKORO_STYLE_ID, type KokoroStyleSpec } from '../../core/voice/kokoroStyles.ts';
 import { findMatchingKokoroVoice, resolveKokoroSpeechParameters } from './kokoroTts.ts';
+import { isNeuralReady, isModelDownloaded, synthesizeNeural, stopNeuralSynthesis } from './kokoroNeuralTts.ts';
 
 // Pre-fetch voices eagerly in background so cache is primed
 listVoices().catch(() => {});
@@ -134,7 +135,52 @@ export function speak(text: string, opts: SpeakOptions = {}): boolean {
     const styleId = persona?.kokoroStyleId ?? prefs.kokoroStyleId ?? DEFAULT_KOKORO_STYLE_ID;
     const styleSpec = getKokoroStyle(styleId);
 
-    // Resolve voice: explicit opts.voice -> Kokoro matched voice -> persona voice pattern -> fallback
+    // Acoustic modulation: style baseline takes priority when Kokoro is chosen; combined with persona
+    const stylePitch = styleSpec?.pitch ?? 1.0;
+    const styleRate = styleSpec?.speed ?? 1.0;
+    const personaPitchFactor = persona && persona.pitch !== 1.0 ? persona.pitch : 1.0;
+    const personaRateFactor = persona && persona.rate !== 1.0 ? persona.rate : 1.0;
+    const basePitch = opts.pitch ?? (stylePitch * personaPitchFactor);
+    const baseRate = opts.rate ?? (styleRate * personaRateFactor);
+    const activeEmotion = opts.emotion ?? (persona ? persona.kokoroEmotion : prefs.kokoroEmotion);
+    const activeIntensity = opts.emotionIntensity ?? (persona ? persona.kokoroEmotionIntensity : prefs.kokoroEmotionIntensity);
+    const mod = computeAcousticModulation(basePitch, baseRate, activeEmotion, activeIntensity);
+
+    targetPitch = mod.pitch;
+    targetRate = mod.rate;
+
+    // Check if real neural Kokoro engine is ready or downloaded
+    if (isModelDownloaded() || isNeuralReady()) {
+      synthesizeNeural(text, {
+        styleId: styleSpec?.id,
+        speed: targetRate,
+        pitch: targetPitch,
+        onDone: () => finish(),
+      })
+        .then((started) => {
+          if (!started && gen === generation && !finished) {
+            // Graceful fallback to native TTS only if neural engine failed and not cancelled
+            try {
+              const kokoroMatched = findMatchingKokoroVoice(styleSpec, voices);
+              const fallbackVoice = opts.voice ?? kokoroMatched ?? prefs.ttsVoice ?? undefined;
+              s.speak(text.slice(0, Math.max(1, s.maxSpeechInputLength - 1)), {
+                voice: fallbackVoice,
+                rate: targetRate,
+                pitch: targetPitch,
+                onDone: () => finish(),
+                onStopped: () => finish(),
+                onError: (e: Error) => finish(`Speech failed: ${e.message}`),
+              });
+            } catch (e) {
+              finish(`Speech failed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+        })
+        .catch(() => finish());
+      return true;
+    }
+
+    // Resolve fallback voice: explicit opts.voice -> Kokoro matched voice -> persona voice pattern -> fallback
     if (opts.voice !== undefined && opts.voice !== null) {
       targetVoice = opts.voice;
     } else {
@@ -142,21 +188,16 @@ export function speak(text: string, opts: SpeakOptions = {}): boolean {
       const personaMatched = persona ? findMatchingNativeVoice(persona.voicePattern) : null;
       targetVoice = kokoroMatched ?? personaMatched ?? prefs.ttsVoice ?? undefined;
     }
-
-    // Acoustic modulation: style baseline + persona + dynamic emotion modulation
-    const basePitch = opts.pitch ?? (persona ? persona.pitch : (styleSpec ? styleSpec.pitch : 1.0));
-    const baseRate = opts.rate ?? (persona ? persona.rate : (styleSpec ? styleSpec.speed : 1.0));
-    const activeEmotion = opts.emotion ?? (persona ? persona.kokoroEmotion : prefs.kokoroEmotion);
-    const activeIntensity = opts.emotionIntensity ?? (persona ? persona.kokoroEmotionIntensity : prefs.kokoroEmotionIntensity);
-    const mod = computeAcousticModulation(basePitch, baseRate, activeEmotion, activeIntensity);
-
-    targetPitch = mod.pitch;
-    targetRate = mod.rate;
   } else {
     // Standard Android System TTS
     targetVoice = (opts.voice !== undefined && opts.voice !== null ? opts.voice : prefs.ttsVoice) ?? undefined;
     targetRate = opts.rate ?? prefs.ttsRate;
     targetPitch = opts.pitch ?? prefs.ttsPitch;
+  }
+
+  // If voices have not loaded yet, prime cache for subsequent speech
+  if (!voices) {
+    listVoices().catch(() => {});
   }
 
   try {
@@ -179,6 +220,7 @@ export function speak(text: string, opts: SpeakOptions = {}): boolean {
 export async function stopSpeaking(): Promise<void> {
   generation++;
   ttsStore.setState({ pending: 0, speaking: false });
+  stopNeuralSynthesis();
   await speech()?.stop();
 }
 
@@ -187,6 +229,13 @@ export const PREVIEW_TEXT = 'Hello. This is how I will sound when I answer you.'
 /** Speak a sample with the given (unsaved) settings, replacing anything currently spoken. */
 export async function previewVoice(opts: Omit<SpeakOptions, 'onDone'> = {}, text = PREVIEW_TEXT): Promise<boolean> {
   await stopSpeaking();
+  if (!voices) {
+    try {
+      voices = await listVoices();
+    } catch {
+      // safe fallback
+    }
+  }
   const prefs = getVoicePrefs();
   if (prefs.ttsEngine === 'kokoro') {
     const styleSpec = getKokoroStyle(prefs.kokoroStyleId);
