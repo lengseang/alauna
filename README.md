@@ -72,9 +72,9 @@ Your thoughts belong to you. All chat histories, personal preferences, voice mod
                    │             ALAUNA COMPANION            │
                    │                                         │
                    │               ╭─────────╮               │
-                   │              │   ●   ●   │              │
-                   │             │      ~      │             │
-                   │              ╰─────────╯               │
+                   │               │  ●   ●  │               │
+                   │               │    ~    │               │
+                   │               ╰─────────╯               │
                    │        [ Fluid Voice & Presence ]       │
                    │                                         │
                    │  "I remember what you said yesterday    │
