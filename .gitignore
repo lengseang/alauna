@@ -83,3 +83,4 @@ docs/PLAN-v2.md
 docs/audit/
 scripts/scan_features.ps1
 scripts/sync_github.ps1
+scripts/publish_release.ps1
