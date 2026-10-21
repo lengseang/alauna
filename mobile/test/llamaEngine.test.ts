@@ -11,12 +11,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { behavior, callsOf, resetNative } from './stubs/fakeNative.ts';
 
-const { LlamaEngine } = await import('../src/services/llamaEngine.ts');
+const { LlamaEngine, androidCpuMask } = await import('../src/services/llamaEngine.ts');
 const { EngineLoadError, EngineUnavailableError, diagnoseEngineError } = await import('../src/core/engineTypes.ts');
 
 const reset = resetNative;
 const baseLoad = { path: 'file:///data/user/0/app/files/vault/models/m.gguf', nCtx: 4096, threads: null as number | null, useGpu: false };
 const msgs = [{ role: 'system' as const, content: 'sys' }, { role: 'user' as const, content: 'hi' }];
+
+test('contract: androidCpuMask maps thread count to big-core hex bitmask', () => {
+  assert.equal(androidCpuMask(0), undefined);
+  assert.equal(androidCpuMask(1), '0x80');
+  assert.equal(androidCpuMask(2), '0xC0');
+  assert.equal(androidCpuMask(3), '0xE0');
+  assert.equal(androidCpuMask(4), '0xF0');
+  assert.equal(androidCpuMask(5), '0xF8');
+  assert.equal(androidCpuMask(6), '0xFC');
+  assert.equal(androidCpuMask(7), '0xFE');
+  assert.equal(androidCpuMask(8), '0xFF');
+});
 
 test('contract: load sends the real llama.rn parameter names; CPU-only on Android; progress is 0..100 -> 0..1', async () => {
   reset();
@@ -26,9 +38,12 @@ test('contract: load sends the real llama.rn parameter names; CPU-only on Androi
   const [, p] = callsOf('llamaInitContext')[0] as [number, Record<string, unknown>];
   assert.equal(p.model, '/data/user/0/app/files/vault/models/m.gguf', 'llama.rn strips file://');
   assert.deepEqual([p.n_ctx, p.n_batch, p.n_ubatch, p.use_mlock], [4096, 512, 512, false]);
+  assert.equal(p.n_parallel, 1, 'n_parallel defaults to 1 to eliminate 8x KV cache bloat');
   assert.deepEqual(p.devices, ['CPU'], 'CPU backend by default on Android');
   assert.equal(p.n_gpu_layers, undefined, 'no GPU offload unless the user opts in');
-  assert.equal(p.n_threads, undefined, 'threads left to the engine unless the user sets them');
+  assert.equal(p.n_threads, 4, 'Android defaults to 4 threads on big cores to bypass broken SELinux sysfs reads');
+  assert.equal(p.cpu_mask, '0xF0', 'targets big/prime cores 4..7');
+  assert.equal(p.cpu_strict, false, 'scheduler load balances across big cores');
   assert.equal(p.use_progress_callback, true);
   assert.deepEqual(progress, [0, 0, 0.4, 1], 'llama.rn emits 0 first and the native percentages after; we divide by 100');
   assert.deepEqual([info.backend, info.gpu, info.nCtx, info.architecture, info.modelBytes], ['CPU', false, 4096, 'qwen35', 2_740_937_888]);
@@ -41,6 +56,8 @@ test('contract: user options map to n_threads / n_gpu_layers; GPU path does not 
   await new LlamaEngine().load({ ...baseLoad, threads: 6, useGpu: true });
   const [, p] = callsOf('llamaInitContext')[0] as [number, Record<string, unknown>];
   assert.equal(p.n_threads, 6);
+  assert.equal(p.cpu_mask, '0xFC');
+  assert.equal(p.cpu_strict, false);
   assert.equal(p.n_gpu_layers, 99);
   assert.equal(p.devices, undefined);
 });

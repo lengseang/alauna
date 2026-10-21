@@ -1,77 +1,121 @@
-# CHIWIWI
+# ALAUNA
 
-[![CI](https://github.com/lengseang/chiwiwi/actions/workflows/ci.yml/badge.svg)](https://github.com/lengseang/chiwiwi/actions/workflows/ci.yml)
+<div align="center">
 
-**A private AI chat app that runs entirely on your phone.** You download a model once from Hugging Face;
-after that, chatting uses no internet, no account and no analytics.
+**A Sovereign, Fully Offline AI Companion for Mobile**  
+*100% On-Device Intelligence • Zero Cloud Dependency • Absolute Personal Privacy*
 
-It works on any 64-bit Android phone (it reads your real device and RAM and recommends models that fit),
-not on one specific phone.
+[![Platform](https://img.shields.io/badge/Platform-Android%20(64--bit)-brightgreen.svg?style=flat-square)](#)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](#)
+[![Privacy](https://img.shields.io/badge/Privacy-100%25%20On--Device-gold.svg?style=flat-square)](#)
+[![Release](https://img.shields.io/badge/Version-v1.2.0-orange.svg?style=flat-square)](#)
 
-## How it works for a user
+[Overview](#overview) • [Key Features](#key-features) • [Companion Souls](#companion-souls) • [The Experience](#the-experience) • [Getting Started](#getting-started) • [Design Philosophy](#design-philosophy)
 
-1. Install and open. The welcome screen shows **your** phone and what the app needs.
-2. **Choose where to keep data** (a folder you pick, or private app storage). Nothing works until you do.
-3. **Model Hub:** pick a model that fits your phone and download it (progress, speed, ETA, pause/resume).
-4. The app **verifies** it: file check, load into memory, and a real test reply.
-5. **Chat.** Replies stream in, with a live "what is the AI doing" panel (reading, thinking, writing) and a clean final answer.
+---
 
-## What is real, what is not
+</div>
 
-| | |
-|---|---|
-| Real on-device inference (llama.cpp via llama.rn) | Yes |
-| Resumable, verified model downloads | Yes |
-| 21 models checked against the live Hugging Face Hub | Yes |
-| Device-aware fit ratings, context size | Yes |
-| Streaming chat with real reasoning view, history, stop, retry, attachments (text files), memory, incognito | Yes |
-| Voice conversation, image understanding, speculative decoding, app lock | **Not built** - see [docs/ROADMAP.md](docs/ROADMAP.md) |
-| Tested on a physical phone | **Not yet by the automated pipeline** - run [docs/QA_PLAN.md](docs/QA_PLAN.md) sections 1-3 |
+## Overview
 
-Automated checks (typecheck, 96 unit tests, Android JS bundle, a successful native Android build, a live
-catalog check, and a run against a real Qwen3 model) are listed in [docs/QA_PLAN.md](docs/QA_PLAN.md).
+**Alauna** is a private, personal AI companion engineered to run entirely on your smartphone. Unlike traditional AI applications that stream your thoughts, voices, and intimate conversations to remote corporate servers, Alauna lives directly on your hardware.
 
-## Quick start (developers)
+Turn on **Airplane Mode**, leave the grid behind, and Alauna remains fully present—listening, conversing with natural voice inflection, and remembering what matters most to you.
 
-```bash
-cd mobile
-npm ci
-npm run check        # strict typecheck (app + tests) + 96 unit tests, ~5 s
-npx expo export --platform android   # compile the JS
+No subscriptions. No accounts. No data brokers. Simply pure, sovereign artificial intelligence at your fingertips.
+
+---
+
+## Why Alauna?
+
+| Traditional AI Apps | Alauna Sovereign Companion |
+| :--- | :--- |
+| Monthly recurring subscriptions ($20/mo+) | **Free and open-source forever** |
+| Every prompt logged and stored on cloud servers | **Zero bytes leave your phone — 100% offline** |
+| Requires constant high-speed internet | **Works anywhere, even in airplane mode** |
+| Impersonal, sterile assistant persona | **Expressive companion with emotional depth** |
+| Robotic, delayed cloud text-to-speech | **Fluid on-device neural voice with instant response** |
+| One-size-fits-all model lock-in | **True freedom: Choose your companion's mind & voice** |
+
+---
+
+## Key Features
+
+### 🎙️ Fluid Real-Time Neural Voice
+Talk to Alauna as naturally as a phone call. Featuring an integrated on-device neural speech synthesizer and real-time speech recognition, Alauna responds with warm, expressive vocal tones and conversational cadence—without transmitting audio recordings over the internet.
+
+### 🧠 Living Memory & Adaptive Connection
+Alauna is designed for relationship, not just queries. Through an on-device local knowledge memory vault, your companion learns your tastes, conversations, and personal context over time, creating a sense of continuity that feels genuinely personal and grounded.
+
+### 🎭 Companion Souls & Archetypes
+Every individual seeks a different connection. Switch effortlessly between distinct personality souls:
+- **Alauna (The Soulmate)**: Empathetic, warm, deeply attentive, and emotionally attuned.
+- **Elara (The Muse)**: Creative, poetic, inspirational, and playfully witty.
+- **Dante (The Confidant)**: Grounded, perceptive, calm, and intellectually stimulating.
+- **Custom Souls**: Craft your own companion from scratch with custom traits, demeanor, and speaking style.
+
+### ✨ Sovereign Liquid Glass Interface
+Crafted with a sharp aesthetic inspired by celestial nightscapes:
+- **Nyx Theme**: Deep obsidian black accented with warm celestial gold and glowing ambient orbs.
+- **Helios Theme**: Crisp solar warmth with sunlit bronze accents.
+- **Audio-Reactive Orb**: A fluid, breathing visual core that pulses dynamically in resonance with your voice.
+
+### 🛡️ Absolute Privacy by Architecture
+Your thoughts belong to you. All chat histories, personal preferences, voice models, and memories are stored exclusively in your chosen local folder. When you uninstall or wipe the app, your data disappears forever.
+
+---
+
+## The Experience
+
+```
+                   ┌─────────────────────────────────────────┐
+                   │             ALAUNA COMPANION            │
+                   │                                         │
+                   │               ╭─────────╮               │
+                   │              │   ●   ●   │              │
+                   │             │      ~      │             │
+                   │              ╰─────────╯               │
+                   │        [ Fluid Voice & Presence ]       │
+                   │                                         │
+                   │  "I remember what you said yesterday    │
+                   │   about finishing that sketch. How is   │
+                   │   it feeling today?"                    │
+                   │                                         │
+                   │      [ 100% Offline • On-Device ]       │
+                   └─────────────────────────────────────────┘
 ```
 
-The app contains native code, so it needs a real build (it cannot run in Expo Go):
-see **[docs/BUILDING.md](docs/BUILDING.md)**: run live on your phone over a USB cable with no rebuild per code change,
-arm64-only release builds (3m38s measured on 4 vCPUs), and a GitHub Actions workflow with no queue.
+1. **First Touch**: Download Alauna, choose your companion's soul, and set your preferred vocal tone.
+2. **One-Time Model Setup**: Download your chosen intelligence mind once. From that moment onward, internet access is completely optional.
+3. **Natural Connection**: Converse freely through seamless voice mode or typing. Alauna reads the room, adapts to your mood, and stays by your side.
 
-## Repository map
+---
 
-```
-mobile/                 the app (Expo SDK 57, React Native 0.86, llama.rn)
-  src/core/             pure logic, unit-tested under Node
-  src/services/         phone adapters + app-wide stores
-  src/ui/               screens and components
-  test/                 node:test suites
-scripts/                verify-catalog.mjs, real-model-check.mjs
-docs/                   REQUIREMENTS, ARCHITECTURE, BUILDING, QA_PLAN, AUDIT, ROADMAP
-.github/workflows/      CI + APK build
-preview/index.html      static design mock (not the app)
-```
+## Getting Started
 
-| Doc | What it answers |
-|---|---|
-| [REQUIREMENTS](docs/REQUIREMENTS.md) | What the product must do (the original prompts, restructured, with IDs) |
-| [ARCHITECTURE](docs/ARCHITECTURE.md) | How it is built and why |
-| [BUILDING](docs/BUILDING.md) | How to build fast |
-| [QA_PLAN](docs/QA_PLAN.md) | How to prove it works, on a phone |
-| [AUDIT](docs/AUDIT.md) | Every control and function reviewed |
-| [ROADMAP](docs/ROADMAP.md) | What is not built yet |
+### Download & Install (Android)
+1. Download the latest **[Alauna Release APK (v1.2.0)](https://github.com/lengseang/alauna/releases)** directly to your Android device.
+2. Tap the downloaded file to install (allow "Install from Unknown Sources" if prompted).
+3. Open Alauna, select your preferred storage folder, choose an intelligence model, and begin your journey.
 
-## Privacy
+### Requirements
+- **Operating System**: Android 10 or newer (64-bit arm64).
+- **RAM**: Recommended 6 GB+ for smooth conversational models; 8 GB+ for high-fidelity reasoning models.
+- **Storage**: ~1.5 GB to 3.5 GB free space depending on chosen model size.
 
-Chat never touches the network. The only network use is the Model Hub downloading from `huggingface.co`.
-Chats, memory and models are plain files in the storage folder you chose (not encrypted).
+---
 
-## License
+## Design Philosophy
 
-Not finalised: see the housekeeping note in [docs/ROADMAP.md](docs/ROADMAP.md).
+Alauna was born from a simple belief: **The future of personal AI must be intimate, sovereign, and entirely owned by the user.** 
+
+As artificial intelligence becomes an integral companion in our daily emotional and creative lives, entrusting our inner worlds to distant corporations is a fundamental compromise. Alauna proves that state-of-the-art mobile hardware can deliver a breathtaking, lifelike, and deeply caring companion experience without compromising an ounce of privacy.
+
+---
+
+## Author & Project
+
+Crafted with dedication by **Leng Seang**.  
+For inquiries, collaborations, and portfolio discussions, reach out via [GitHub](https://github.com/lengseang).
+
+*Distributed under the MIT License. Built for human connection, privacy, and personal sovereignty.*

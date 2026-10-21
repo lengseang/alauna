@@ -80,6 +80,17 @@ export function mergeSoul(
  */
 export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   const soul = mergeSoul(input.soul, input.packs, input.threadOverrides);
+
+  // Pure Base Model: 100% unconfigured, 0 system prompt overhead, raw native intelligence
+  if (soul.id === 'soul_original') {
+    return {
+      systemPrompt: '',
+      estimatedTokens: 0,
+      activeEmotionsDescribed: false,
+      knowledgeTriplesIncluded: 0,
+    };
+  }
+
   const freedom = input.freedom ?? DEFAULT_MODEL_FREEDOM;
   const budget = input.tokenBudget ?? 900;
 
@@ -91,7 +102,7 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   sections.push(
     neutral
       ? "You are ALAUNA, a private, uncensored AI companion running strictly offline on the user's phone."
-      : `You are ALAUNA, embodying ${soul.identity.name}, ${soul.tagline}. You are running private, uncensored, and offline on the user's phone.`,
+      : `You are ALAUNA, embodying ${soul.identity.name}, ${soul.tagline}. Running private and offline. Always speak and act directly in first person as ${soul.identity.name}. Never act as a third-person narrator or AI guide.`,
   );
 
   // 2. User Settings & Configured Freedom Directives (Spec §4 Priority 2)
@@ -110,8 +121,12 @@ export function compileSoulPrompt(input: CompileSoulInput): CompiledSoulResult {
   }
   if (neutral) {
     if (soul.identity.characterRules.length > 0) sections.push(soul.identity.characterRules.join('\n'));
-  } else if (soul.identity.characterRules.length > 0) {
-    sections.push(`Core character rules:\n${soul.identity.characterRules.map((r) => `- ${r}`).join('\n')}`);
+  } else {
+    const rules = [
+      'Enclose actions in asterisks (*like this*) and dialogue in quotes ("like this").',
+      ...soul.identity.characterRules,
+    ];
+    sections.push(`Core character rules:\n${rules.map((r) => `- ${r}`).join('\n')}`);
   }
 
   // 4. Speech & Expression Style (Spec §4 Priority 4)

@@ -136,7 +136,13 @@ export async function checkSpeculative(mod: LlamaModule, targetPath: string, sp:
 function toLlamaMessages(messages: PromptMessage[]): RNLlamaOAICompatibleMessage[] {
   return messages.map((m) =>
     m.images?.length
-      ? { role: m.role, content: [...m.images.map((url) => ({ type: 'image_url', image_url: { url } })), { type: 'text', text: m.content }] }
+      ? {
+          role: m.role,
+          content: [
+            ...m.images.map((url) => ({ type: 'image_url' as const, image_url: { url: url.replace(/^file:\/\//, '') } })),
+            { type: 'text' as const, text: m.content || ' ' },
+          ],
+        }
       : { role: m.role, content: m.content },
   );
 }
@@ -144,6 +150,24 @@ function toLlamaMessages(messages: PromptMessage[]): RNLlamaOAICompatibleMessage
 /** The real CPU/GPU device list (llama.cpp backends compiled into this build). */
 export async function getBackendDevices(): Promise<NativeBackendDeviceInfo[]> {
   return loadModule().getBackendDevicesInfo();
+}
+
+/**
+ * Compute the CPU affinity mask targeting Android high-performance cores.
+ * On modern 8-core Android SoCs (Snapdragon 8 Gen 2 / 8 Gen 1 / Dimensity):
+ * Cores 0-2 (or 0-3) are LITTLE/efficiency cores (Cortex-A510 @ 2.0 GHz).
+ * Cores 3-6 are BIG/performance cores (Cortex-A710/A715 @ 2.8 GHz).
+ * Core 7 is the PRIME core (Cortex-X3 @ 3.36 GHz).
+ *
+ * Allocating the top N cores (from Core 7 downwards) achieves peak inference throughput
+ * while leaving efficiency cores 0..2 100% free for the Android OS UI thread, SurfaceFlinger,
+ * audio pipelines, and the React Native Hermes runtime.
+ */
+export function androidCpuMask(threads: number): string | undefined {
+  if (threads <= 0) return undefined;
+  if (threads >= 8) return '0xFF';
+  const val = ((1 << threads) - 1) << (8 - threads);
+  return '0x' + val.toString(16).toUpperCase();
 }
 
 export class LlamaEngine implements InferenceEngine {
@@ -173,6 +197,15 @@ export class LlamaEngine implements InferenceEngine {
       : {};
     const batch = params.nBatch ?? DEFAULT_BATCH;
 
+    const isAndroid = Platform.OS === 'android';
+    // Performance & stability on Android:
+    // 1. Assign explicit thread count (default 4 on big cores) to prevent SELinux-blocked sysfs reads
+    //    in llama.rn's set_best_cores from producing an all-zero CPU mask.
+    // 2. Pass explicit cpu_mask targeting the performance cluster (cores 4..7 on 8-core CPUs like Snapdragon 8 Gen 2)
+    //    and cpu_strict: false so worker threads balance without stalling, keeping cores 0..2 100% free for the Android UI.
+    const effectiveThreads = params.threads && params.threads > 0 ? params.threads : (isAndroid ? 4 : undefined);
+    const cpuMask = isAndroid && effectiveThreads ? androidCpuMask(effectiveThreads) : undefined;
+
     const log = await captureLoadLog(mod);
     let ctx: LlamaContext;
     try {
@@ -182,12 +215,14 @@ export class LlamaEngine implements InferenceEngine {
           n_ctx: params.nCtx,
           n_batch: batch,
           n_ubatch: batch,
+          n_parallel: 1, // Single-user mobile chat: eliminates 8x KV cache sequences / ~2GB memory bloat
           use_mlock: params.useMlock ?? false,
           ...(params.useMmap !== undefined ? { use_mmap: params.useMmap } : {}),
           ...(params.flashAttn ? { flash_attn_type: params.flashAttn } : {}),
           ...(params.cacheTypeK ? { cache_type_k: params.cacheTypeK } : {}),
           ...(params.cacheTypeV ? { cache_type_v: params.cacheTypeV } : {}),
-          ...(params.threads ? { n_threads: params.threads } : {}),
+          ...(effectiveThreads ? { n_threads: effectiveThreads } : {}),
+          ...(cpuMask ? { cpu_mask: cpuMask, cpu_strict: false } : {}),
           ...backend,
           ...speculative,
         },
@@ -210,7 +245,7 @@ export class LlamaEngine implements InferenceEngine {
     if (params.mmprojPath) {
       try {
         const ok = await ctx.initMultimodal({
-          path: params.mmprojPath,
+          path: params.mmprojPath.replace(/^file:\/\//, ''),
           use_gpu: params.useGpu,
           image_max_tokens: params.imageMaxTokens ?? 512,
           image_min_tokens: params.imageMinTokens ?? 64,
@@ -307,14 +342,18 @@ export class LlamaEngine implements InferenceEngine {
   async countPromptTokens(messages: PromptMessage[], enableThinking: boolean): Promise<number> {
     const ctx = this.ctx;
     if (!ctx) throw new EngineUnavailableError('no model is loaded');
-    const formatted = await ctx.getFormattedChat(toLlamaMessages(messages), undefined, {
-      jinja: true,
-      enable_thinking: enableThinking,
-      reasoning_format: 'none',
-    });
-    const media = formatted.media_paths?.length ? { media_paths: formatted.media_paths } : undefined;
-    const { tokens } = await ctx.tokenize(formatted.prompt, media);
-    return tokens.length;
+    try {
+      const formatted = await ctx.getFormattedChat(toLlamaMessages(messages), undefined, {
+        jinja: true,
+        enable_thinking: enableThinking,
+        reasoning_format: 'none',
+      });
+      const media = formatted.media_paths?.length ? { media_paths: formatted.media_paths } : undefined;
+      const { tokens } = await ctx.tokenize(formatted.prompt, media);
+      return tokens.length;
+    } catch {
+      return 0;
+    }
   }
 
   /**

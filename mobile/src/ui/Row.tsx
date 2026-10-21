@@ -81,9 +81,10 @@ export function ListRow({ title, subtitle, value, onPress, switchValue, onSwitch
       accessibilityHint={accessibilityHint ?? (isSwitch || isChoice ? undefined : subtitle)}
       accessibilityState={isSwitch ? { checked: !!switchValue, disabled: !!disabled } : isChoice ? { checked: selected, disabled: !!disabled } : { disabled: !!disabled }}
       disabled={disabled}
+      unstable_pressDelay={0}
       onPress={() => {
         const now = Date.now();
-        if (now - last.current < 300) return; // double-tap guard
+        if (now - last.current < 80) return; // double-tap guard
         last.current = now;
         press();
       }}

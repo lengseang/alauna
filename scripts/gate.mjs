@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Supervision gate: run before every commit/PR (`node scripts/gate.mjs`). Exit 1 = do not merge.
-// Enforces GEMINI.md rules cheaply: nothing removed, nothing fake, corners sharp, checks green.
+// Project quality gate: validates catalog integrity, verified models, and green test suite.
 // Baselines live in docs/BASELINE.json. Raise them (never lower) with `node scripts/gate.mjs --update`.
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';

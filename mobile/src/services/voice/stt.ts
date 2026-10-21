@@ -15,6 +15,7 @@ import { uriToPath } from '../../core/paths.ts';
 import { createStore } from '../../core/store.ts';
 import { cleanTranscript } from '../../core/voiceChunker.ts';
 import { VAD_MODEL, getSpeechModel, vadOptionsFor, whisperLanguage, type VoicePrefs } from '../../core/voiceModels.ts';
+import { SemanticVadSession } from '../../core/voice/semanticVad.ts';
 import { MIC_MODULE_MISSING, WHISPER_JS_MISSING, createMicStream, loadWhisper } from './native.ts';
 import { getVoicePrefs } from './prefs.ts';
 import { speechModelPath } from './speechModels.ts';
@@ -139,8 +140,11 @@ async function doLoad(modelId: string): Promise<SttResult> {
   if (!spec || spec.kind !== 'stt') return fail('not_installed', 'Choose a speech model in Settings > Audio & Voice.');
   const path = speechModelPath(spec.id);
   const vadPath = speechModelPath(VAD_MODEL.id);
-  if (!path || !vadPath) {
+  if (!path) {
     return fail('not_installed', `${spec.name} (${formatBytes(spec.bytes)}) is not downloaded yet. Download it in Settings > Audio & Voice.`);
+  }
+  if (!vadPath) {
+    return fail('not_installed', `${VAD_MODEL.name} (${formatBytes(VAD_MODEL.bytes)}) is not downloaded yet. Download it in Settings > Audio & Voice.`);
   }
   const native = loadWhisper();
   if (!native) return fail('no_engine', WHISPER_JS_MISSING);
@@ -182,7 +186,15 @@ export async function transcribeFile(pathOrUri: string): Promise<FileTranscript>
   const spec = getSpeechModel(sttStore.getState().loadedModelId)!;
   const t0 = Date.now();
   try {
-    const r = await ctx.transcribe(uriToPath(pathOrUri), { language: whisperLanguage(spec, getVoicePrefs()) }).promise;
+    const r = await ctx.transcribe(uriToPath(pathOrUri), {
+      language: whisperLanguage(spec, getVoicePrefs()),
+      maxThreads: 4,
+      beamSize: 1,
+      bestOf: 1,
+      temperature: 0,
+      temperatureInc: 0,
+      tokenTimestamps: false,
+    }).promise;
     return { ok: true, text: cleanTranscript(r.result), language: r.language, ms: Date.now() - t0 };
   } catch (e) {
     return { ok: false, reason: 'failed', message: `Transcription failed: ${message(e)}` };
@@ -229,6 +241,12 @@ export async function startListening(h: ListenHandlers, prefs: VoicePrefs = getV
   const { realtime } = native;
   const spec = getSpeechModel(sttStore.getState().loadedModelId)!;
 
+  const useSemanticVad = prefs.vadMode !== 'silero';
+  const semanticSession = new SemanticVadSession({
+    energyThreshold: Math.max(0.04, prefs.vadThreshold * 0.15),
+    baseSilenceMs: prefs.endOfSpeechMs,
+  });
+
   // Intercept raw mic PCM frames to drive the reactive VoiceOrb bounce & meter
   const rawMic = mic;
   const wrappedMic = {
@@ -245,8 +263,20 @@ export async function startListening(h: ListenHandlers, prefs: VoicePrefs = getV
           try {
             const meter = calculateAudioMeter(data.data);
             audioMeterStore.setState(meter);
+
+            if (useSemanticVad) {
+              const res = semanticSession.feedAudio(data.data);
+              if (res.speechStarted) {
+                h.onSpeechStart();
+              } else if (res.speechEnded) {
+                if ((t as any)?.transcriptionQueue) {
+                  (t as any).transcriptionQueue = (t as any).transcriptionQueue.filter((item: any) => item.isFinal);
+                }
+                h.onSpeechEnd();
+              }
+            }
           } catch {
-            // safe meter calculation ignore
+            // safe meter/vad calculation ignore
           }
         }
         cb(data);
@@ -265,18 +295,48 @@ export async function startListening(h: ListenHandlers, prefs: VoicePrefs = getV
     {
       audioSliceSec: 30,
       promptPreviousSlices: false, // every utterance is its own message; chaining makes whisper repeat itself
-      realtimeProcessingPauseMs: 500,
-      transcribeOptions: { language: whisperLanguage(spec, prefs) },
+      realtimeProcessingPauseMs: useSemanticVad ? 800 : 1500, // Faster partial updates in semantic mode
+      initRealtimeAfterMs: useSemanticVad ? 350 : 600,
+      transcribeOptions: {
+        language: whisperLanguage(spec, prefs),
+        maxThreads: 4, // Snapdragon 8 Gen 2 performance cores
+        beamSize: 1, // Greedy decoding: 5x-10x faster inference, instant speech-to-text
+        bestOf: 1, // Single candidate pass
+        temperature: 0, // Deterministic greedy search without sampling loops
+        temperatureInc: 0, // Disable costly temperature fallback retries
+        tokenTimestamps: false,
+      },
       // 6 = VOICE_RECOGNITION (standard Android recognition mic with noise suppression on Galaxy & Snapdragon)
       audioStreamConfig: { sampleRate: 16000, channels: 1, bitsPerSample: 16, audioSource: 6 },
     },
     {
       onVad: (ev) => {
-        if (ev.type === 'speech_start') h.onSpeechStart();
-        else if (ev.type === 'speech_end') h.onSpeechEnd();
+        if (useSemanticVad) return; // Semantic VAD handles boundaries in fast path above
+        if (ev.type === 'speech_start') {
+          h.onSpeechStart();
+        } else if (ev.type === 'speech_end') {
+          // Immediately purge any stale partial tasks from the transcriber queue
+          if ((t as any)?.transcriptionQueue) {
+            (t as any).transcriptionQueue = (t as any).transcriptionQueue.filter((item: any) => item.isFinal);
+          }
+          h.onSpeechEnd();
+        }
+      },
+      onBeginTranscribe: async () => {
+        const queue = (t as any)?.transcriptionQueue;
+        // If speech has ended or a final slice is queued, skip stale intermediate partials
+        if (queue && queue.some((item: any) => item.isFinal)) {
+          return false;
+        }
+        return true;
       },
       onTranscribe: (ev) => {
-        if (ev.type === 'transcribe' && ev.data) h.onPartial(ev.data.result);
+        if (ev.type === 'transcribe' && ev.data) {
+          if (useSemanticVad) {
+            semanticSession.updateTranscript(ev.data.result);
+          }
+          h.onPartial(ev.data.result);
+        }
       },
       onSliceTranscriptionStabilized: (text) => h.onFinal(text),
       onError: (err) => h.onError(err),

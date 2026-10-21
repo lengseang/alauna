@@ -7,16 +7,16 @@
 import { useSyncExternalStore } from 'react';
 import { createStore } from '../../core/store.ts';
 import { IDLE_VOICE, voiceReducer, type VoiceEffect, type VoiceEvent, type VoiceLoopOptions, type VoiceLoopState } from '../../core/voiceLoop.ts';
-import { getSpeechModel } from '../../core/voiceModels.ts';
+import { getSpeechModel, STT_MODELS, VAD_MODEL } from '../../core/voiceModels.ts';
 import { chatStore, sendMessage, stopGeneration } from '../chat.ts';
-import { getVoicePrefs, initVoicePrefs, voicePrefsStore } from './prefs.ts';
-import { isSpeechModelInstalled } from './speechModels.ts';
+import { getVoicePrefs, initVoicePrefs, updateVoicePrefs, voicePrefsStore } from './prefs.ts';
+import { isSpeechModelInstalled, refreshSpeechModels } from './speechModels.ts';
 import { WHISPER_JS_MISSING } from './native.ts';
 import { MIC_MODULE_MISSING, micCaptureAvailable, releaseStt, startListening, stopListening, sttEngineAvailable, updateLiveVad, type SttFailure } from './stt.ts';
 import { speak, stopSpeaking } from './tts.ts';
 
 const chatApi = {
-  send: (text: string) => sendMessage(text),
+  send: (text: string) => sendMessage(text, [], { isVoice: true }),
   stop: () => stopGeneration(),
   isBusy: () => chatStore.getState().sending,
   subscribe: chatStore.subscribe,
@@ -46,10 +46,23 @@ export function useVoiceMode(): VoiceModeState {
 export function voiceModeBlocker(): { message: string; fix: VoiceFix } | null {
   if (!sttEngineAvailable()) return { message: WHISPER_JS_MISSING, fix: 'install_update' };
   if (!micCaptureAvailable()) return { message: MIC_MODULE_MISSING, fix: 'install_update' };
+  refreshSpeechModels();
   const prefs = getVoicePrefs();
-  if (!isSpeechModelInstalled(prefs.sttModelId)) {
-    const name = getSpeechModel(prefs.sttModelId)?.name ?? 'A speech model';
+  let sttId = prefs.sttModelId;
+  if (!isSpeechModelInstalled(sttId)) {
+    // If the currently configured STT model is not installed, auto-fallback to any installed Whisper model
+    const installed = STT_MODELS.find((m) => isSpeechModelInstalled(m.id));
+    if (installed) {
+      updateVoicePrefs({ sttModelId: installed.id });
+      sttId = installed.id;
+    }
+  }
+  if (!isSpeechModelInstalled(sttId)) {
+    const name = getSpeechModel(sttId)?.name ?? 'A speech model';
     return { message: `${name} is not downloaded yet. Download it in Settings > Audio & Voice.`, fix: 'download_model' };
+  }
+  if (!isSpeechModelInstalled(VAD_MODEL.id)) {
+    return { message: `${VAD_MODEL.name} is not downloaded yet. Download it in Settings > Audio & Voice.`, fix: 'download_model' };
   }
   return null;
 }

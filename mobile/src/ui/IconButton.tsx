@@ -25,7 +25,7 @@ export interface IconButtonProps {
 export function IconButton({ icon, label, onPress, tone = 'default', selected, disabled, color, accessibilityHint, haptics = true, style }: IconButtonProps) {
   const { colors, haptics: themeHaptics } = useTheme();
   const s = useStyles();
-  const { execute } = useGuardedAction(async () => void (await onPress()), { debounceMs: 250, enableHaptics: haptics && themeHaptics });
+  const { execute } = useGuardedAction(onPress, { debounceMs: 80, enableHaptics: haptics && themeHaptics });
   const filled = tone === 'filled';
   const fg = filled ? (disabled ? colors.muted : colors.onAccent) : selected ? colors.accent : (color ?? colors.text);
   return (
@@ -35,6 +35,8 @@ export function IconButton({ icon, label, onPress, tone = 'default', selected, d
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!disabled, selected }}
       disabled={disabled}
+      unstable_pressDelay={0}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       onPress={() => void execute()}
       style={({ pressed }) => [
         s.base,
@@ -51,13 +53,13 @@ export function IconButton({ icon, label, onPress, tone = 'default', selected, d
   );
 }
 
-const useStyles = makeStyles(({ colors, line, radius }) => ({
-  base: { width: hit, height: hit, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
-  outline: { borderWidth: line, borderColor: colors.borderStrong, borderRadius: radius.pill },
-  filled: { backgroundColor: colors.accent, borderRadius: radius.pill },
-  filledOff: { backgroundColor: colors.surfaceAlt, borderRadius: radius.pill },
-  selected: { backgroundColor: colors.accentSoft, borderRadius: radius.pill },
-  pressed: { backgroundColor: colors.accentSoft, borderRadius: radius.pill },
+const useStyles = makeStyles(({ colors, line }) => ({
+  base: { width: hit, height: hit, alignItems: 'center', justifyContent: 'center' },
+  outline: { borderWidth: line, borderColor: colors.borderStrong },
+  filled: { backgroundColor: colors.accent },
+  filledOff: { backgroundColor: colors.surfaceAlt },
+  selected: { backgroundColor: colors.accentSoft },
+  pressed: { opacity: 0.55 },
   pressedFilled: { opacity: 0.82 },
   disabled: { opacity: 0.45 },
 }));

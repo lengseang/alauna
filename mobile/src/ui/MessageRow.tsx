@@ -38,13 +38,31 @@ const speechStore = createStore<{ id: string | null }>({ id: null });
 /** Only the row being read (and the one that stops) re-renders. */
 const useIsSpoken = (id: string) => useSyncExternalStore(speechStore.subscribe, () => speechStore.getState().id === id);
 
+function groupSentences(sentences: string[], maxLen = 350): string[] {
+  const groups: string[] = [];
+  let current = '';
+  for (const s of sentences) {
+    if (!current) {
+      current = s;
+    } else if (current.length + 1 + s.length <= maxLen) {
+      current += ' ' + s;
+    } else {
+      groups.push(current);
+      current = s;
+    }
+  }
+  if (current) groups.push(current);
+  return groups;
+}
+
 /** Read a reply aloud, sentence by sentence (code blocks skipped, Markdown stripped). Replaces anything being read. */
 export async function speakMessage(m: ChatMessage): Promise<void> {
   await stopSpeaking();
   const { sentences } = nextSentences(m.text, 0, true);
   if (!sentences.length) return showToast('Nothing to read aloud.');
+  const chunks = groupSentences(sentences);
   speechStore.setState({ id: m.id });
-  const ok = sentences.every((t, i) => speak(t, i === sentences.length - 1 ? { onDone: () => speechStore.setState({ id: null }) } : {}));
+  const ok = chunks.every((t, i) => speak(t, i === chunks.length - 1 ? { onDone: () => speechStore.setState({ id: null }) } : {}));
   if (!ok) {
     speechStore.setState({ id: null });
     showToast(ttsStore.getState().lastError ?? TTS_MISSING);

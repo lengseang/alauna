@@ -190,7 +190,7 @@ export async function initKokoroNeural(): Promise<boolean> {
       KOKORO_INSTANCE_ID,
       modelDir,
       'kokoro',
-      2, // numThreads (optimal for INT8 neural inference without thread contention)
+      4, // 4 threads for fast real-time INT8 neural inference on modern octa-core SoCs
       false, // debug
       undefined, // noiseScale
       undefined, // noiseScaleW

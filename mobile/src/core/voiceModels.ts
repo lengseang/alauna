@@ -46,18 +46,18 @@ export const VAD_MODEL: SpeechModelSpec = {
   note: 'Voice activity detection.',
 };
 
-/** Kokoro-82M v1.0 ONNX text-to-speech model: 82M params, 24kHz audio, 512-D style embeddings. */
+/** Kokoro-82M v1.0 ONNX text-to-speech model: 82M params, 24kHz audio, 53 speakers & emotion latent styles. */
 export const KOKORO_MODEL: SpeechModelSpec = {
-  id: 'kokoro-82m-v1.0-onnx',
-  name: 'Kokoro-82M v1.0 (Neural ONNX)',
+  id: 'kokoro-int8-multi-lang-v1_0',
+  name: 'Kokoro-82M v1.0 (Multi-Lang INT8 Neural)',
   kind: 'tts',
-  repo: 'onnx-community/Kokoro-82M-v1.0-ONNX',
-  filename: 'onnx/model_quantized.onnx',
-  bytes: 92_361_116,
-  sha256: 'fbae9257e1e05ffc727e951ef9b9c98418e6d79f1c9b6b13bd59f5c9028a1478',
+  repo: 'k2-fsa/sherpa-onnx',
+  filename: 'kokoro-int8-multi-lang-v1_0.tar.bz2',
+  bytes: 132_303_094,
+  sha256: '4c3052abaa60943a341f193888cf6abd68787dae6ab8ae5c925a706caa247e4e',
   englishOnly: false,
   quant: 'q8_0',
-  note: 'High-fidelity neural text-to-speech with 512-D style & emotion blending (82M params).',
+  note: 'Authentic 24kHz studio-quality neural text-to-speech with 53 speakers & emotion latent styles.',
 };
 
 export const TTS_MODELS: SpeechModelSpec[] = [KOKORO_MODEL];
@@ -65,10 +65,14 @@ export const SPEECH_MODELS: SpeechModelSpec[] = [...STT_MODELS, VAD_MODEL, KOKOR
 export const DEFAULT_STT_MODEL_ID = 'whisper-base.en';
 
 export function getSpeechModel(id: string | null | undefined): SpeechModelSpec | null {
+  if (id === 'kokoro-82m-v1.0-onnx') return KOKORO_MODEL;
   return SPEECH_MODELS.find((m) => m.id === id) ?? null;
 }
 
 export function speechModelUrl(spec: SpeechModelSpec): string {
+  if (spec.repo === 'k2-fsa/sherpa-onnx') {
+    return `https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${spec.filename}`;
+  }
   return `https://huggingface.co/${spec.repo}/resolve/main/${spec.filename}`;
 }
 
@@ -79,11 +83,14 @@ import { type EmotionType, EMOTION_PROFILES } from './voice/emotionMixer.ts';
 import { DEFAULT_KOKORO_STYLE_ID, getKokoroStyle } from './voice/kokoroStyles.ts';
 
 export type TtsEngine = 'system' | 'kokoro';
+export type VadMode = 'semantic' | 'silero';
 
 export interface VoicePrefs {
   sttModelId: string;
   /** Whisper language: 'auto' or an ISO-639-1 code. English-only models always use 'en'. */
   language: string;
+  /** Voice Activity Detection mode: 'semantic' (smart turn completion) or 'silero' (legacy acoustic probability). */
+  vadMode: VadMode;
   /** Silero speech probability threshold: lower = more sensitive (picks up quieter speech and more noise). */
   vadThreshold: number;
   /** Silence that ends your turn, in ms. */
@@ -117,6 +124,7 @@ export const VAD_SENSITIVITY_PRESETS = [
 export const DEFAULT_VOICE_PREFS: VoicePrefs = {
   sttModelId: DEFAULT_STT_MODEL_ID,
   language: 'auto',
+  vadMode: 'semantic',
   vadThreshold: 0.5,
   endOfSpeechMs: 800,
   ttsEnabled: true,
@@ -126,7 +134,7 @@ export const DEFAULT_VOICE_PREFS: VoicePrefs = {
   bargeIn: true,
   continuous: true,
   personaId: DEFAULT_VOICE_PERSONA_ID,
-  ttsEngine: 'system',
+  ttsEngine: 'kokoro',
   kokoroStyleId: DEFAULT_KOKORO_STYLE_ID,
   kokoroEmotion: 'neutral',
   kokoroEmotionIntensity: 0.5,
@@ -142,7 +150,8 @@ export function sanitizeVoicePrefs(raw: unknown): VoicePrefs {
   const r = raw as Record<string, unknown>;
   const stt = getSpeechModel(typeof r.sttModelId === 'string' ? r.sttModelId : null);
   const pId = typeof r.personaId === 'string' && getVoicePersona(r.personaId) ? r.personaId : d.personaId;
-  const engine: TtsEngine = r.ttsEngine === 'kokoro' ? 'kokoro' : 'system';
+  const engine: TtsEngine = r.ttsEngine === 'system' ? 'system' : 'kokoro';
+  const vMode: VadMode = r.vadMode === 'silero' ? 'silero' : 'semantic';
   const kStyle = typeof r.kokoroStyleId === 'string' && getKokoroStyle(r.kokoroStyleId) ? r.kokoroStyleId : d.kokoroStyleId;
   const kEmotion: EmotionType = typeof r.kokoroEmotion === 'string' && r.kokoroEmotion in EMOTION_PROFILES ? (r.kokoroEmotion as EmotionType) : d.kokoroEmotion;
   const kIntensity = clamp(r.kokoroEmotionIntensity, 0, 1, d.kokoroEmotionIntensity);
@@ -150,6 +159,7 @@ export function sanitizeVoicePrefs(raw: unknown): VoicePrefs {
   return {
     sttModelId: stt && stt.kind === 'stt' ? stt.id : d.sttModelId,
     language: typeof r.language === 'string' && /^(auto|[a-z]{2,3})$/.test(r.language) ? r.language : d.language,
+    vadMode: vMode,
     vadThreshold: clamp(r.vadThreshold, 0.05, 0.95, d.vadThreshold),
     endOfSpeechMs: Math.round(clamp(r.endOfSpeechMs, 200, 3000, d.endOfSpeechMs)),
     ttsEnabled: typeof r.ttsEnabled === 'boolean' ? r.ttsEnabled : d.ttsEnabled,

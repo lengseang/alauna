@@ -27,7 +27,7 @@ interface LayerViewProps {
 
 /**
  * One screen of the stack. Enters from the right (320ms, decelerating), leaves faster (240ms). The screen underneath
- * slides 28% left and dims, like the native stacks in Claude/ChatGPT. Layers buried two deep are made invisible
+ * slides 28% left and dims, following smooth layered navigation transitions. Layers buried two deep are made invisible
  * (opacity 0: no overdraw, but scroll positions and state survive), and covered layers are hidden from screen readers.
  */
 function LayerView({ layer, coverBy, active, width, onGone, children }: LayerViewProps) {

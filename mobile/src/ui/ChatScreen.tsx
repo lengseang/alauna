@@ -23,7 +23,6 @@ import { showUndo } from './undo';
 import { VoiceOverlay } from './VoiceOverlay';
 import { Text } from './Text';
 import { ThreadDrawer } from './ThreadDrawer';
-import { useKeyboardHeight } from './useKeyboard';
 
 const FAR_FROM_BOTTOM = 320;
 const completed = (id: string | null | undefined) => !!id && downloads.store.getState().items[id]?.status === 'completed';
@@ -49,7 +48,6 @@ export function ChatScreen() {
   const [far, setFar] = useState(false);
   const [voice, setVoice] = useState(false);
   const [acts, setActs] = useState<ChatMessage | null>(null);
-  const keyboardHeight = useKeyboardHeight();
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const farRef = useRef(false);
 
@@ -153,7 +151,7 @@ export function ChatScreen() {
         ) : null}
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={[s.fill, Platform.OS === 'android' && { paddingBottom: keyboardHeight }]}
+          style={s.fill}
         >
           {messages.length === 0 ? (
             <EmptyChat hasModel={anyInstalled} loading={engineState === 'mounting'} incognito={chat.thread.incognito} />

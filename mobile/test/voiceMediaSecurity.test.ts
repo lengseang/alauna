@@ -184,7 +184,7 @@ test('speech models: verified HF files (exact size + sha256), unique ids, tiny/b
     if (m.kind === 'stt' || m.kind === 'vad') {
       assert.match(speechModelUrl(m), /^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+\/resolve\/main\/ggml-[\w.-]+\.bin$/);
     } else {
-      assert.match(speechModelUrl(m), /^https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+\/resolve\/main\/[\w.-/]+$/);
+      assert.match(speechModelUrl(m), /^(https:\/\/huggingface\.co\/[\w.-]+\/[\w.-]+\/resolve\/main\/[\w.-/]+|https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/releases\/download\/[\w.-]+\/[\w.-]+)$/);
     }
   }
   for (const size of ['tiny', 'base', 'small']) {

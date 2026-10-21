@@ -176,7 +176,7 @@ test('kokoro persona bindings: every persona links to valid Kokoro styles and em
 
 test('kokoro prefs sanitization: engine switching, style ID, and emotion intensity persistence', () => {
   const defaults = sanitizeVoicePrefs(null);
-  assert.equal(defaults.ttsEngine, 'system');
+  assert.equal(defaults.ttsEngine, 'kokoro');
   assert.equal(defaults.kokoroStyleId, DEFAULT_KOKORO_STYLE_ID);
   assert.equal(defaults.kokoroEmotion, 'neutral');
   assert.equal(defaults.kokoroEmotionIntensity, 0.5);
@@ -192,6 +192,11 @@ test('kokoro prefs sanitization: engine switching, style ID, and emotion intensi
   assert.equal(custom.kokoroEmotion, 'affectionate');
   assert.equal(custom.kokoroEmotionIntensity, 0.85);
 
+  const explicitSystem = sanitizeVoicePrefs({
+    ttsEngine: 'system',
+  });
+  assert.equal(explicitSystem.ttsEngine, 'system');
+
   // Fallbacks for invalid inputs
   const corrupt = sanitizeVoicePrefs({
     ttsEngine: 'invalid_engine',
@@ -199,7 +204,7 @@ test('kokoro prefs sanitization: engine switching, style ID, and emotion intensi
     kokoroEmotion: 'bogus_emotion',
     kokoroEmotionIntensity: 999,
   });
-  assert.equal(corrupt.ttsEngine, 'system');
+  assert.equal(corrupt.ttsEngine, 'kokoro');
   assert.equal(corrupt.kokoroStyleId, DEFAULT_KOKORO_STYLE_ID);
   assert.equal(corrupt.kokoroEmotion, 'neutral');
   assert.equal(corrupt.kokoroEmotionIntensity, 1.0); // clamped to 1

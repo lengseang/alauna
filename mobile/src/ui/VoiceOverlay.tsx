@@ -7,8 +7,10 @@ import { chatStore } from '../services/chat.ts';
 import { getVoicePrefs, useVoicePrefs } from '../services/voice/prefs.ts';
 import {
   downloadSpeechModel,
+  refreshSpeechModels,
   useSpeechModels,
 } from '../services/voice/speechModels.ts';
+import { showToast } from '../services/toast.ts';
 import { openAppSettings } from '../services/voice/stt.ts';
 import { stopSpeaking } from '../services/voice/tts.ts';
 import {
@@ -20,12 +22,12 @@ import {
 } from '../services/voice/voiceMode.ts';
 import { makeStyles, useTheme } from '../theme';
 import { Button } from './Button';
-import { Icon } from './Icon';
 import { IconButton } from './IconButton';
 import { ProgressBar } from './ProgressBar';
 import { Tag } from './Tag';
 import { Text } from './Text';
 import { VoiceOrb } from './voice/VoiceOrb';
+import { NeonBubbleBackground } from './voice/NeonBubbleBackground';
 import { VoicePersonaSheet } from './voice/VoicePersonaSheet';
 
 const PHASE_LABEL = {
@@ -38,7 +40,7 @@ const PHASE_LABEL = {
 } as const;
 
 /**
- * ChatGPT-style immersive voice interaction overlay:
+ * Immersive voice interaction overlay:
  * - Fluid audio-reactive Voice Orb (center) bouncing dynamically with vocal pitch & volume
  * - Sun shine neon effect for light mode (Helios) & Moon light neon effect for dark mode (Nyx)
  * - Ambient backdrop blur with celestial radial corona
@@ -49,7 +51,7 @@ const PHASE_LABEL = {
 export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const s = useStyles();
   const insets = useSafeAreaInsets();
-  const { isDark, colors } = useTheme();
+  const { isDark } = useTheme();
   const v = useVoiceMode();
   const prefs = useVoicePrefs();
   const speechModels = useSpeechModels();
@@ -72,6 +74,7 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
 
   useEffect(() => {
     if (!visible) return;
+    refreshSpeechModels();
     void startVoiceMode();
     return () => void stopVoiceMode();
   }, [visible]);
@@ -101,7 +104,11 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
       setFixing(true);
       const r = await downloadSpeechModel(getVoicePrefs().sttModelId);
       setFixing(false);
-      if (r.ok) void startVoiceMode();
+      if (r.ok) {
+        void startVoiceMode();
+      } else if (r.message) {
+        showToast(r.message);
+      }
     } else if (kind === 'open_settings') {
       await openAppSettings();
     }
@@ -124,92 +131,42 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
   return (
     <Modal visible={visible} animationType="fade" onRequestClose={close} statusBarTranslucent>
       <View style={[s.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 16 }]}>
-        {/* Dynamic Toned Celestial Backdrop Aura */}
-        <View pointerEvents="none" style={s.ambientBackdrop}>
-          <Svg width="100%" height="100%">
-            <Defs>
-              <RadialGradient id="bgAura1" cx="50%" cy="38%" rx="55%" ry="45%">
-                <Stop
-                  offset="0%"
-                  stopColor={isDark ? '#8B5CF6' : '#F59E0B'}
-                  stopOpacity={isDark ? '0.18' : '0.14'}
-                />
-                <Stop
-                  offset="60%"
-                  stopColor={isDark ? '#06B6D4' : '#FB7185'}
-                  stopOpacity={isDark ? '0.07' : '0.04'}
-                />
-                <Stop
-                  offset="100%"
-                  stopColor={isDark ? '#8B5CF6' : '#F59E0B'}
-                  stopOpacity="0"
-                />
-              </RadialGradient>
-              <RadialGradient id="bgAura2" cx="50%" cy="58%" rx="50%" ry="40%">
-                <Stop
-                  offset="0%"
-                  stopColor={isDark ? '#EC4899' : '#C084FC'}
-                  stopOpacity={isDark ? '0.12' : '0.08'}
-                />
-                <Stop
-                  offset="100%"
-                  stopColor={isDark ? '#EC4899' : '#C084FC'}
-                  stopOpacity="0"
-                />
-              </RadialGradient>
-            </Defs>
-            <Circle cx="50%" cy="38%" r="52%" fill="url(#bgAura1)" />
-            <Circle cx="50%" cy="58%" r="48%" fill="url(#bgAura2)" />
-          </Svg>
-        </View>
+        {/* Dynamic Animated Neon Backdrop & Floating Bubbles Canvas */}
+        <NeonBubbleBackground />
 
         {/* Top Control Bar */}
         <View style={s.topBar}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close voice chat"
-            onPress={close}
-            style={({ pressed }) => [s.roundTopBtn, pressed && s.actionPressed]}
-          >
-            <Icon name="back" size={20} />
-          </Pressable>
-
-          <Text variant="strong" style={s.topTitle}>
-            Live Voice Chat
-          </Text>
-
           <Pressable
             style={s.personaPill}
             onPress={() => setShowPersonaSheet(true)}
             accessibilityLabel="Select voice style"
           >
             <Text style={s.personaPillText}>
-              {persona ? persona.name : 'Natural'}
+              Voice: {persona ? persona.name : 'Natural'}
             </Text>
             {persona?.isNsfw ? <Tag label="18+" tone="danger" /> : null}
             <Text tone="muted" style={s.pillArrow}>▾</Text>
           </Pressable>
+
+          <IconButton icon="close" label="Close voice mode" onPress={close} />
         </View>
 
         {/* Center Animated Orb Stage */}
         <View style={s.centerStage}>
           <VoiceOrb
             phase={v.phase}
-            size={190}
+            size={180}
             onPress={handleOrbPress}
             label={status}
           />
 
           <View style={s.phaseContainer}>
-            <View style={s.statusPill}>
-              <View style={[s.liveDot, v.phase === 'speaking' ? s.liveDotSpeaking : v.phase === 'listening' ? s.liveDotListening : s.liveDotIdle]} />
-              <Text variant="small" tone="accent" style={s.statusPillText} accessibilityLiveRegion="polite">
-                {status.toLowerCase()}
-              </Text>
-            </View>
+            <Text variant="heading" style={s.statusText} accessibilityLiveRegion="polite">
+              {status}
+            </Text>
             {v.phase === 'speaking' ? (
               <Text tone="muted" style={s.tapHint}>
-                (Tap to interrupt)
+                (Tap orb to interrupt)
               </Text>
             ) : null}
           </View>
@@ -237,8 +194,19 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
               ) : null}
             </View>
           ) : (
-            /* Clean Floating Typography Live Transcript */
+            /* Clean Floating Typography Live Transcript (No divs/boxes) */
             <View style={s.transcriptWrapper}>
+              <View style={s.transcriptHeader}>
+                <Text tone="muted" style={s.transcriptHeaderTitle}>
+                  {showHistory ? 'CONVERSATION HISTORY' : 'LIVE TRANSCRIPT'}
+                </Text>
+                <Pressable onPress={() => setShowHistory((prev) => !prev)}>
+                  <Text tone="accent" style={s.toggleHistoryText}>
+                    {showHistory ? 'LIVE VIEW' : `HISTORY (${chatMessages.length})`}
+                  </Text>
+                </Pressable>
+              </View>
+
               <ScrollView
                 ref={scrollRef}
                 style={s.transcriptScroll}
@@ -257,7 +225,7 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
                           style={s.floatingRole}
                           tone={m.role === 'user' ? 'muted' : 'accent'}
                         >
-                          {m.role === 'user' ? 'YOU' : persona?.name?.toUpperCase() ?? 'ALAUNA'}
+                          {m.role === 'user' ? 'YOU' : persona?.name?.toUpperCase() ?? 'AI'}
                         </Text>
                         <Text style={s.floatingText}>{m.text}</Text>
                       </View>
@@ -275,7 +243,7 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
                     {v.reply ? (
                       <View style={s.floatingRow}>
                         <Text style={s.floatingRole} tone="accent">
-                          {persona?.name?.toUpperCase() ?? 'ALAUNA'}
+                          {persona?.name?.toUpperCase() ?? 'AI'}
                         </Text>
                         <Text style={s.floatingText}>{v.reply}</Text>
                       </View>
@@ -283,7 +251,7 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
 
                     {!v.heard && !v.reply ? (
                       <Text tone="muted" style={s.emptyHint}>
-                        Hello! I'm here with you. Speak whenever you're ready.
+                        Speak naturally. Transcripts will float here live.
                       </Text>
                     ) : null}
                   </>
@@ -293,43 +261,24 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
           )}
         </View>
 
-        {/* Bottom Floating Control Dock (Matching Screen 3) */}
+        {/* Bottom Action Dock */}
         {v.phase !== 'error' ? (
           <View style={s.bottomDock}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Toggle conversation history"
-              onPress={() => setShowHistory((prev) => !prev)}
-              style={({ pressed }) => [s.roundActionBtn, showHistory && s.roundActionBtnActive, pressed && s.actionPressed]}
-            >
-              <Icon name="chat" size={22} color={showHistory ? colors.onAccent : colors.text} />
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={v.phase === 'speaking' ? 'Interrupt AI' : 'Push to talk'}
-              onPress={handleOrbPress}
-              style={({ pressed }) => [
-                s.mainVoiceButton,
-                v.phase === 'speaking' && s.mainVoiceButtonActive,
-                pressed && s.mainVoiceButtonPressed,
-              ]}
-            >
-              <Icon
-                name={v.phase === 'speaking' ? 'stop' : 'mic'}
-                size={30}
-                color={colors.onAccent}
+            {v.phase === 'speaking' ? (
+              <Button
+                label="Interrupt AI"
+                variant="quiet"
+                icon="stop"
+                onPress={handleOrbPress}
               />
-            </Pressable>
+            ) : null}
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="End call"
+            <Button
+              label="End Call"
+              variant="quiet"
+              icon="close"
               onPress={close}
-              style={({ pressed }) => [s.roundActionBtn, pressed && s.actionPressed]}
-            >
-              <Icon name="close" size={22} color={colors.text} />
-            </Pressable>
+            />
           </View>
         ) : null}
 
@@ -343,7 +292,7 @@ export function VoiceOverlay({ visible, onClose }: { visible: boolean; onClose: 
   );
 }
 
-const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
+const useStyles = makeStyles(({ colors, space, line }) => ({
   root: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -362,36 +311,18 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     zIndex: 10,
-    minHeight: 44,
-  },
-  roundTopBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.pill,
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: line,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-  },
-  topTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.3,
   },
   personaPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.xs,
-    paddingVertical: 5,
-    paddingHorizontal: space.sm + 2,
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-    borderRadius: radius.pill,
-    borderWidth: line,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+    paddingVertical: space.xs + 2,
+    paddingHorizontal: space.md,
+    backgroundColor: colors.surfaceAlt,
+    opacity: 0.9,
   },
   personaPillText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   pillArrow: {
@@ -406,36 +337,11 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
   },
   phaseContainer: {
     alignItems: 'center',
-    gap: space.xs,
+    gap: 4,
   },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.pill,
-  },
-  liveDotSpeaking: {
-    backgroundColor: colors.accent,
-  },
-  liveDotListening: {
-    backgroundColor: '#10B981',
-  },
-  liveDotIdle: {
-    backgroundColor: colors.muted,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: space.md,
-    paddingVertical: 5,
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-    borderRadius: radius.pill,
-    borderWidth: line,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-  },
-  statusPillText: {
-    fontSize: 13,
-    fontWeight: '600',
+  statusText: {
+    fontSize: 18,
+    textAlign: 'center',
     letterSpacing: 0.5,
   },
   tapHint: {
@@ -456,21 +362,38 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
   },
   transcriptWrapper: {
     width: '100%',
-    maxHeight: 180,
-    paddingHorizontal: space.md,
+    maxHeight: 230,
+    paddingHorizontal: space.sm,
     paddingVertical: space.xs,
+    // Clean borderless container — floating text directly on ambient canvas
+  },
+  transcriptHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: space.sm,
+    paddingBottom: space.xs,
+    opacity: 0.8,
+  },
+  transcriptHeaderTitle: {
+    fontSize: 11,
+    letterSpacing: 1,
+    fontWeight: '600',
+  },
+  toggleHistoryText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   transcriptScroll: {
-    maxHeight: 160,
+    maxHeight: 180,
   },
   transcriptContent: {
     gap: space.md,
-    alignItems: 'center',
   },
   floatingRow: {
     gap: 2,
-    alignItems: 'center',
-    maxWidth: '90%',
+    // Pure typography — no background divs or box borders
   },
   floatingRole: {
     fontSize: 10,
@@ -480,58 +403,17 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
   floatingText: {
     fontSize: 15,
     lineHeight: 22,
-    textAlign: 'center',
   },
   emptyHint: {
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 13,
     paddingVertical: space.md,
-    lineHeight: 20,
   },
   bottomDock: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    gap: space.xl,
-    paddingBottom: space.sm,
+    gap: space.md,
+    paddingTop: space.sm,
     zIndex: 10,
-  },
-  roundActionBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.pill,
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.04)',
-    borderWidth: line,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  roundActionBtnActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  actionPressed: {
-    opacity: 0.75,
-    transform: [{ scale: 0.96 }],
-  },
-  mainVoiceButton: {
-    width: 66,
-    height: 66,
-    borderRadius: radius.pill,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.accent,
-    shadowOpacity: isDark ? 0.35 : 0.2,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  mainVoiceButtonActive: {
-    backgroundColor: '#F43F5E',
-    shadowColor: '#F43F5E',
-  },
-  mainVoiceButtonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.94 }],
   },
 }));

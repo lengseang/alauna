@@ -53,6 +53,8 @@ export const ModelRow = React.memo(function ModelRow({ spec, eng, verified, ramB
         accessibilityLabel={`${spec.name}, ${paramsLabel(spec.paramsB)}, ${status}`}
         accessibilityHint="Opens the model details"
         onPress={() => onOpen(spec.id)}
+        unstable_pressDelay={0}
+        hitSlop={{ top: 4, bottom: 4 }}
         style={({ pressed }) => [s.info, pressed && s.pressed]}
       >
         <Text variant="strong">{spec.name}</Text>

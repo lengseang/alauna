@@ -230,7 +230,12 @@ test('query: the v1 queryCatalog API still behaves as before', () => {
 
 test('speculative: drafts share the tokenizer key, are at most half the size, smallest first; Gemma 4 offers its MTP head first', () => {
   const q4 = draftOptions(getModel('qwen3.5-4b')!);
-  assert.deepEqual(q4.map((o) => (o.kind === 'model' ? o.spec.id : 'mtp')), ['qwen3.5-0.8b', 'qwen3.5-2b', 'qwen3.5-2b-hauhau-aggressive']);
+  assert.deepEqual(q4.map((o) => (o.kind === 'model' ? o.spec.id : 'mtp')), [
+    'qwen3.5-0.8b',
+    'qwen3.5-2b',
+    'qwen3.5-2b-hauhau-aggressive',
+    'huihui-qwen3.5-2b-abliterated',
+  ]);
   const g = draftOptions(getModel('gemma-4-12b')!);
   assert.equal(g[0].kind, 'mtp');
   assert.ok(g.some((o) => o.kind === 'model' && o.spec.id === 'gemma-4-e2b'));

@@ -9,8 +9,9 @@ import {
 } from '../../core/voicePersonas.ts';
 import { updateVoicePrefs, useVoicePrefs } from '../../services/voice/prefs.ts';
 import { previewPersonaVoice, stopSpeaking } from '../../services/voice/tts.ts';
-import { makeStyles } from '../../theme';
+import { makeStyles, useTheme } from '../../theme';
 import { Button } from '../Button';
+import { Icon } from '../Icon';
 import { Notice } from '../Notice';
 import { Sheet } from '../Sheet';
 import { Tag } from '../Tag';
@@ -27,6 +28,7 @@ export interface VoicePersonaSheetProps {
  */
 export function VoicePersonaSheet({ visible, onClose }: VoicePersonaSheetProps) {
   const s = useStyles();
+  const { colors } = useTheme();
   const prefs = useVoicePrefs();
   const [tab, setTab] = useState<'normal' | 'companion' | 'nsfw_adult'>('normal');
   const [previewingId, setPreviewingId] = useState<string | null>(null);
@@ -92,12 +94,20 @@ export function VoicePersonaSheet({ visible, onClose }: VoicePersonaSheetProps) 
                 key={persona.id}
                 style={[s.card, isSelected && s.selectedCard]}
               >
+                {isSelected ? (
+                  <View style={s.activeBadgeBar}>
+                    <Icon name="check" size={14} color={colors.onAccent} />
+                    <Text variant="label" style={s.activeBadgeText}>
+                      ACTIVE VOICE PROFILE
+                    </Text>
+                  </View>
+                ) : null}
+
                 <View style={s.cardHeader}>
                   <View style={s.nameRow}>
-                    <Text variant="heading" style={s.name}>
+                    <Text variant="strong" style={s.name}>
                       {persona.name}
                     </Text>
-                    {isSelected ? <Tag label="Active" tone="accent" /> : null}
                     {persona.isNsfw ? <Tag label="18+" tone="danger" /> : null}
                   </View>
                   <Text tone="muted" style={s.subtitle}>
@@ -115,18 +125,26 @@ export function VoicePersonaSheet({ visible, onClose }: VoicePersonaSheetProps) 
 
                 <View style={s.cardActions}>
                   <Button
-                    label={isPlaying ? 'Stop Preview' : 'Preview Voice'}
-                    variant="text"
+                    label={isPlaying ? 'Stop' : 'Preview'}
+                    variant="quiet"
                     icon={isPlaying ? 'stop' : 'play'}
                     onPress={() => handlePreview(persona)}
                   />
-                  {!isSelected ? (
+                  {isSelected ? (
+                    <Button
+                      label="Active Voice"
+                      variant="quiet"
+                      icon="check"
+                      disabled
+                      onPress={() => {}}
+                    />
+                  ) : (
                     <Button
                       label="Use This Voice"
                       variant="primary"
                       onPress={() => handleSelect(persona)}
                     />
-                  ) : null}
+                  )}
                 </View>
               </View>
             );
@@ -164,6 +182,22 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
   },
   selectedCard: {
     borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  activeBadgeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    backgroundColor: colors.accent,
+    alignSelf: 'flex-start',
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+    marginBottom: 2,
+  },
+  activeBadgeText: {
+    color: colors.onAccent,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   cardHeader: {
     gap: space.xs,
@@ -175,9 +209,10 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
   },
   name: {
     flex: 1,
+    fontSize: 16,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 14,
   },
   description: {
     fontSize: 14,
@@ -193,5 +228,6 @@ const useStyles = makeStyles(({ colors, space, line }) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: space.xs,
+    gap: space.xs,
   },
 }));

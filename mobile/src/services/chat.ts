@@ -301,7 +301,12 @@ export async function pickAttachmentFromText(name: string, content: string): Pro
 
 // ------------------------------------------------------------------ sending
 
-export async function sendMessage(rawText: string, attachments: Attachment[] = []): Promise<SendResult> {
+export interface SendOptions {
+  isVoice?: boolean;
+  isVoiceMode?: boolean;
+}
+
+export async function sendMessage(rawText: string, attachments: Attachment[] = [], options?: SendOptions): Promise<SendResult> {
   const text = rawText.trim();
   if (!text && attachments.length === 0) return { ok: false, reason: 'empty', message: 'Type a message first.' };
 
@@ -324,7 +329,7 @@ export async function sendMessage(rawText: string, attachments: Attachment[] = [
   if (imagePaths(attachments).length > 0 && !modelHasVision(spec)) return { ok: false, reason: 'no_vision', message: NO_VISION };
 
   const userMessage: ChatMessage = { id: newId('u'), role: 'user', text, attachments: attachments.length ? attachments : undefined, createdAt: Date.now(), status: 'done' };
-  return runTurn(userMessage, true);
+  return runTurn(userMessage, true, options);
 }
 
 /** Re-answer the last user message (after an error or Stop, or to get a different answer). */
@@ -468,7 +473,7 @@ export async function continueGeneration(): Promise<SendResult> {
   }
 }
 
-async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<SendResult> {
+async function runTurn(userMessage: ChatMessage, appendUser: boolean, options?: SendOptions): Promise<SendResult> {
   const spec = getModel(settingsStore.getState().activeModelId);
   if (!spec) return { ok: false, reason: 'no_model', message: 'No model selected yet.' };
 
@@ -543,12 +548,17 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
       userMemories: activeFactTexts(memoryStore.getState().facts),
     });
 
-    const system = behavioralPrompts.length > 0
-      ? `${compiled.systemPrompt}\n\nImmediate turn behavioral directives:\n${behavioralPrompts.map((b) => `- ${b}`).join('\n')}`
+    const isVoice = !!options?.isVoiceMode;
+    const voiceDirective = isVoice
+      ? 'VOICE INTERACTION DIRECTIVE: You are in real-time voice chat. Reply immediately, naturally, and concisely in 1-2 spoken sentences only. Strictly avoid markdown, asterisks, bullet points, numbered lists, code, or preamble.'
+      : null;
+    const allBehavioral = voiceDirective ? [...behavioralPrompts, voiceDirective] : behavioralPrompts;
+    const system = allBehavioral.length > 0
+      ? `${compiled.systemPrompt}\n\nImmediate turn behavioral directives:\n${allBehavioral.map((b) => `- ${b}`).join('\n')}`
       : compiled.systemPrompt;
     const sampling = padToSampling(threadSoul.pad, threadSoul.toneIntensity, settings.sampling);
     // KV session cache: restore (or evaluate + save) the system-prompt prefix before the reply. Never throws.
-    await engine.preparePrefix(system, settings.thinkingEnabled && spec.thinking !== 'none');
+    await engine.preparePrefix(system, !isVoice && settings.thinkingEnabled && spec.thinking !== 'none');
 
     if (abortController.signal.aborted) {
       patchMessage(assistantId, { status: 'stopped', phase: 'done', notice: 'Stopped by user.' });
@@ -580,7 +590,7 @@ async function runTurn(userMessage: ChatMessage, appendUser: boolean): Promise<S
       imageTokens: imageTokenAllowance(spec, settings.compute.imageMaxTokens),
       nCtx: engine.state.nCtx || engine.contextSize(),
       system,
-      thinkingEnabled: settings.thinkingEnabled,
+      thinkingEnabled: !isVoice && settings.thinkingEnabled,
       sampling,
       backend: engine.state.info?.backend,
       signal: abortController.signal,

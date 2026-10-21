@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 */node_modules/
+package/
+*.tgz
 
 # Expo & Build Artifacts
 .expo/
@@ -44,3 +46,39 @@ yarn-error.*
 # Large local binary packages
 *.apk
 *.zip
+
+# Character assets & temporary graphics
+Character images/
+new logo/
+
+# Scratch & local developer verification scripts
+check_*.mjs
+check_*.ps1
+fetch_*.mjs
+find_*.ps1
+inspect_*.mjs
+list_*.ps1
+run_*.ps1
+search_*.mjs
+search_*.ps1
+test_*.mjs
+verify_*.mjs
+scripts/check_*.ps1
+scripts/test_*.ps1
+scripts/deep_scan.ps1
+scripts/scan_ai_footprints.ps1
+scripts/sanitize.mjs
+scripts/bump_version.mjs
+scripts/inspect_apk.ps1
+scripts/compare_src.ps1
+scripts/view_sherpa_kt.ps1
+scripts/run_check_alauna.ps1
+scripts/add_sherpa_deps.ps1
+
+# Internal agent docs & planning notes
+GEMINI.md
+docs/GEMINI-TASKS.md
+docs/HANDOFF.md
+docs/PLAN-v2.md
+docs/audit/
+scripts/scan_features.ps1

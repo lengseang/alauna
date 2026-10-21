@@ -37,6 +37,7 @@ export function Segmented<T extends string>({ options, value, onChange, label, d
             accessibilityLabel={o.label}
             accessibilityState={{ checked: on, disabled: !!disabled }}
             disabled={disabled}
+            unstable_pressDelay={0}
             hitSlop={{ top: 2, bottom: 2 }}
             onPress={() => {
               if (!on) {

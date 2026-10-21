@@ -16,6 +16,14 @@ import { createStore } from '../../core/store.ts';
 import { SPEECH_MODELS, VAD_MODEL, getSpeechModel, speechModelUrl, type SpeechModelSpec } from '../../core/voiceModels.ts';
 import { fileSize, hashFile } from '../modelLibrary.ts';
 import { freeSpaceBytes, isStorageReady, vaultRoot } from '../storage.ts';
+import { unpackKokoroArchive, isModelDownloaded } from './kokoroNeuralTts.ts';
+import {
+  showDownloadProgressNotification,
+  showVerifyingNotification,
+  showUnpackingNotification,
+  showDownloadCompleteNotification,
+  cancelDownloadNotification,
+} from '../notifications/downloadNotifications.ts';
 
 export type SpeechModelStatus = 'absent' | 'downloading' | 'paused' | 'verifying' | 'installed' | 'error';
 
@@ -61,7 +69,11 @@ const partFile = (spec: SpeechModelSpec) => new File(voiceDir(), `${diskFilename
 
 function isComplete(spec: SpeechModelSpec): boolean {
   try {
-    return isStorageReady() && fileSize(finalFile(spec)) === spec.bytes;
+    if (!isStorageReady()) return false;
+    if (spec.kind === 'tts') {
+      return isModelDownloaded() || fileSize(finalFile(spec)) === spec.bytes;
+    }
+    return fileSize(finalFile(spec)) === spec.bytes;
   } catch {
     return false;
   }
@@ -86,6 +98,12 @@ export function refreshSpeechModels(): void {
     }
     if (isComplete(spec)) {
       patch(spec.id, { ...ABSENT(spec), status: 'installed', receivedBytes: spec.bytes });
+      if (spec.kind === 'tts' && !isModelDownloaded()) {
+        const file = finalFile(spec);
+        if (file.exists && fileSize(file) === spec.bytes) {
+          unpackKokoroArchive(uriToPath(file.uri)).catch(() => {});
+        }
+      }
       continue;
     }
     const have = fileSize(partFile(spec));
@@ -135,15 +153,37 @@ async function transfer(spec: SpeechModelSpec, run: Running): Promise<SpeechMode
     const bps = meter.push(bytesWritten, now);
     if (now - lastUi < 250) return;
     lastUi = now;
-    patch(spec.id, { receivedBytes: bytesWritten, bytesPerSecond: bps, etaSeconds: meter.etaSeconds(spec.bytes - bytesWritten) });
+    const eta = meter.etaSeconds(spec.bytes - bytesWritten);
+    patch(spec.id, { receivedBytes: bytesWritten, bytesPerSecond: bps, etaSeconds: eta });
+    showDownloadProgressNotification(spec.id, spec.name, bytesWritten, spec.bytes, bps, eta);
   };
   patch(spec.id, { status: 'downloading', receivedBytes: have, error: null, verifyProgress: 0 });
 
   try {
     let file: File | null;
     if (have > 0 && Platform.OS === 'android') {
-      run.task = DownloadTask.fromSavable({ url, fileUri: part.uri, isDirectory: false, resumeData: String(have) }, { onProgress });
-      file = await run.task.resumeAsync();
+      try {
+        run.task = DownloadTask.fromSavable({ url, fileUri: part.uri, isDirectory: false, resumeData: String(have) }, { onProgress });
+        file = await run.task.resumeAsync();
+      } catch (resumeErr) {
+        if (run.cancelled) return cancelledResult(spec);
+        // The resume attempt failed (e.g. HTTP 416, corrupted partial, or rejected resume offset).
+        // Safely cancel the failed resume task so native state does not conflict
+        try {
+          if (run.task && typeof run.task.cancel === 'function') {
+            run.task.cancel();
+          }
+        } catch {
+          // ignore cleanup error
+        }
+        run.task = null;
+        if (part.exists) part.delete();
+        have = 0;
+        meter.reset(0);
+        patch(spec.id, { receivedBytes: 0, bytesPerSecond: 0, etaSeconds: 0 });
+        run.task = new DownloadTask(url, part, { onProgress });
+        file = await run.task.downloadAsync();
+      }
     } else {
       if (have > 0) part.delete();
       have = 0;
@@ -152,18 +192,27 @@ async function transfer(spec: SpeechModelSpec, run: Running): Promise<SpeechMode
     }
     if (run.cancelled) return cancelledResult(spec);
     if (!file) {
+      cancelDownloadNotification(spec.id);
       patch(spec.id, { status: 'paused', receivedBytes: fileSize(part), bytesPerSecond: 0, etaSeconds: 0 });
       return { ok: false, message: 'Paused.' };
     }
   } catch (e) {
+    cancelDownloadNotification(spec.id);
     if (run.cancelled) return cancelledResult(spec);
-    const msg = `Download of ${spec.name} stopped: ${message(e)}. Tap Download to continue where it stopped.`;
+    const errText = message(e);
+    // If the error was a rejected resume or Range failure, delete the broken partial so next tap downloads clean
+    if (/resume.*reject/i.test(errText) || /416/i.test(errText)) {
+      if (part.exists) part.delete();
+      patch(spec.id, { receivedBytes: 0 });
+    }
+    const msg = `Download of ${spec.name} stopped: ${errText}. Tap Download to continue where it stopped.`;
     patch(spec.id, { status: 'error', error: msg, receivedBytes: fileSize(part), bytesPerSecond: 0, etaSeconds: 0 });
     return { ok: false, message: msg };
   }
 
   const size = fileSize(part);
   if (size !== spec.bytes) {
+    cancelDownloadNotification(spec.id);
     if (part.exists) part.delete();
     const msg = `${spec.name} arrived with the wrong size (${formatBytes(size)}, expected ${formatBytes(spec.bytes)}). Download it again.`;
     patch(spec.id, { status: 'error', error: msg, receivedBytes: 0 });
@@ -171,9 +220,21 @@ async function transfer(spec: SpeechModelSpec, run: Running): Promise<SpeechMode
   }
 
   patch(spec.id, { status: 'verifying', receivedBytes: size, bytesPerSecond: 0, etaSeconds: 0, verifyProgress: 0 });
-  const hash = await hashFile(part, (f) => patch(spec.id, { verifyProgress: f }), () => run.cancelled);
-  if (run.cancelled || hash.stopped) return cancelledResult(spec);
+  showVerifyingNotification(spec.id, spec.name, 0);
+  const hash = await hashFile(
+    part,
+    (f) => {
+      patch(spec.id, { verifyProgress: f });
+      showVerifyingNotification(spec.id, spec.name, f);
+    },
+    () => run.cancelled
+  );
+  if (run.cancelled || hash.stopped) {
+    cancelDownloadNotification(spec.id);
+    return cancelledResult(spec);
+  }
   if (hash.actual !== spec.sha256) {
+    cancelDownloadNotification(spec.id);
     if (part.exists) part.delete();
     const msg = `${spec.name} failed the integrity check (SHA-256 mismatch), so it was deleted. Download it again.`;
     patch(spec.id, { status: 'error', error: msg, receivedBytes: 0 });
@@ -181,12 +242,19 @@ async function transfer(spec: SpeechModelSpec, run: Running): Promise<SpeechMode
   }
   const dest = finalFile(spec);
   if (dest.exists) dest.delete();
-  part.rename(spec.filename);
+  part.rename(diskFilename(spec));
+  if (spec.kind === 'tts') {
+    patch(spec.id, { status: 'verifying', verifyProgress: 0.99 });
+    showUnpackingNotification(spec.id, spec.name);
+    await unpackKokoroArchive(uriToPath(dest.uri));
+  }
   patch(spec.id, { ...ABSENT(spec), status: 'installed', receivedBytes: spec.bytes });
+  showDownloadCompleteNotification(spec.id, spec.name);
   return { ok: true };
 }
 
 function cancelledResult(spec: SpeechModelSpec): SpeechModelResult {
+  cancelDownloadNotification(spec.id);
   try {
     const part = partFile(spec);
     if (part.exists) part.delete();
@@ -230,6 +298,7 @@ export function cancelSpeechModelDownload(id: string): void {
 export function deleteSpeechModel(id: string): void {
   const spec = getSpeechModel(id);
   if (!spec || !isStorageReady()) return;
+  cancelDownloadNotification(id);
   for (const f of [finalFile(spec), partFile(spec)]) if (f.exists) f.delete();
   patch(id, ABSENT(spec));
 }

@@ -1,6 +1,6 @@
 {
     "name":  "alauna-mobile",
-    "version":  "1.1.1",
+    "version":  "1.2.0",
     "main":  "index.ts",
     "dependencies":  {
                          "@expo-google-fonts/cinzel":  "^0.4.2",
@@ -44,7 +44,7 @@
                     "typecheck:tests":  "tsc --noEmit -p tsconfig.test.json",
                     "test":  "node --max-old-space-size=4096 --no-warnings --experimental-strip-types --test test/*.test.ts",
                     "check":  "npm run typecheck \u0026\u0026 npm run typecheck:tests \u0026\u0026 npm test",
-                    "bundle:android":  "expo export --platform android --output-dir /tmp/chiwiwi-export"
+                    "bundle:android":  "expo export --platform android --output-dir /tmp/alauna-export"
                 },
     "private":  true
 }

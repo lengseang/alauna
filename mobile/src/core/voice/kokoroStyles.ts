@@ -477,8 +477,12 @@ export function resolveKokoroSpeechParameters(
   const emotion = emotionOverride ?? persona?.kokoroEmotion ?? 'neutral';
   const intensity = intensityOverride ?? persona?.kokoroEmotionIntensity ?? 0.5;
 
-  const basePitch = persona ? persona.pitch : (styleSpec ? styleSpec.pitch : 1.0);
-  const baseRate = persona ? persona.rate : (styleSpec ? styleSpec.speed : 1.0);
+  const stylePitch = styleSpec?.pitch ?? 1.0;
+  const styleRate = styleSpec?.speed ?? 1.0;
+  const personaPitchFactor = persona && persona.pitch !== 1.0 ? persona.pitch : 1.0;
+  const personaRateFactor = persona && persona.rate !== 1.0 ? persona.rate : 1.0;
+  const basePitch = stylePitch * personaPitchFactor;
+  const baseRate = styleRate * personaRateFactor;
 
   const mod = computeAcousticModulation(basePitch, baseRate, emotion, intensity);
   const voiceId = findMatchingKokoroVoice(styleSpec, installedVoices ?? null);

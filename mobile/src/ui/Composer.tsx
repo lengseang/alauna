@@ -59,7 +59,7 @@ export async function submitMessage(text: string, atts: Attachment[] = []): Prom
 }
 
 /**
- * ChatGPT-inspired Sovereign Greek Liquid Glass Composer:
+ * Sovereign Greek Liquid Glass Composer:
  * Translucent frosted glass bar, zero heavy frame, fluid attachments,
  * live 'Think' (speculative reasoning) toggle, voice launcher, and synchronous text
  * capture to eliminate fast-typing cut-off race conditions.
@@ -74,6 +74,7 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
   const draft = useSyncExternalStore(draftStore.subscribe, draftStore.getState);
 
   const [input, setInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const textRef = useRef('');
   const [items, setItems] = useState<Item[]>([]);
   const [focused, setFocused] = useState(false);
@@ -106,29 +107,35 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
     showToast(next ? 'Deep Think: Enabled (Speculative Draft)' : 'Deep Think: Disabled');
   }, [speculativeEnabled]);
 
-  const send = async () => {
-    if (lock.current) return;
+  const send = useCallback(() => {
+    if (lock.current || submitting) return;
+    const text = (textRef.current || input).trim();
+    const pending = items;
+    if (!text && pending.length === 0) return;
+
     lock.current = true;
-    try {
-      // Synchronous ref capture prevents fast-typing race conditions where state lags behind
-      const text = (textRef.current || input).trim();
-      const pending = items;
-      if (!text && pending.length === 0) return;
+    setSubmitting(true);
 
-      textRef.current = '';
-      inputRef.current?.clear();
-      setInput('');
-      setItems([]);
+    textRef.current = '';
+    inputRef.current?.clear();
+    setInput('');
+    setItems([]);
 
-      if (!(await submitMessage(text, pending.map((i) => i.att)))) {
-        textRef.current = text;
-        setInput(text); // nothing was sent: restore user words and files
-        setItems(pending);
-      }
-    } finally {
-      lock.current = false;
-    }
-  };
+    // Run in background so send() returns immediately, freeing useGuardedAction
+    // and allowing the Stop button to be tapped anytime without blocking!
+    void submitMessage(text, pending.map((i) => i.att))
+      .then((ok) => {
+        if (!ok) {
+          textRef.current = text;
+          setInput(text);
+          setItems(pending);
+        }
+      })
+      .finally(() => {
+        lock.current = false;
+        setSubmitting(false);
+      });
+  }, [input, items, submitting]);
 
   const remove = (item: Item) => {
     if (item.picked) discardAttachment(item.picked);
@@ -200,6 +207,8 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
             accessibilityRole="button"
             accessibilityLabel={`Deep Think mode ${speculativeEnabled ? 'active' : 'inactive'}`}
             onPress={toggleThink}
+            unstable_pressDelay={0}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             style={({ pressed }) => [
               s.thinkPill,
               speculativeEnabled && s.thinkPillActive,
@@ -222,12 +231,27 @@ export const Composer = React.memo(function Composer({ placeholder, onVoice }: {
             </Text>
           </Pressable>
 
-          {sending ? (
-            <IconButton icon="stop" label="Stop generating" tone="filled" onPress={() => stopGeneration()} />
+          {sending || submitting ? (
+            <IconButton
+              icon="stop"
+              label="Stop generating"
+              color={colors.danger ?? colors.accent}
+              onPress={() => stopGeneration()}
+            />
           ) : canSend ? (
-            <IconButton icon="send" label="Send" tone="filled" onPress={send} />
+            <IconButton
+              icon="send"
+              label="Send"
+              color={colors.accent}
+              onPress={send}
+            />
           ) : (
-            <IconButton icon="mic" label="Voice mode" onPress={onVoice} color={colors.accent} style={s.voiceBtn} />
+            <IconButton
+              icon="mic"
+              label="Voice mode"
+              onPress={onVoice}
+              color={colors.accent}
+            />
           )}
         </View>
       </View>
@@ -291,12 +315,12 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: radius.pill,
     borderWidth: line,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceAlt,
-    minHeight: 34,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+    minHeight: 32,
     marginRight: 2,
   },
   thinkPillActive: {
@@ -306,10 +330,6 @@ const useStyles = makeStyles(({ colors, space, line, radius, isDark }) => ({
   thinkLabel: {
     fontSize: 13,
     fontWeight: '600',
-  },
-  voiceBtn: {
-    backgroundColor: colors.accentSoft,
-    borderRadius: radius.pill,
   },
   tiles: { gap: space.sm, paddingRight: space.lg },
   imageTile: { width: TILE, height: TILE, borderWidth: line, borderColor: colors.border, borderRadius: radius.md },

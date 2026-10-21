@@ -1,12 +1,11 @@
 /**
  * Native Local Image Inference Runtime Adapter (service).
  *
- * Feature ID: CHIWIWI-IMG-ARCH-001 §5.6
- * Bridges the ImageGenerationCoordinator to a real on-device diffusion engine (`LocalDiffusionEngine`).
+ * Bridges the ImageGenerationCoordinator to an on-device diffusion engine (`LocalDiffusionEngine`).
  *
- * Invariant (GEMINI.md Rule 2 & Specification §16.6): no engine, no image. No diffusion engine is linked in this build,
- * so generation reports an honest typed error; there is no simulated progress and no synthesized picture. A real engine
- * is dropped in with `registerLocalDiffusionEngine()`; every progress number then comes from that engine.
+ * Invariant: No engine, no image. If no diffusion engine is linked in this build,
+ * generation reports a typed error; there is no simulated progress or synthetic fallback. A real engine
+ * is registered with `registerLocalDiffusionEngine()`; every progress metric comes directly from that engine.
  */
 
 import { DeviceEventEmitter, NativeModules, Platform } from 'react-native';

@@ -51,6 +51,8 @@ export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSo
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Open menu"
+        unstable_pressDelay={0}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         onPress={onMenu}
         style={({ pressed }) => [s.iconTouch, pressed && s.iconPressed]}
       >
@@ -62,6 +64,8 @@ export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSo
         accessibilityRole="button"
         accessibilityLabel={`${characterName}. Model: ${name}. ${line.text}${incognito ? '. Incognito chat' : ''}`}
         accessibilityHint="Switch character or model"
+        unstable_pressDelay={0}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         onPress={onModel}
         style={({ pressed }) => [s.modelHeader, pressed && s.modelHeaderPressed]}
       >
@@ -87,6 +91,8 @@ export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSo
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Live voice call"
+            unstable_pressDelay={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={onVoice}
             style={({ pressed }) => [s.voiceIconTouch, pressed && s.iconPressed]}
           >
@@ -97,6 +103,8 @@ export const ChatTopBar = React.memo(function ChatTopBar({ onMenu, onModel, onSo
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="New chat"
+          unstable_pressDelay={0}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           onPress={onNewChat}
           style={({ pressed }) => [s.iconTouch, pressed && s.iconPressed]}
         >

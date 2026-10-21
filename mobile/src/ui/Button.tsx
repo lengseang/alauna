@@ -35,14 +35,12 @@ export interface ButtonProps {
  * The button for every action with side effects. Square, 48dp, one weight. A tap while busy or inside the debounce
  * window is dropped, a failing action becomes a toast (never a crash).
  */
-export function Button({ label, onPress, variant = 'primary', icon, disabled, loading, busyLabel, accessibilityHint, accessibilityLabel, debounceMs = 350, haptics = true, style }: ButtonProps) {
+export function Button({ label, onPress, variant = 'primary', icon, disabled, loading, busyLabel, accessibilityHint, accessibilityLabel, debounceMs = 100, haptics = true, style }: ButtonProps) {
   const theme = useTheme();
   const { colors } = theme;
   const s = useStyles();
   const { isBusy, execute } = useGuardedAction(
-    async () => {
-      await onPress();
-    },
+    onPress,
     { debounceMs, enableHaptics: haptics && theme.haptics, onError: (e) => showToast(`Something went wrong: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160)) },
   );
   const busy = isBusy || !!loading;
@@ -55,6 +53,8 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, lo
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: off, busy }}
       disabled={off}
+      unstable_pressDelay={0}
+      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
       onPress={() => void execute()}
       style={({ pressed }) => [s.base, s[variant], pressed && (variant === 'primary' ? s.pressedPrimary : variant === 'danger' ? s.pressedDanger : s.pressedQuiet), disabled && !busy && s.disabled, style]}
     >
@@ -66,12 +66,11 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, lo
   );
 }
 
-const useStyles = makeStyles(({ colors, space, line, radius }) => ({
+const useStyles = makeStyles(({ colors, space, line }) => ({
   base: {
     minHeight: hit,
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
-    borderRadius: radius.pill,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

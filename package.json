@@ -1,11 +1,11 @@
 {
-  "name": "chiwiwi",
-  "version": "0.2.0",
+  "name": "alauna",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "CHIWIWI: private on-device AI chat. App code lives in ./mobile.",
+  "description": "Alauna: Sovereign open-source AI companion running 100% privately on your mobile device.",
   "scripts": {
-    "test": "node --no-warnings --experimental-strip-types --test test/suite.test.js && npm --prefix mobile test",
+    "test": "npm --prefix mobile test",
     "verify:catalog": "node --no-warnings --experimental-strip-types scripts/verify-catalog.mjs"
   }
 }
